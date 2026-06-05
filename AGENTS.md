@@ -87,10 +87,38 @@ docs/04_SOCKET_EVENTS.md
 
 ```text
 1. git status로 변경 파일을 확인한다.
-2. 작업 범위에 해당하는 파일만 stage한다.
-3. 필요한 검증 명령을 실행한다.
-4. 검증이 통과하면 commit한다.
-5. 최종 응답에 commit hash와 검증 결과를 보고한다.
+2. 필요한 검증 명령을 실행한다.
+3. 작업 범위에 해당하는 파일만 명시적 pathspec으로 stage한다.
+4. staged diff를 확인한다.
+5. 검증이 통과하고 staged diff가 작업 범위와 일치하면 commit한다.
+6. 최종 응답에 commit hash와 검증 결과를 보고한다.
+```
+
+Stage할 때는 파일 경로를 명시한다.
+
+```text
+허용 예시:
+git add -- AGENTS.md THREAD_SYNC.md
+git add -- packages/db/src/wallet-transactions.ts packages/db/package.json
+```
+
+다음 방식은 unrelated change를 포함할 위험이 있으므로 사용하지 않는다.
+
+```text
+금지:
+git add .
+git add -A
+git add --all
+git commit -a
+IDE 또는 GUI의 Stage All / Commit All
+와일드카드로 넓은 범위를 stage하는 명령
+```
+
+커밋 전에는 반드시 staged 파일과 staged diff를 확인한다.
+
+```text
+git diff --cached --name-only
+git diff --cached
 ```
 
 예외 상황에서는 커밋하지 않고 이유를 보고한다.
@@ -103,6 +131,8 @@ docs/04_SOCKET_EVENTS.md
 ```
 
 커밋할 때는 unrelated change를 포함하지 않는다.
+
+이미 staged 된 unrelated change가 있으면 커밋하지 않고 사용자에게 보고한다.
 
 ## 7. Multi-Thread 작업 분리 규칙
 

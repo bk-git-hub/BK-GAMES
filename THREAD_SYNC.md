@@ -60,8 +60,10 @@ Multi-thread coordination:
 After making file changes:
 
 - Inspect `git status`.
-- Stage only the files that belong to the current task.
 - Run the appropriate verification.
+- Stage only the files that belong to the current task, using explicit pathspecs such as `git add -- AGENTS.md THREAD_SYNC.md`.
+- Never use broad staging commands such as `git add .`, `git add -A`, `git add --all`, `git commit -a`, IDE/GUI Stage All, or wide wildcard staging.
+- Before committing, inspect both `git diff --cached --name-only` and `git diff --cached`.
 - Commit in the same task if verification passes.
 - Do not include unrelated user changes, ignored local env files, logs, caches, or generated artifacts that should stay untracked.
 
@@ -448,6 +450,7 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - Root `.env` loading was fixed for Drizzle CLI and the DB client.
 - `AGENTS.md` was updated to require agents to commit after verified file changes, unless there is an explicit reason not to commit.
 - `AGENTS.md` was updated with multi-thread ownership rules so backend and frontend threads can run in parallel with reduced file interference.
+- `AGENTS.md` was updated to forbid broad staging commands such as `git add .`, `git add -A`, and `git commit -a`; agents must stage explicit paths and inspect staged diffs before committing.
 - Better Auth integration work started: package adapter installed, auth route/client/server files added, auth UI added, and `AUTH_STRUCTURE.md` created.
 - Better Auth production build issue was resolved by pinning Kysely to `0.28.17`.
 - Better Auth integration was verified through `/auth`, `/api/auth/sign-up/email`, `/api/auth/get-session`, and a PostgreSQL row check; the smoke-test account was deleted afterward.

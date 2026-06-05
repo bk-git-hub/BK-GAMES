@@ -1,2 +1,2 @@
-export * from "./socket-events";
-export * from "./types";
+export * from "./socket-events.js";
+export * from "./types.js";

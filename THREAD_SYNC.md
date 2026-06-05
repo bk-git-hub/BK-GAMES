@@ -392,26 +392,27 @@ The user chose Docker as the preferred path.
 
 ## Next Recommended Work
 
-Next task should be daily reward claim.
+Next task should build on the realtime blackjack table skeleton.
 
 Recommended order:
 
-- Implement daily reward claim as the first real wallet/ledger flow.
-- Add session/user plumbing between `apps/web` and `apps/game-server`.
+- Add trusted session/user plumbing between `apps/web` and `apps/game-server`.
+- Add blackjack betting phase commands and wallet bet debits.
+- Then build the pure blackjack engine/state machine for dealing, player actions, dealer turn, and settlement.
 
-The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, and wallet mutations now go through `applyWalletMutation`.
+The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, and daily rewards go through `claimDailyReward`.
 
 ## Suggested Next Scope Report
 
-Use this before starting daily reward claim:
+Use this before starting the next backend blackjack slice:
 
 ```text
 이번 작업 범위:
-- 목표: daily reward claim 구현
-- 수정 예상: packages/db daily reward service, apps/web reward entry point if needed
-- 실행 명령: pnpm --filter @bk-games/db smoke:wallet, pnpm typecheck, pnpm lint, pnpm test, pnpm build
-- 제외: blackjack runtime 구현, admin UI 구현, Socket.IO auth 구현
-- 검증: 같은 날짜 reward는 한 번만 지급되고 wallet/ledger/daily_reward_claims가 일관되게 생성되는지 확인
+- 목표: blackjack betting phase 또는 socket auth bridge 구현
+- 수정 예상: apps/game-server, packages/shared, 필요 시 packages/db
+- 실행 명령: pnpm --filter game-server test, pnpm typecheck, pnpm lint, pnpm test, pnpm build
+- 제외: 프론트엔드 UI, 전체 blackjack settlement 구현, admin UI 구현
+- 검증: socket command/state transition 테스트와 전체 workspace 검증
 ```
 
 ## Update Rules For This File
@@ -458,3 +459,5 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - Private ACID study notes were added under `private/02_WALLET_ACID_STUDY_NOTES.md` for the user's backend learning; implementation work should still follow the wallet/ledger rules in this tracked handoff file.
 - Transaction-safe wallet mutation was implemented with row locking, idempotency checks, wallet status/balance validation, ledger insertion, wallet balance/version update, and a `pnpm --filter @bk-games/db smoke:wallet` verification script.
 - Frontend wording was aligned with the product direction: BK Games is a free-points multiplayer game platform, and blackjack is the first game rather than the whole project. Impact: tracked web metadata/home copy and this handoff summary now use platform framing; local gitignored implementation docs were updated the same way.
+- Daily reward claim was implemented in `packages/db/src/daily-rewards.ts`, using deterministic idempotency and one DB transaction across `wallets`, `point_ledgers`, and `daily_reward_claims`.
+- Shared blackjack socket contracts were added in `packages/shared`, and `apps/game-server` now has an in-memory realtime table skeleton for join, take-seat, leave-seat, disconnect, and table-state broadcasts. Impact: backend and frontend threads should use the shared event names and payload types instead of stringly typed socket events.

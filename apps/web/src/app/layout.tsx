@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "BK Games",
-  description: "Realtime blackjack game MVP",
+  description: "Free-points multiplayer game platform MVP",
 };
 
 export default function RootLayout({

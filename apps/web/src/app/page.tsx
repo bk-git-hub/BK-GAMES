@@ -27,7 +27,7 @@ const setupItems = [
 const nextItems = [
   "Wallet transaction service",
   "Daily reward claim",
-  "Blackjack engine",
+  "First game: Blackjack engine",
   "Realtime table state machine",
 ];
 
@@ -55,8 +55,8 @@ export default async function Home() {
               BK Games
             </h1>
             <p className="text-muted-foreground max-w-2xl text-base leading-7">
-              무료 포인트 기반 실시간 블랙잭 MVP를 위한 모노레포
-              워크스페이스입니다.
+              무료 포인트 기반 멀티플레이 게임 플랫폼을 위한 모노레포
+              워크스페이스입니다. 첫 게임은 실시간 블랙잭입니다.
             </p>
           </div>
         </div>

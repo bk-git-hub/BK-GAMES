@@ -18,7 +18,7 @@ Last updated: 2026-06-05
 
 ## Project Summary
 
-BK Games is a free-points, real-time multiplayer blackjack web game.
+BK Games is a free-points multiplayer game platform. The first game is real-time multiplayer blackjack.
 
 The project is intentionally split into multiple apps/packages:
 
@@ -457,3 +457,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - User profile and wallet bootstrap was implemented with an idempotent DB transaction and wired into the authenticated home page flow.
 - Private ACID study notes were added under `private/02_WALLET_ACID_STUDY_NOTES.md` for the user's backend learning; implementation work should still follow the wallet/ledger rules in this tracked handoff file.
 - Transaction-safe wallet mutation was implemented with row locking, idempotency checks, wallet status/balance validation, ledger insertion, wallet balance/version update, and a `pnpm --filter @bk-games/db smoke:wallet` verification script.
+- Frontend wording was aligned with the product direction: BK Games is a free-points multiplayer game platform, and blackjack is the first game rather than the whole project. Impact: tracked web metadata/home copy and this handoff summary now use platform framing; local gitignored implementation docs were updated the same way.

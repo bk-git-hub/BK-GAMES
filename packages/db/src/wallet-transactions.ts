@@ -53,6 +53,10 @@ export type WalletMutationResult = {
   idempotent: boolean;
 };
 
+export type WalletMutationTransaction = Parameters<
+  Parameters<typeof db.transaction>[0]
+>[0];
+
 type LockedWalletRow = {
   id: string;
   userId: string;
@@ -82,126 +86,131 @@ const zero = BigInt(0);
 export async function applyWalletMutation(
   input: WalletMutationInput,
 ): Promise<WalletMutationResult> {
+  return db.transaction((tx) => applyWalletMutationInTransaction(tx, input));
+}
+
+export async function applyWalletMutationInTransaction(
+  tx: WalletMutationTransaction,
+  input: WalletMutationInput,
+): Promise<WalletMutationResult> {
   validateWalletMutationInput(input);
 
-  return db.transaction(async (tx) => {
-    const existingBeforeLock = await findLedgerByIdempotencyKey(
-      tx,
-      input.userId,
-      input.idempotencyKey,
-    );
+  const existingBeforeLock = await findLedgerByIdempotencyKey(
+    tx,
+    input.userId,
+    input.idempotencyKey,
+  );
 
-    if (existingBeforeLock) {
-      assertIdempotencyMatch(existingBeforeLock, input);
-      return {
-        ledger: existingBeforeLock,
-        wallet: await findWalletByUserId(tx, input.userId),
-        idempotent: true,
-      };
-    }
-
-    const lockedWallet = await lockWalletByUserId(tx, input.userId);
-
-    const existingAfterLock = await findLedgerByIdempotencyKey(
-      tx,
-      input.userId,
-      input.idempotencyKey,
-    );
-
-    if (existingAfterLock) {
-      assertIdempotencyMatch(existingAfterLock, input);
-      return {
-        ledger: existingAfterLock,
-        wallet: await findWalletByUserId(tx, input.userId),
-        idempotent: true,
-      };
-    }
-
-    if (lockedWallet.status !== "ACTIVE") {
-      throw new WalletMutationError(
-        "WALLET_NOT_ACTIVE",
-        `Wallet for user ${input.userId} is ${lockedWallet.status}.`,
-      );
-    }
-
-    const balanceBefore = toBigInt(lockedWallet.balance);
-    const lockedBalance = toBigInt(lockedWallet.lockedBalance);
-    const balanceAfter = balanceBefore + input.delta;
-
-    if (balanceAfter < zero || balanceAfter < lockedBalance) {
-      throw new WalletMutationError(
-        "INSUFFICIENT_BALANCE",
-        `Insufficient wallet balance for user ${input.userId}.`,
-      );
-    }
-
-    const [ledger] = await tx
-      .insert(pointLedgers)
-      .values({
-        walletId: lockedWallet.id,
-        userId: input.userId,
-        category: input.category,
-        gameType: input.category === "GAME" ? input.gameType : null,
-        type: input.type,
-        delta: input.delta,
-        balanceBefore,
-        balanceAfter,
-        referenceType: input.referenceType,
-        referenceId: input.referenceId,
-        idempotencyKey: input.idempotencyKey,
-        memo: input.memo ?? null,
-        metadata: input.metadata ?? {},
-      })
-      .onConflictDoNothing({
-        target: [pointLedgers.userId, pointLedgers.idempotencyKey],
-      })
-      .returning();
-
-    if (!ledger) {
-      const existingLedger = await findLedgerByIdempotencyKey(
-        tx,
-        input.userId,
-        input.idempotencyKey,
-      );
-
-      if (!existingLedger) {
-        throw new WalletMutationError(
-          "IDEMPOTENCY_CONFLICT",
-          `Ledger idempotency key ${input.idempotencyKey} conflicted without returning an existing ledger.`,
-        );
-      }
-
-      assertIdempotencyMatch(existingLedger, input);
-      return {
-        ledger: existingLedger,
-        wallet: await findWalletByUserId(tx, input.userId),
-        idempotent: true,
-      };
-    }
-
-    const [wallet] = await tx
-      .update(wallets)
-      .set({
-        balance: balanceAfter,
-        version: sql`${wallets.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(wallets.id, lockedWallet.id))
-      .returning();
-
-    if (!wallet) {
-      throw new WalletMutationError(
-        "WALLET_NOT_FOUND",
-        `Wallet ${lockedWallet.id} disappeared during mutation.`,
-      );
-    }
-
+  if (existingBeforeLock) {
+    assertIdempotencyMatch(existingBeforeLock, input);
     return {
-      wallet,
-      ledger,
-      idempotent: false,
+      ledger: existingBeforeLock,
+      wallet: await findWalletByUserId(tx, input.userId),
+      idempotent: true,
     };
-  });
+  }
+
+  const lockedWallet = await lockWalletByUserId(tx, input.userId);
+
+  const existingAfterLock = await findLedgerByIdempotencyKey(
+    tx,
+    input.userId,
+    input.idempotencyKey,
+  );
+
+  if (existingAfterLock) {
+    assertIdempotencyMatch(existingAfterLock, input);
+    return {
+      ledger: existingAfterLock,
+      wallet: await findWalletByUserId(tx, input.userId),
+      idempotent: true,
+    };
+  }
+
+  if (lockedWallet.status !== "ACTIVE") {
+    throw new WalletMutationError(
+      "WALLET_NOT_ACTIVE",
+      `Wallet for user ${input.userId} is ${lockedWallet.status}.`,
+    );
+  }
+
+  const balanceBefore = toBigInt(lockedWallet.balance);
+  const lockedBalance = toBigInt(lockedWallet.lockedBalance);
+  const balanceAfter = balanceBefore + input.delta;
+
+  if (balanceAfter < zero || balanceAfter < lockedBalance) {
+    throw new WalletMutationError(
+      "INSUFFICIENT_BALANCE",
+      `Insufficient wallet balance for user ${input.userId}.`,
+    );
+  }
+
+  const [ledger] = await tx
+    .insert(pointLedgers)
+    .values({
+      walletId: lockedWallet.id,
+      userId: input.userId,
+      category: input.category,
+      gameType: input.category === "GAME" ? input.gameType : null,
+      type: input.type,
+      delta: input.delta,
+      balanceBefore,
+      balanceAfter,
+      referenceType: input.referenceType,
+      referenceId: input.referenceId,
+      idempotencyKey: input.idempotencyKey,
+      memo: input.memo ?? null,
+      metadata: input.metadata ?? {},
+    })
+    .onConflictDoNothing({
+      target: [pointLedgers.userId, pointLedgers.idempotencyKey],
+    })
+    .returning();
+
+  if (!ledger) {
+    const existingLedger = await findLedgerByIdempotencyKey(
+      tx,
+      input.userId,
+      input.idempotencyKey,
+    );
+
+    if (!existingLedger) {
+      throw new WalletMutationError(
+        "IDEMPOTENCY_CONFLICT",
+        `Ledger idempotency key ${input.idempotencyKey} conflicted without returning an existing ledger.`,
+      );
+    }
+
+    assertIdempotencyMatch(existingLedger, input);
+    return {
+      ledger: existingLedger,
+      wallet: await findWalletByUserId(tx, input.userId),
+      idempotent: true,
+    };
+  }
+
+  const [wallet] = await tx
+    .update(wallets)
+    .set({
+      balance: balanceAfter,
+      version: sql`${wallets.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(eq(wallets.id, lockedWallet.id))
+    .returning();
+
+  if (!wallet) {
+    throw new WalletMutationError(
+      "WALLET_NOT_FOUND",
+      `Wallet ${lockedWallet.id} disappeared during mutation.`,
+    );
+  }
+
+  return {
+    wallet,
+    ledger,
+    idempotent: false,
+  };
 }
 
 function validateWalletMutationInput(input: WalletMutationInput) {
@@ -267,7 +276,7 @@ function validateWalletMutationInput(input: WalletMutationInput) {
 }
 
 async function findLedgerByIdempotencyKey(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: WalletMutationTransaction,
   userId: string,
   idempotencyKey: string,
 ) {
@@ -286,7 +295,7 @@ async function findLedgerByIdempotencyKey(
 }
 
 async function findWalletByUserId(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: WalletMutationTransaction,
   userId: string,
 ) {
   const [wallet] = await tx
@@ -306,7 +315,7 @@ async function findWalletByUserId(
 }
 
 async function lockWalletByUserId(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: WalletMutationTransaction,
   userId: string,
 ) {
   const result = await tx.execute(sql<LockedWalletRow>`

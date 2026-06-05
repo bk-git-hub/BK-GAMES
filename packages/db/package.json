@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "echo \"db tests are not configured yet\"",
     "smoke:wallet": "tsx scripts/wallet-transactions-smoke.ts",
+    "smoke:daily-reward": "tsx scripts/daily-rewards-smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"

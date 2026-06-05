@@ -42,7 +42,7 @@ Not implemented yet:
 - Password reset email flow.
 - Admin role enforcement.
 - Initial point grant.
-- Daily reward claim flow.
+- Daily reward API/UI entry point.
 - Game-server Socket.IO authentication.
 - Game token issuance for realtime socket handshakes.
 
@@ -100,6 +100,7 @@ Game account bootstrap:
 Wallet transactions:
 
 - `packages/db/src/wallet-transactions.ts`
+- `packages/db/src/daily-rewards.ts`
 - `WALLET_TRANSACTIONS.md`
 
 Dev database:
@@ -205,14 +206,16 @@ Example: user abc123 may bet from their own wallet but cannot adjust another use
 
 Current implementation covers authentication.
 
-Next work should begin applying authorization rules to wallet transactions and game-server flows.
+The database package now includes the first real wallet authorization boundary for daily rewards: callers must provide a trusted server-side `userId`, and repeated claims are constrained by deterministic idempotency plus `daily_reward_claims`.
+
+Next work should expose this through a server-side entry point and continue applying authorization rules to game-server flows.
 
 ## Next Recommended Auth Work
 
 Recommended order:
 
-1. Implement daily reward claim as the first real ledger flow.
-2. Add server helpers for `requireSession` and `requireUserId`.
+1. Add server helpers for `requireSession` and `requireUserId`.
+2. Expose daily reward claim through a trusted server-side entry point.
 3. Define how the NestJS game server receives trusted identity from the web app.
 4. Add Socket.IO handshake validation.
 5. Add role-based admin checks.

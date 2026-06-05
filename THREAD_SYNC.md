@@ -207,6 +207,7 @@ Decision:
 - `wallets` stores the current balance cache.
 - `point_ledgers` stores append-only point movement history.
 - Every point mutation must create a ledger row in the same transaction.
+- Wallet mutation helpers must explicitly preserve ACID behavior: atomic wallet+ledger writes, consistency checks, row-level isolation for concurrent point movement, and durable PostgreSQL commits.
 
 Rules:
 
@@ -440,3 +441,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - Better Auth production build issue was resolved by pinning Kysely to `0.28.17`.
 - Better Auth integration was verified through `/auth`, `/api/auth/sign-up/email`, `/api/auth/get-session`, and a PostgreSQL row check; the smoke-test account was deleted afterward.
 - User profile and wallet bootstrap was implemented with an idempotent DB transaction and wired into the authenticated home page flow.
+- Private ACID study notes were added under `private/02_WALLET_ACID_STUDY_NOTES.md` for the user's backend learning; implementation work should still follow the wallet/ledger rules in this tracked handoff file.

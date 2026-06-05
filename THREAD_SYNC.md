@@ -208,6 +208,8 @@ Decision:
 - `point_ledgers` stores append-only point movement history.
 - Every point mutation must create a ledger row in the same transaction.
 - Wallet mutation helpers must explicitly preserve ACID behavior: atomic wallet+ledger writes, consistency checks, row-level isolation for concurrent point movement, and durable PostgreSQL commits.
+- `packages/db/src/wallet-transactions.ts` implements the current `applyWalletMutation` helper.
+- `WALLET_TRANSACTIONS.md` explains the helper structure and verification flow.
 
 Rules:
 
@@ -379,27 +381,26 @@ The user chose Docker as the preferred path.
 
 ## Next Recommended Work
 
-Next task should be wallet transaction implementation or daily reward claim.
+Next task should be daily reward claim.
 
 Recommended order:
 
-- Implement transaction-safe point mutation helpers.
 - Implement daily reward claim as the first real wallet/ledger flow.
 - Add session/user plumbing between `apps/web` and `apps/game-server`.
 
-The local DB is migrated, Better Auth wiring has been verified, and authenticated users are bootstrapped into `user_profiles` and `wallets`.
+The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, and wallet mutations now go through `applyWalletMutation`.
 
 ## Suggested Next Scope Report
 
-Use this before starting wallet transaction helpers:
+Use this before starting daily reward claim:
 
 ```text
 이번 작업 범위:
-- 목표: transaction-safe wallet mutation helper 구현
-- 수정 예상: packages/db wallet service, tests if added
-- 실행 명령: pnpm typecheck, pnpm lint, pnpm test, pnpm build
-- 제외: blackjack runtime 구현, admin UI 구현, Socket.IO auth 구현, daily reward UI
-- 검증: ledger + wallet balance가 같은 transaction에서 갱신되는지 확인
+- 목표: daily reward claim 구현
+- 수정 예상: packages/db daily reward service, apps/web reward entry point if needed
+- 실행 명령: pnpm --filter @bk-games/db smoke:wallet, pnpm typecheck, pnpm lint, pnpm test, pnpm build
+- 제외: blackjack runtime 구현, admin UI 구현, Socket.IO auth 구현
+- 검증: 같은 날짜 reward는 한 번만 지급되고 wallet/ledger/daily_reward_claims가 일관되게 생성되는지 확인
 ```
 
 ## Update Rules For This File
@@ -442,3 +443,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - Better Auth integration was verified through `/auth`, `/api/auth/sign-up/email`, `/api/auth/get-session`, and a PostgreSQL row check; the smoke-test account was deleted afterward.
 - User profile and wallet bootstrap was implemented with an idempotent DB transaction and wired into the authenticated home page flow.
 - Private ACID study notes were added under `private/02_WALLET_ACID_STUDY_NOTES.md` for the user's backend learning; implementation work should still follow the wallet/ledger rules in this tracked handoff file.
+- Transaction-safe wallet mutation was implemented with row locking, idempotency checks, wallet status/balance validation, ledger insertion, wallet balance/version update, and a `pnpm --filter @bk-games/db smoke:wallet` verification script.

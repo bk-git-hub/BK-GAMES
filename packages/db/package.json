@@ -9,6 +9,7 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "echo \"db tests are not configured yet\"",
+    "smoke:wallet": "tsx scripts/wallet-transactions-smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@types/pg": "^8.20.0",
-    "drizzle-kit": "^0.31.10"
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.22.4"
   }
 }

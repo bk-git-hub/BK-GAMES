@@ -32,6 +32,7 @@ Implemented now:
 - Home page session display and sign-out button.
 - Idempotent game account bootstrap for authenticated users.
 - Automatic `user_profiles` and `wallets` creation when an authenticated user reaches the home page.
+- Transaction-safe wallet mutation helper in `@bk-games/db`.
 - Root `.env` loading for package-level Drizzle commands and DB client usage.
 
 Not implemented yet:
@@ -41,6 +42,7 @@ Not implemented yet:
 - Password reset email flow.
 - Admin role enforcement.
 - Initial point grant.
+- Daily reward claim flow.
 - Game-server Socket.IO authentication.
 - Game token issuance for realtime socket handshakes.
 
@@ -94,6 +96,11 @@ Database schema:
 Game account bootstrap:
 
 - `packages/db/src/user-bootstrap.ts`
+
+Wallet transactions:
+
+- `packages/db/src/wallet-transactions.ts`
+- `WALLET_TRANSACTIONS.md`
 
 Dev database:
 
@@ -204,12 +211,11 @@ Next work should begin applying authorization rules to wallet transactions and g
 
 Recommended order:
 
-1. Add transaction-safe wallet mutation helpers.
-2. Implement daily reward claim as the first real ledger flow.
-3. Add server helpers for `requireSession` and `requireUserId`.
-4. Define how the NestJS game server receives trusted identity from the web app.
-5. Add Socket.IO handshake validation.
-6. Add role-based admin checks.
+1. Implement daily reward claim as the first real ledger flow.
+2. Add server helpers for `requireSession` and `requireUserId`.
+3. Define how the NestJS game server receives trusted identity from the web app.
+4. Add Socket.IO handshake validation.
+5. Add role-based admin checks.
 
 ## Verification Completed
 

@@ -48,6 +48,15 @@ The scope report should include:
 
 If the scope grows, stop and report the expanded scope before continuing.
 
+Multi-thread coordination:
+
+- Backend and frontend threads may run in parallel.
+- Each thread must state its ownership area in the initial scope report.
+- Backend-owned areas include `packages/db`, `apps/game-server`, schema/migrations, wallet/ledger/reward/settlement, socket contracts, and backend auth integration.
+- Frontend-owned areas include `apps/web` UI routes, components, styling, responsive layout, frontend-only state, mock screens, and visual QA.
+- Shared files such as `package.json`, `pnpm-lock.yaml`, `packages/shared`, auth route/helpers, `.env.example`, `AGENTS.md`, and `THREAD_SYNC.md` require explicit reporting before edits.
+- If a shared file is changed, record the reason and impact in this file.
+
 After making file changes:
 
 - Inspect `git status`.
@@ -438,6 +447,7 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - A gitignored local `.env` file was created from `.env.example` values.
 - Root `.env` loading was fixed for Drizzle CLI and the DB client.
 - `AGENTS.md` was updated to require agents to commit after verified file changes, unless there is an explicit reason not to commit.
+- `AGENTS.md` was updated with multi-thread ownership rules so backend and frontend threads can run in parallel with reduced file interference.
 - Better Auth integration work started: package adapter installed, auth route/client/server files added, auth UI added, and `AUTH_STRUCTURE.md` created.
 - Better Auth production build issue was resolved by pinning Kysely to `0.28.17`.
 - Better Auth integration was verified through `/auth`, `/api/auth/sign-up/email`, `/api/auth/get-session`, and a PostgreSQL row check; the smoke-test account was deleted afterward.

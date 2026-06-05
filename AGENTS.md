@@ -103,3 +103,48 @@ docs/04_SOCKET_EVENTS.md
 ```
 
 커밋할 때는 unrelated change를 포함하지 않는다.
+
+## 7. Multi-Thread 작업 분리 규칙
+
+이 프로젝트는 백엔드 스레드와 프론트엔드 스레드를 동시에 운영할 수 있다.
+
+각 스레드는 작업 시작 전 자신이 담당하는 영역을 작업 범위 보고에 명시한다.
+
+Backend thread 기본 담당:
+
+```text
+packages/db
+apps/game-server
+database schema / migrations
+wallet / ledger / reward / settlement
+socket contracts
+backend auth integration
+```
+
+Frontend thread 기본 담당:
+
+```text
+apps/web UI routes
+components
+styling
+responsive layout
+frontend-only state
+mock screens and visual QA
+```
+
+공유 파일은 수정 전에 반드시 사용자에게 보고한다.
+
+```text
+package.json
+pnpm-lock.yaml
+packages/shared
+apps/web/src/lib/auth*
+apps/web/src/app/api/auth/[...all]/route.ts
+.env.example
+AGENTS.md
+THREAD_SYNC.md
+```
+
+공유 파일을 수정하면 작업 완료 후 `THREAD_SYNC.md`에 변경 이유와 영향을 기록한다.
+
+다른 스레드의 담당 영역에서 변경이 필요해지면 즉시 멈추고 사용자에게 범위 변경을 보고한다.

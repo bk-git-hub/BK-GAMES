@@ -10,8 +10,9 @@ Last updated: 2026-06-05
 
 - Workspace: `C:\Users\bksoft\Documents\BK-Games`
 - Branch: `main`
-- Current git status at the time of this note: `THREAD_SYNC.md` and `docker-compose.yml` are uncommitted
-- Latest commit: `e9e154c feat(db): add blackjack schema and migrations`
+- Current git status at the time of this note: clean before the agent-rule update
+- Latest known committed baseline: `948c0b0 chore(dev): add docker postgres setup`
+- Previous DB schema commit: `e9e154c feat(db): add blackjack schema and migrations`
 - Initial commit: `f419b8b chore: initialize bk-games monorepo`
 
 ## Project Summary
@@ -30,7 +31,7 @@ The project is intentionally split into multiple apps/packages:
 
 Read `AGENTS.md` before working.
 
-The most important local rule is: report the work scope before starting every task.
+The most important local rules are: report the work scope before starting every task, and commit after making verified file changes.
 
 The scope report should include:
 
@@ -41,6 +42,14 @@ The scope report should include:
 - Verification method
 
 If the scope grows, stop and report the expanded scope before continuing.
+
+After making file changes:
+
+- Inspect `git status`.
+- Stage only the files that belong to the current task.
+- Run the appropriate verification.
+- Commit in the same task if verification passes.
+- Do not include unrelated user changes, ignored local env files, logs, caches, or generated artifacts that should stay untracked.
 
 ## Documentation Rules
 
@@ -394,3 +403,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - The local database was verified to contain 17 public tables.
 - A gitignored local `.env` file was created from `.env.example` values.
 - Root `.env` loading was fixed for Drizzle CLI and the DB client.
+- `AGENTS.md` was updated to require agents to commit after verified file changes, unless there is an explicit reason not to commit.

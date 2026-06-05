@@ -30,6 +30,8 @@ Implemented now:
 - Better Auth React client helper.
 - Basic sign-in/sign-up page.
 - Home page session display and sign-out button.
+- Idempotent game account bootstrap for authenticated users.
+- Automatic `user_profiles` and `wallets` creation when an authenticated user reaches the home page.
 - Root `.env` loading for package-level Drizzle commands and DB client usage.
 
 Not implemented yet:
@@ -38,7 +40,7 @@ Not implemented yet:
 - Email verification.
 - Password reset email flow.
 - Admin role enforcement.
-- Wallet creation on signup.
+- Initial point grant.
 - Game-server Socket.IO authentication.
 - Game token issuance for realtime socket handshakes.
 
@@ -89,6 +91,10 @@ Database schema:
 
 - `packages/db/src/schema.ts`
 
+Game account bootstrap:
+
+- `packages/db/src/user-bootstrap.ts`
+
 Dev database:
 
 - `docker-compose.yml`
@@ -119,6 +125,17 @@ Dev database:
 1. `SignOutButton` calls `authClient.signOut`.
 2. Better Auth clears the session.
 3. The home page refreshes and shows the guest state.
+
+### Game Account Bootstrap
+
+1. The home page reads the Better Auth session server-side.
+2. If a session exists, the server calls `ensureUserGameAccount`.
+3. The helper inserts a `user_profiles` row if it does not exist.
+4. The helper inserts a `wallets` row if it does not exist.
+5. Both inserts run inside one database transaction.
+6. Unique constraints make repeated calls safe.
+
+The browser never sends the `userId` used for bootstrap. The user id comes from the trusted server-side Better Auth session.
 
 ## Database Tables Used By Better Auth
 
@@ -181,14 +198,14 @@ Example: user abc123 may bet from their own wallet but cannot adjust another use
 
 Current implementation covers authentication.
 
-Next work should begin applying authorization rules to profile, wallet, and game-server flows.
+Next work should begin applying authorization rules to wallet transactions and game-server flows.
 
 ## Next Recommended Auth Work
 
 Recommended order:
 
-1. Create `user_profiles` rows when a user signs up.
-2. Create a wallet bootstrap flow for new users.
+1. Add transaction-safe wallet mutation helpers.
+2. Implement daily reward claim as the first real ledger flow.
 3. Add server helpers for `requireSession` and `requireUserId`.
 4. Define how the NestJS game server receives trusted identity from the web app.
 5. Add Socket.IO handshake validation.

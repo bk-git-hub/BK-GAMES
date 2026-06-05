@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import Link from "next/link";
+import { ensureUserGameAccount } from "@bk-games/db";
 import { LogIn } from "lucide-react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -20,11 +21,12 @@ const setupItems = [
   "pnpm workspace",
   "Shared packages",
   "Better Auth route",
+  "Profile and wallet bootstrap",
 ];
 
 const nextItems = [
-  "Wallet profile bootstrap",
-  "Point wallet",
+  "Wallet transaction service",
+  "Daily reward claim",
   "Blackjack engine",
   "Realtime table state machine",
 ];
@@ -33,6 +35,13 @@ export default async function Home() {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
+  const gameAccount = session
+    ? await ensureUserGameAccount({
+        userId: session.user.id,
+        displayName: session.user.name,
+      })
+    : null;
+  const walletBalanceText = gameAccount?.wallet.balance.toString() ?? "0";
 
   return (
     <main className="bg-background text-foreground min-h-screen">
@@ -59,7 +68,7 @@ export default async function Home() {
             </span>
             <span className="text-muted-foreground text-sm">
               {session
-                ? session.user.email
+                ? `${session.user.email} · Wallet ready (${walletBalanceText} pts)`
                 : "Sign in to start the table flow."}
             </span>
           </div>

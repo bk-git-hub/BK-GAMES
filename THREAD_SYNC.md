@@ -172,10 +172,12 @@ Implemented:
 - Root pnpm override pins `kysely@0.28.17` because Better Auth `1.6.14` failed production builds with the initially resolved `kysely@0.29.2`.
 - Explicit Better Auth `basePath: "/api/auth"` is configured on both the server auth instance and browser client helper.
 - Local auth smoke passed: `/auth` rendered, email sign-up created a session, and the PostgreSQL `user` row was confirmed.
+- User profile and wallet bootstrap now runs for authenticated users through `packages/db/src/user-bootstrap.ts`.
 
 Current scope does not include:
 
-- Wallet bootstrap on signup.
+- Initial point grant.
+- Wallet ledger mutation service.
 - Game-server socket auth.
 - OAuth providers.
 - Password reset email.
@@ -376,27 +378,27 @@ The user chose Docker as the preferred path.
 
 ## Next Recommended Work
 
-Next task should be wallet/user bootstrap or wallet transaction implementation.
+Next task should be wallet transaction implementation or daily reward claim.
 
 Recommended order:
 
-- Add session/user plumbing between `apps/web` and `apps/game-server`.
-- Implement wallet creation and transaction-safe point mutation helpers.
+- Implement transaction-safe point mutation helpers.
 - Implement daily reward claim as the first real wallet/ledger flow.
+- Add session/user plumbing between `apps/web` and `apps/game-server`.
 
-The local DB is migrated, and Better Auth wiring has been verified.
+The local DB is migrated, Better Auth wiring has been verified, and authenticated users are bootstrapped into `user_profiles` and `wallets`.
 
 ## Suggested Next Scope Report
 
-Use this before starting wallet bootstrap after Better Auth is committed:
+Use this before starting wallet transaction helpers:
 
 ```text
 이번 작업 범위:
-- 목표: 회원가입 이후 user profile/wallet bootstrap 구조 구현
-- 수정 예상: apps/web auth hook 또는 server flow, packages/db/service layer
-- 실행 명령: pnpm typecheck, pnpm lint, pnpm test, auth signup smoke check
-- 제외: blackjack runtime 구현, admin UI 구현, Socket.IO auth 구현
-- 검증: signup 후 user/profile/wallet row 생성 확인
+- 목표: transaction-safe wallet mutation helper 구현
+- 수정 예상: packages/db wallet service, tests if added
+- 실행 명령: pnpm typecheck, pnpm lint, pnpm test, pnpm build
+- 제외: blackjack runtime 구현, admin UI 구현, Socket.IO auth 구현, daily reward UI
+- 검증: ledger + wallet balance가 같은 transaction에서 갱신되는지 확인
 ```
 
 ## Update Rules For This File
@@ -437,3 +439,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - Better Auth integration work started: package adapter installed, auth route/client/server files added, auth UI added, and `AUTH_STRUCTURE.md` created.
 - Better Auth production build issue was resolved by pinning Kysely to `0.28.17`.
 - Better Auth integration was verified through `/auth`, `/api/auth/sign-up/email`, `/api/auth/get-session`, and a PostgreSQL row check; the smoke-test account was deleted afterward.
+- User profile and wallet bootstrap was implemented with an idempotent DB transaction and wired into the authenticated home page flow.

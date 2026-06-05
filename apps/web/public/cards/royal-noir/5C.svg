@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="588" viewBox="0 0 420 588" role="img" aria-labelledby="title desc">
+  <title id="title">Royal Noir - Five of Clubs</title>
+  <desc id="desc">A black and gold Royal Noir themed playing card for the Five of Clubs.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#050505"/>
+      <stop offset="0.48" stop-color="#17130b"/>
+      <stop offset="1" stop-color="#030303"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff0a8"/>
+      <stop offset="0.36" stop-color="#c6932f"/>
+      <stop offset="0.72" stop-color="#6f4815"/>
+      <stop offset="1" stop-color="#f7d878"/>
+    </linearGradient>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <style>
+      .rank { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; fill: #f6d37a; letter-spacing: 0; }
+      .corner .suit { filter: url(#softGlow); }
+      .face-rank { font-family: Georgia, 'Times New Roman', serif; font-size: 132px; font-weight: 700; fill: #f6d37a; letter-spacing: 0; }
+      .small-label { font-family: Georgia, 'Times New Roman', serif; font-size: 15px; font-weight: 700; fill: #f6d37a; letter-spacing: 0; opacity: 0.78; }
+      .suit { filter: drop-shadow(0 2px 4px rgba(0,0,0,0.55)); }
+    </style>
+  </defs>
+
+    <rect width="420" height="588" rx="34" fill="url(#bg)"/>
+    <rect x="10" y="10" width="400" height="568" rx="30" fill="none" stroke="url(#edge)" stroke-width="5"/>
+    <rect x="24" y="24" width="372" height="540" rx="24" fill="none" stroke="#f6d37a" stroke-width="1.4" opacity="0.62"/>
+    <rect x="36" y="36" width="348" height="516" rx="20" fill="none" stroke="#7a5521" stroke-width="1" opacity="0.48"/>
+    <path d="M210 44 C250 82 301 84 344 64 C325 112 344 156 376 188 C319 179 274 202 246 246 C247 197 236 116 210 44 Z" fill="#f6d37a" opacity="0.035"/>
+    <path d="M210 544 C170 506 119 504 76 524 C95 476 76 432 44 400 C101 409 146 386 174 342 C173 391 184 472 210 544 Z" fill="#f6d37a" opacity="0.035"/>
+    <path d="M126 116 L136 126 L126 136 L116 126 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M210 116 L220 126 L210 136 L200 126 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M294 116 L304 126 L294 136 L284 126 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M126 200 L136 210 L126 220 L116 210 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M210 200 L220 210 L210 220 L200 210 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M294 200 L304 210 L294 220 L284 210 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M126 284 L136 294 L126 304 L116 294 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M210 284 L220 294 L210 304 L200 294 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M294 284 L304 294 L294 304 L284 294 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M126 368 L136 378 L126 388 L116 378 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M210 368 L220 378 L210 388 L200 378 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M294 368 L304 378 L294 388 L284 378 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M126 452 L136 462 L126 472 L116 462 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M210 452 L220 462 L210 472 L200 462 Z" fill="#f6d37a" opacity="0.055"/>
+    <path d="M294 452 L304 462 L294 472 L284 462 Z" fill="#f6d37a" opacity="0.055"/>
+    <circle cx="210" cy="294" r="132" fill="none" stroke="#f6d37a" stroke-width="1" opacity="0.16"/>
+    <circle cx="210" cy="294" r="104" fill="none" stroke="#7a5521" stroke-width="1" opacity="0.18"/>
+
+    <g class="corner">
+      <text x="52" y="78" class="rank" font-size="50">5</text>
+      <g class="suit " transform="translate(62 112) rotate(0) scale(0.36)" fill="#f6d37a" opacity="1"><circle cx="0" cy="-22" r="21"/><circle cx="-24" cy="6" r="21"/><circle cx="24" cy="6" r="21"/><path d="M-8 20 C-8 35 -16 47 -28 58 H28 C16 47 8 35 8 20 Z"/></g>
+    </g>
+    <g class="corner" transform="translate(420 588) rotate(180)">
+      <text x="52" y="78" class="rank" font-size="50">5</text>
+      <g class="suit " transform="translate(62 112) rotate(0) scale(0.36)" fill="#f6d37a" opacity="1"><circle cx="0" cy="-22" r="21"/><circle cx="-24" cy="6" r="21"/><circle cx="24" cy="6" r="21"/><path d="M-8 20 C-8 35 -16 47 -28 58 H28 C16 47 8 35 8 20 Z"/></g>
+    </g>
+  <g class="pip-field">
+    <g class="suit " transform="translate(145 145) rotate(0) scale(0.68)" fill="#f6d37a" opacity="0.96"><circle cx="0" cy="-22" r="21"/><circle cx="-24" cy="6" r="21"/><circle cx="24" cy="6" r="21"/><path d="M-8 20 C-8 35 -16 47 -28 58 H28 C16 47 8 35 8 20 Z"/></g>
+    <g class="suit " transform="translate(275 145) rotate(0) scale(0.68)" fill="#f6d37a" opacity="0.96"><circle cx="0" cy="-22" r="21"/><circle cx="-24" cy="6" r="21"/><circle cx="24" cy="6" r="21"/><path d="M-8 20 C-8 35 -16 47 -28 58 H28 C16 47 8 35 8 20 Z"/></g>
+    <g class="suit " transform="translate(210 294) rotate(0) scale(0.68)" fill="#f6d37a" opacity="0.96"><circle cx="0" cy="-22" r="21"/><circle cx="-24" cy="6" r="21"/><circle cx="24" cy="6" r="21"/><path d="M-8 20 C-8 35 -16 47 -28 58 H28 C16 47 8 35 8 20 Z"/></g>
+    <g class="suit " transform="translate(145 443) rotate(180) scale(0.68)" fill="#f6d37a" opacity="0.96"><circle cx="0" cy="-22" r="21"/><circle cx="-24" cy="6" r="21"/><circle cx="24" cy="6" r="21"/><path d="M-8 20 C-8 35 -16 47 -28 58 H28 C16 47 8 35 8 20 Z"/></g>
+    <g class="suit " transform="translate(275 443) rotate(180) scale(0.68)" fill="#f6d37a" opacity="0.96"><circle cx="0" cy="-22" r="21"/><circle cx="-24" cy="6" r="21"/><circle cx="24" cy="6" r="21"/><path d="M-8 20 C-8 35 -16 47 -28 58 H28 C16 47 8 35 8 20 Z"/></g>
+  </g>
+</svg>

@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const packageDir = dirname(fileURLToPath(import.meta.url));
 
-config({ path: resolve(packageDir, "../../.env") });
-config({ path: resolve(packageDir, ".env") });
+config({ path: resolve(packageDir, "../../.env"), quiet: true });
+config({ path: resolve(packageDir, ".env"), quiet: true });
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required for Drizzle Kit.");

@@ -8,8 +8,8 @@ import * as schema from "./schema";
 
 const packageSrcDir = dirname(fileURLToPath(import.meta.url));
 
-config({ path: resolve(packageSrcDir, "../../../.env") });
-config({ path: resolve(packageSrcDir, "../.env") });
+config({ path: resolve(packageSrcDir, "../../../.env"), quiet: true });
+config({ path: resolve(packageSrcDir, "../.env"), quiet: true });
 
 const { Pool } = pg;
 

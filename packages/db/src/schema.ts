@@ -149,6 +149,11 @@ export const authVerifications = pgTable(
   ],
 );
 
+export const user = authUsers;
+export const session = authSessions;
+export const account = authAccounts;
+export const verification = authVerifications;
+
 export const userProfiles = pgTable(
   "user_profiles",
   {

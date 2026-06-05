@@ -14,6 +14,11 @@
     "db:migrate": "pnpm --filter @bk-games/db db:migrate",
     "db:studio": "pnpm --filter @bk-games/db db:studio"
   },
+  "pnpm": {
+    "overrides": {
+      "kysely": "0.28.17"
+    }
+  },
   "devDependencies": {
     "eslint": "^10.4.1",
     "prettier": "^3.8.3",

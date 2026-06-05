@@ -10,8 +10,9 @@ Last updated: 2026-06-05
 
 - Workspace: `C:\Users\bksoft\Documents\BK-Games`
 - Branch: `main`
-- Current git status at the time of this note: clean before the agent-rule update
-- Latest known committed baseline: `948c0b0 chore(dev): add docker postgres setup`
+- Current git status: always run `git status --short --branch` in the active thread.
+- Latest known committed baseline before Better Auth work: `e93780b chore: require commits after agent changes`
+- Previous Docker setup commit: `948c0b0 chore(dev): add docker postgres setup`
 - Previous DB schema commit: `e9e154c feat(db): add blackjack schema and migrations`
 - Initial commit: `f419b8b chore: initialize bk-games monorepo`
 
@@ -26,6 +27,10 @@ The project is intentionally split into multiple apps/packages:
 - `packages/game-engine`: Pure TypeScript blackjack rule engine.
 - `packages/db`: Drizzle schema, database client, and migrations.
 - `packages/shared`: Shared types, socket event names, and cross-package constants.
+
+Auth structure documentation:
+
+- `AUTH_STRUCTURE.md`
 
 ## Important Agent Rules
 
@@ -149,6 +154,32 @@ Verification:
 - `docker compose ps` showed `bk-games-postgres` as `healthy`.
 - `pnpm db:migrate` completed successfully.
 - `information_schema.tables` showed 17 public tables.
+
+### Better Auth Integration
+
+Status: implemented and verified.
+
+Implemented:
+
+- Better Auth server instance in `apps/web/src/lib/auth.ts`.
+- Better Auth React client helper in `apps/web/src/lib/auth-client.ts`.
+- Next.js route handler in `apps/web/src/app/api/auth/[...all]/route.ts`.
+- Sign-in/sign-up page under `apps/web/src/app/auth`.
+- Sign-out button under `apps/web/src/components/auth`.
+- Home page server-side session display.
+- Drizzle schema aliases for `user`, `session`, `account`, and `verification`.
+- Auth structure documentation in `AUTH_STRUCTURE.md`.
+- Root pnpm override pins `kysely@0.28.17` because Better Auth `1.6.14` failed production builds with the initially resolved `kysely@0.29.2`.
+- Explicit Better Auth `basePath: "/api/auth"` is configured on both the server auth instance and browser client helper.
+- Local auth smoke passed: `/auth` rendered, email sign-up created a session, and the PostgreSQL `user` row was confirmed.
+
+Current scope does not include:
+
+- Wallet bootstrap on signup.
+- Game-server socket auth.
+- OAuth providers.
+- Password reset email.
+- Admin authorization.
 
 ## Confirmed Technical Decisions
 
@@ -345,28 +376,27 @@ The user chose Docker as the preferred path.
 
 ## Next Recommended Work
 
-Next task should be Better Auth integration or wallet transaction implementation.
+Next task should be wallet/user bootstrap or wallet transaction implementation.
 
 Recommended order:
 
-- Wire Better Auth to the Drizzle/PostgreSQL database.
 - Add session/user plumbing between `apps/web` and `apps/game-server`.
 - Implement wallet creation and transaction-safe point mutation helpers.
 - Implement daily reward claim as the first real wallet/ledger flow.
 
-The local DB is now migrated, so Better Auth and wallet work can start.
+The local DB is migrated, and Better Auth wiring has been verified.
 
 ## Suggested Next Scope Report
 
-Use this before starting Better Auth setup:
+Use this before starting wallet bootstrap after Better Auth is committed:
 
 ```text
 이번 작업 범위:
-- 목표: Better Auth를 Next.js/Drizzle/PostgreSQL에 연결
-- 수정 예상: apps/web, packages/db, .env.example 필요 시 보강
-- 실행 명령: pnpm typecheck, pnpm lint, pnpm test, auth smoke check
-- 제외: wallet transaction 구현, blackjack runtime 구현, admin UI 구현
-- 검증: auth route/session 동작 확인, 타입체크/린트/테스트
+- 목표: 회원가입 이후 user profile/wallet bootstrap 구조 구현
+- 수정 예상: apps/web auth hook 또는 server flow, packages/db/service layer
+- 실행 명령: pnpm typecheck, pnpm lint, pnpm test, auth signup smoke check
+- 제외: blackjack runtime 구현, admin UI 구현, Socket.IO auth 구현
+- 검증: signup 후 user/profile/wallet row 생성 확인
 ```
 
 ## Update Rules For This File
@@ -404,3 +434,6 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - A gitignored local `.env` file was created from `.env.example` values.
 - Root `.env` loading was fixed for Drizzle CLI and the DB client.
 - `AGENTS.md` was updated to require agents to commit after verified file changes, unless there is an explicit reason not to commit.
+- Better Auth integration work started: package adapter installed, auth route/client/server files added, auth UI added, and `AUTH_STRUCTURE.md` created.
+- Better Auth production build issue was resolved by pinning Kysely to `0.28.17`.
+- Better Auth integration was verified through `/auth`, `/api/auth/sign-up/email`, `/api/auth/get-session`, and a PostgreSQL row check; the smoke-test account was deleted afterward.

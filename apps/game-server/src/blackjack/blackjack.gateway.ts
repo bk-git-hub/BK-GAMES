@@ -15,6 +15,7 @@ import {
   type BlackjackJoinTablePayload,
   type BlackjackLeaveSeatPayload,
   type BlackjackPlaceBetPayload,
+  type BlackjackPlayerActionPayload,
   type BlackjackSocketErrorPayload,
   type BlackjackSocketUser,
   type BlackjackTakeSeatPayload,
@@ -176,6 +177,27 @@ export class BlackjackGateway {
         }
       },
     );
+  }
+
+  @SubscribeMessage(BLACKJACK_CLIENT_EVENTS.PLAYER_ACTION)
+  handlePlayerAction(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: BlackjackPlayerActionPayload,
+  ) {
+    this.handleCommand(socket, BLACKJACK_CLIENT_EVENTS.PLAYER_ACTION, () => {
+      const user = this.resolveSocketUser(socket);
+      const update = this.tableService.playerAction({
+        tableId: body.tableId,
+        seatNo: body.seatNo,
+        action: body.action,
+        socketId: socket.id,
+        user,
+      });
+
+      void socket.join(blackjackTableRoom(update.state.tableId));
+      void socket.join(blackjackUserRoom(user.userId));
+      this.emitTableUpdate(update);
+    });
   }
 
   private handleCommand(
@@ -372,5 +394,8 @@ const socketErrorCodes = new Set<string>([
   'WALLET_NOT_ACTIVE',
   'INSUFFICIENT_BALANCE',
   'IDEMPOTENCY_CONFLICT',
+  'ROUND_NOT_ACTIVE',
+  'NOT_YOUR_TURN',
+  'ACTION_NOT_ALLOWED',
   'INVALID_SOCKET_USER',
 ]);

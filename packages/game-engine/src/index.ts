@@ -1,1 +1,1 @@
-export * from "./blackjack";
+export * from "./blackjack/index.js";

@@ -398,11 +398,13 @@ Next task should build on the realtime blackjack table skeleton.
 
 Recommended order:
 
-- Wire the pure blackjack engine into `apps/game-server` realtime round state.
-- Add player action commands for hit, stand, double, split, surrender, and insurance/even-money decisions.
-- Then wire frontend Socket.IO client to request game tokens, join the table, take seats, and place bets against the backend contract.
+- Add wallet-backed blackjack settlement for the current HIT/STAND runtime slice.
+- Add advanced player action commands for double, split, surrender, and insurance/even-money decisions.
+- Then wire frontend Socket.IO client to request game tokens, join the table, take seats, place bets, and send player actions against the backend contract.
 
 The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, game-server sockets can verify short-lived game tokens from `POST /api/game-token`, initial blackjack bets now debit wallets through an idempotent DB transaction, and `packages/game-engine` now has pure blackjack card/hand/action helpers.
+
+The game-server now starts an in-memory blackjack round after all occupied seats have confirmed initial bets, deals public player cards plus hidden dealer hole card, supports realtime `player:action` for HIT/STAND, advances player turns, and runs the dealer to `SETTLING` when player turns are complete. Settlement remains intentionally pending.
 
 ## Suggested Next Scope Report
 
@@ -410,11 +412,11 @@ Use this before starting the next backend blackjack slice:
 
 ```text
 이번 작업 범위:
-- 목표: game-server blackjack round state machine 연결
-- 수정 예상: apps/game-server, packages/shared, 필요 시 packages/db
+- 목표: HIT/STAND blackjack round settlement 연결
+- 수정 예상: apps/game-server, packages/db, packages/shared 필요 시
 - 실행 명령: pnpm --filter game-server test, pnpm typecheck, pnpm lint, pnpm test, pnpm build
-- 제외: frontend UI, admin UI, 고급 규칙 전체 구현
-- 검증: socket command/state transition test, game-server unit test, 전체 workspace 검증
+- 제외: frontend UI, admin UI, double/split/surrender/insurance 구현
+- 검증: settlement unit test, wallet idempotency smoke, game-server unit test, 전체 workspace 검증
 ```
 
 ## Update Rules For This File
@@ -472,3 +474,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - `bet:place` now requires `commandId`, `tableId`, `seatNo`, and string point `amount`. The game-server reserves the runtime seat before DB work, confirms the bet after DB success, broadcasts table state without wallet balance, and emits `wallet:updated` only to `user:{userId}`.
 - `pnpm --filter @bk-games/db smoke:blackjack-betting` verifies bet idempotency: retrying the same command reuses the same ledger and round seat without a second debit.
 - Pure blackjack engine foundation was added in `packages/game-engine`: ordered deck creation, Fisher-Yates shuffle, hand evaluation with soft ace handling, natural blackjack/bust detection, dealer soft-17 policy, pair detection, and player action availability. Verification: `pnpm --filter @bk-games/game-engine test` now covers 9 engine tests.
+- Realtime blackjack round state was wired into `apps/game-server`: `ROUND_STARTED`, `PLAYER_ACTED`, and `DEALER_PLAYED` table events were added; seat snapshots now include hand status, cards, score, current-turn marker, and available actions; dealer snapshots now hide the hole card during player turns. Impact: frontend threads should render from `packages/shared/src/socket-events.ts` instead of local mock shapes.

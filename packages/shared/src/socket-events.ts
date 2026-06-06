@@ -76,12 +76,28 @@ export type BlackjackLeaveSeatPayload = {
   seatNo: number;
 };
 
+export type BlackjackPlayerAction = "HIT" | "STAND";
+
 export type BlackjackPlaceBetPayload = {
   commandId: string;
   tableId: string;
   seatNo: number;
   amount: string;
 };
+
+export type BlackjackPlayerActionPayload = {
+  tableId: string;
+  seatNo: number;
+  action: BlackjackPlayerAction;
+};
+
+export type BlackjackHandStatus =
+  | "WAITING_BET"
+  | "BET_PLACED"
+  | "PLAYING"
+  | "STOOD"
+  | "BUSTED"
+  | "BLACKJACK";
 
 export type BlackjackSeatSnapshot = {
   seatNo: number;
@@ -90,6 +106,12 @@ export type BlackjackSeatSnapshot = {
   status: BlackjackSeatStatus;
   connected: boolean;
   betAmount: string | null;
+  handStatus: BlackjackHandStatus;
+  cards: BlackjackCardSnapshot[];
+  score: number | null;
+  isSoft: boolean;
+  isCurrentTurn: boolean;
+  availableActions: BlackjackPlayerAction[];
 };
 
 export type BlackjackDealerSnapshot = {
@@ -117,10 +139,15 @@ export type BlackjackTableState = {
   seats: BlackjackSeatSnapshot[];
   bettingLimits: BlackjackBettingLimitsSnapshot;
   dealer: BlackjackDealerSnapshot;
-  round: null;
+  round: BlackjackRoundSnapshot | null;
   timers: BlackjackTimerSnapshot;
   version: number;
   updatedAt: string;
+};
+
+export type BlackjackRoundSnapshot = {
+  roundId: string;
+  currentTurnSeatNo: number | null;
 };
 
 export type BlackjackTableEventType =
@@ -128,6 +155,9 @@ export type BlackjackTableEventType =
   | "SEAT_TAKEN"
   | "SEAT_LEFT"
   | "BET_PLACED"
+  | "ROUND_STARTED"
+  | "PLAYER_ACTED"
+  | "DEALER_PLAYED"
   | "PLAYER_DISCONNECTED";
 
 export type BlackjackTableEventPayload = {
@@ -161,6 +191,9 @@ export type BlackjackSocketErrorCode =
   | "WALLET_NOT_ACTIVE"
   | "INSUFFICIENT_BALANCE"
   | "IDEMPOTENCY_CONFLICT"
+  | "ROUND_NOT_ACTIVE"
+  | "NOT_YOUR_TURN"
+  | "ACTION_NOT_ALLOWED"
   | "INVALID_SOCKET_USER"
   | "UNKNOWN_ERROR";
 

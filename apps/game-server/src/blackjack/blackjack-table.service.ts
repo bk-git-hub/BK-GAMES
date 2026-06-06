@@ -1,5 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
+  createDeck,
+  evaluateHand,
+  getAvailablePlayerActions,
+  shouldDealerHit,
+  shuffleDeck,
+  type BlackjackCard,
+  type BlackjackPlayerAction as BlackjackEnginePlayerAction,
+  type RandomSource,
+} from './blackjack-engine.port';
+import {
+  type BlackjackCardSnapshot,
+  type BlackjackHandStatus,
+  type BlackjackPlayerAction as BlackjackSocketPlayerAction,
   type BlackjackSeatSnapshot,
   type BlackjackSocketErrorCode,
   type BlackjackSocketUser,
@@ -9,9 +22,30 @@ import {
   type BlackjackTableStatus,
 } from '@bk-games/shared';
 
+export const BLACKJACK_TABLE_OPTIONS = 'BLACKJACK_TABLE_OPTIONS';
+
+export type BlackjackTableOptions = {
+  deckCount?: number;
+  dealerHitsSoft17?: boolean;
+  randomSource?: RandomSource;
+};
+
 @Injectable()
 export class BlackjackTableService {
   private readonly tables = new Map<string, BlackjackTableRuntime>();
+  private readonly deckCount: number;
+  private readonly dealerHitsSoft17: boolean;
+  private readonly randomSource: RandomSource;
+
+  constructor(
+    @Optional()
+    @Inject(BLACKJACK_TABLE_OPTIONS)
+    options?: BlackjackTableOptions,
+  ) {
+    this.deckCount = normalizeDeckCount(options?.deckCount ?? 6);
+    this.dealerHitsSoft17 = options?.dealerHitsSoft17 ?? false;
+    this.randomSource = options?.randomSource ?? Math.random;
+  }
 
   joinTable(input: BlackjackJoinTableInput): BlackjackTableMutationResult {
     const table = this.getOrCreateTable(input.tableId);
@@ -239,11 +273,17 @@ export class BlackjackTableService {
       roundSeatId: input.roundSeatId,
     };
     seat.pendingBet = undefined;
+    const roundStarted = this.maybeStartRound(table);
     this.bump(table);
 
     return {
       state: this.toState(table),
-      event: this.toEvent(table, 'BET_PLACED', user.userId, seatNo),
+      event: this.toEvent(
+        table,
+        roundStarted ? 'ROUND_STARTED' : 'BET_PLACED',
+        user.userId,
+        seatNo,
+      ),
     };
   }
 
@@ -261,6 +301,81 @@ export class BlackjackTableService {
       seat.pendingBet = undefined;
       this.bump(table);
     }
+  }
+
+  playerAction(
+    input: BlackjackPlayerActionInput,
+  ): BlackjackTableMutationResult {
+    const table = this.getOrCreateTable(input.tableId);
+    const user = normalizeSocketUser(input.user);
+    const seatNo = normalizeSeatNo(input.seatNo, table.maxSeats);
+    const action = normalizePlayerAction(input.action);
+    const seat = table.seats.get(seatNo);
+
+    table.connections.set(input.socketId, user);
+
+    if (!table.round || table.phase !== 'PLAYER_TURNS') {
+      throw new BlackjackTableError(
+        'ROUND_NOT_ACTIVE',
+        `Table ${table.tableId} does not have an active player turn.`,
+      );
+    }
+
+    if (!seat?.hand) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OCCUPIED',
+        `Seat ${seatNo} does not have an active hand.`,
+      );
+    }
+
+    if (seat.userId !== user.userId) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OWNED',
+        `User ${user.userId} does not own seat ${seatNo}.`,
+      );
+    }
+
+    if (table.round.currentTurnSeatNo !== seatNo) {
+      throw new BlackjackTableError(
+        'NOT_YOUR_TURN',
+        `Seat ${seatNo} is not the current turn.`,
+      );
+    }
+
+    const availableActions = this.getAvailableSeatActions(table, seat);
+
+    if (!availableActions.includes(action)) {
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        `${action} is not available for seat ${seatNo}.`,
+      );
+    }
+
+    if (action === 'HIT') {
+      seat.hand.cards.push(drawCard(table));
+      const hand = evaluateHand(seat.hand.cards);
+
+      if (hand.isBust) {
+        seat.hand.status = 'BUSTED';
+      } else if (hand.total === 21) {
+        seat.hand.status = 'STOOD';
+      }
+    } else {
+      seat.hand.status = 'STOOD';
+    }
+
+    const dealerPlayed = this.advanceTurnOrPlayDealer(table);
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(
+        table,
+        dealerPlayed ? 'DEALER_PLAYED' : 'PLAYER_ACTED',
+        user.userId,
+        seatNo,
+      ),
+    };
   }
 
   disconnectSocket(socketId: string): BlackjackTableMutationResult[] {
@@ -307,6 +422,9 @@ export class BlackjackTableService {
       maxInitialBet: 6_000n,
       maxTotalBetPerSeat: 24_000n,
       maxTotalBetPerUser: 42_000n,
+      deckCount: this.deckCount,
+      dealerHitsSoft17: this.dealerHitsSoft17,
+      shoe: [],
       seats: new Map(),
       connections: new Map(),
       version: 0,
@@ -330,28 +448,206 @@ export class BlackjackTableService {
       phase: table.phase,
       seats: Array.from(table.seats.values())
         .sort((left, right) => left.seatNo - right.seatNo)
-        .map(
-          (seat): BlackjackSeatSnapshot => ({
-            seatNo: seat.seatNo,
-            userId: seat.userId,
-            nickname: seat.nickname,
-            status: seat.status,
-            connected: hasConnectedUser(table, seat.userId),
-            betAmount: seat.bet?.amount.toString() ?? null,
-          }),
-        ),
+        .map((seat): BlackjackSeatSnapshot => this.toSeatSnapshot(table, seat)),
       bettingLimits: {
         minInitialBet: table.minInitialBet.toString(),
         maxInitialBet: table.maxInitialBet.toString(),
         maxTotalBetPerSeat: table.maxTotalBetPerSeat.toString(),
         maxTotalBetPerUser: table.maxTotalBetPerUser.toString(),
       },
-      dealer: { cards: [], visibleScore: null, score: null },
-      round: null,
+      dealer: this.toDealerSnapshot(table),
+      round: table.round
+        ? {
+            roundId: table.round.roundId,
+            currentTurnSeatNo: table.round.currentTurnSeatNo,
+          }
+        : null,
       timers: { phaseEndsAt: null, turnEndsAt: null },
       version: table.version,
       updatedAt: table.updatedAt,
     };
+  }
+
+  private toSeatSnapshot(
+    table: BlackjackTableRuntime,
+    seat: BlackjackSeatRuntime,
+  ): BlackjackSeatSnapshot {
+    const hand = seat.hand ? evaluateHand(seat.hand.cards) : null;
+
+    return {
+      seatNo: seat.seatNo,
+      userId: seat.userId,
+      nickname: seat.nickname,
+      status: seat.status,
+      connected: hasConnectedUser(table, seat.userId),
+      betAmount: seat.bet?.amount.toString() ?? null,
+      handStatus: this.toSeatHandStatus(seat),
+      cards: seat.hand?.cards.map((card) => toCardSnapshot(card)) ?? [],
+      score: hand?.total ?? null,
+      isSoft: hand?.isSoft ?? false,
+      isCurrentTurn: table.round?.currentTurnSeatNo === seat.seatNo,
+      availableActions: this.getAvailableSeatActions(table, seat),
+    };
+  }
+
+  private toDealerSnapshot(table: BlackjackTableRuntime) {
+    if (!table.round || table.round.dealerCards.length === 0) {
+      return { cards: [], visibleScore: null, score: null };
+    }
+
+    const dealerCardsAreHidden = table.phase === 'PLAYER_TURNS';
+    const cards = table.round.dealerCards.map((card, index) =>
+      toCardSnapshot(card, dealerCardsAreHidden && index > 0),
+    );
+    const visibleCards = dealerCardsAreHidden
+      ? table.round.dealerCards.slice(0, 1)
+      : table.round.dealerCards;
+    const visibleScore =
+      visibleCards.length > 0 ? evaluateHand(visibleCards).total : null;
+
+    return {
+      cards,
+      visibleScore,
+      score: dealerCardsAreHidden
+        ? null
+        : evaluateHand(table.round.dealerCards).total,
+    };
+  }
+
+  private toSeatHandStatus(seat: BlackjackSeatRuntime): BlackjackHandStatus {
+    if (seat.hand) {
+      return seat.hand.status;
+    }
+
+    if (seat.bet) {
+      return 'BET_PLACED';
+    }
+
+    return 'WAITING_BET';
+  }
+
+  private maybeStartRound(table: BlackjackTableRuntime) {
+    if (table.phase !== 'WAITING_BETS' || table.round) {
+      return false;
+    }
+
+    const seats = this.getSortedOccupiedSeats(table);
+
+    if (seats.length === 0 || seats.some((seat) => !seat.bet)) {
+      return false;
+    }
+
+    const roundId = seats[0]?.bet?.roundId;
+
+    if (!roundId) {
+      return false;
+    }
+
+    table.phase = 'DEALING';
+    table.shoe = this.createShuffledShoe(table);
+    table.round = {
+      roundId,
+      currentTurnSeatNo: null,
+      dealerCards: [],
+    };
+
+    for (const seat of seats) {
+      seat.hand = { cards: [drawCard(table)], status: 'PLAYING' };
+    }
+
+    table.round.dealerCards.push(drawCard(table));
+
+    for (const seat of seats) {
+      seat.hand?.cards.push(drawCard(table));
+    }
+
+    table.round.dealerCards.push(drawCard(table));
+
+    for (const seat of seats) {
+      if (!seat.hand) {
+        continue;
+      }
+
+      if (evaluateHand(seat.hand.cards).isBlackjack) {
+        seat.hand.status = 'BLACKJACK';
+      }
+    }
+
+    this.advanceTurnOrPlayDealer(table);
+
+    return true;
+  }
+
+  private advanceTurnOrPlayDealer(table: BlackjackTableRuntime) {
+    if (!table.round) {
+      return false;
+    }
+
+    const nextSeat = this.getSortedOccupiedSeats(table).find(
+      (seat) => seat.hand?.status === 'PLAYING',
+    );
+
+    if (nextSeat) {
+      table.phase = 'PLAYER_TURNS';
+      table.round.currentTurnSeatNo = nextSeat.seatNo;
+      return false;
+    }
+
+    this.playDealer(table);
+    return true;
+  }
+
+  private playDealer(table: BlackjackTableRuntime) {
+    if (!table.round) {
+      return;
+    }
+
+    table.phase = 'DEALER_TURN';
+    table.round.currentTurnSeatNo = null;
+
+    while (
+      shouldDealerHit(table.round.dealerCards, {
+        dealerHitsSoft17: table.dealerHitsSoft17,
+      })
+    ) {
+      table.round.dealerCards.push(drawCard(table));
+    }
+
+    table.phase = 'SETTLING';
+  }
+
+  private getAvailableSeatActions(
+    table: BlackjackTableRuntime,
+    seat: BlackjackSeatRuntime,
+  ): BlackjackSocketPlayerAction[] {
+    if (
+      !table.round ||
+      table.phase !== 'PLAYER_TURNS' ||
+      table.round.currentTurnSeatNo !== seat.seatNo ||
+      !seat.hand ||
+      seat.hand.status !== 'PLAYING'
+    ) {
+      return [];
+    }
+
+    return getAvailablePlayerActions(
+      { cards: seat.hand.cards },
+      {
+        doubleAllowed: false,
+        splitAllowed: false,
+        surrenderAllowed: false,
+      },
+    ).filter(isSocketPlayerAction);
+  }
+
+  private getSortedOccupiedSeats(table: BlackjackTableRuntime) {
+    return Array.from(table.seats.values()).sort(
+      (left, right) => left.seatNo - right.seatNo,
+    );
+  }
+
+  private createShuffledShoe(table: BlackjackTableRuntime) {
+    return shuffleDeck(createDeck(table.deckCount), this.randomSource);
   }
 
   private toEvent(
@@ -402,6 +698,11 @@ export type BlackjackConfirmBetInput = BlackjackReserveBetInput & {
   roundSeatId: string;
 };
 
+export type BlackjackPlayerActionInput = BlackjackJoinTableInput & {
+  seatNo: number;
+  action: BlackjackSocketPlayerAction;
+};
+
 export type BlackjackCancelBetReservationInput = {
   tableId: string;
   seatNo: number;
@@ -437,6 +738,10 @@ type BlackjackTableRuntime = {
   maxInitialBet: bigint;
   maxTotalBetPerSeat: bigint;
   maxTotalBetPerUser: bigint;
+  deckCount: number;
+  dealerHitsSoft17: boolean;
+  shoe: BlackjackCard[];
+  round?: BlackjackRoundRuntime;
   seats: Map<number, BlackjackSeatRuntime>;
   connections: Map<string, BlackjackSocketUser>;
   version: number;
@@ -450,6 +755,7 @@ type BlackjackSeatRuntime = {
   status: 'OCCUPIED' | 'SITTING_OUT';
   pendingBet?: BlackjackPendingBetRuntime;
   bet?: BlackjackBetRuntime;
+  hand?: BlackjackSeatHandRuntime;
 };
 
 type BlackjackPendingBetRuntime = {
@@ -462,6 +768,28 @@ type BlackjackBetRuntime = BlackjackPendingBetRuntime & {
   roundId: string;
   roundSeatId: string;
 };
+
+type BlackjackSeatHandRuntime = {
+  cards: BlackjackCard[];
+  status: BlackjackHandStatus;
+};
+
+type BlackjackRoundRuntime = {
+  roundId: string;
+  currentTurnSeatNo: number | null;
+  dealerCards: BlackjackCard[];
+};
+
+function normalizeDeckCount(deckCount: number) {
+  if (!Number.isInteger(deckCount) || deckCount < 1 || deckCount > 8) {
+    throw new BlackjackTableError(
+      'UNKNOWN_ERROR',
+      'Blackjack deckCount must be an integer between 1 and 8.',
+    );
+  }
+
+  return deckCount;
+}
 
 function normalizeTableId(tableId: string) {
   const normalizedTableId = tableId.trim();
@@ -506,6 +834,17 @@ function normalizeCommandId(commandId: string) {
   }
 
   return normalizedCommandId;
+}
+
+function normalizePlayerAction(action: unknown): BlackjackSocketPlayerAction {
+  if (action !== 'HIT' && action !== 'STAND') {
+    throw new BlackjackTableError(
+      'ACTION_NOT_ALLOWED',
+      `${String(action)} is not supported yet.`,
+    );
+  }
+
+  return action;
 }
 
 function normalizeSocketUser(
@@ -581,4 +920,30 @@ function hasConnectedUser(table: BlackjackTableRuntime, userId: string) {
   return Array.from(table.connections.values()).some(
     (user) => user.userId === userId,
   );
+}
+
+function drawCard(table: BlackjackTableRuntime) {
+  const card = table.shoe.shift();
+
+  if (!card) {
+    throw new BlackjackTableError(
+      'UNKNOWN_ERROR',
+      `Table ${table.tableId} shoe is empty.`,
+    );
+  }
+
+  return card;
+}
+
+function toCardSnapshot(
+  card: BlackjackCard,
+  hidden = false,
+): BlackjackCardSnapshot {
+  return hidden ? { ...card, hidden: true } : card;
+}
+
+function isSocketPlayerAction(
+  action: BlackjackEnginePlayerAction,
+): action is BlackjackSocketPlayerAction {
+  return action === 'HIT' || action === 'STAND';
 }

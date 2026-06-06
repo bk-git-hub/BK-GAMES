@@ -1,5 +1,5 @@
-import type { BlackjackCard } from "./cards";
-import { evaluateHand, isPair } from "./hand";
+import type { BlackjackCard } from "./cards.js";
+import { evaluateHand, isPair } from "./hand.js";
 
 export type BlackjackPlayerAction =
   | "HIT"

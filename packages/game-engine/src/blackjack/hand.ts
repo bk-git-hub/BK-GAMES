@@ -2,7 +2,7 @@ import {
   BlackjackEngineError,
   type BlackjackCard,
   type BlackjackRank,
-} from "./cards";
+} from "./cards.js";
 
 export type BlackjackHandEvaluation = {
   cards: readonly BlackjackCard[];

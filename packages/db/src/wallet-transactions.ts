@@ -53,6 +53,15 @@ export type WalletMutationResult = {
   idempotent: boolean;
 };
 
+export type LockedActiveWallet = {
+  id: string;
+  userId: string;
+  balance: bigint;
+  lockedBalance: bigint;
+  status: "ACTIVE";
+  version: number;
+};
+
 export type WalletMutationTransaction = Parameters<
   Parameters<typeof db.transaction>[0]
 >[0];
@@ -213,6 +222,29 @@ export async function applyWalletMutationInTransaction(
   };
 }
 
+export async function getActiveWalletForUpdate(
+  tx: WalletMutationTransaction,
+  userId: string,
+): Promise<LockedActiveWallet> {
+  const lockedWallet = await lockWalletByUserId(tx, userId);
+
+  if (lockedWallet.status !== "ACTIVE") {
+    throw new WalletMutationError(
+      "WALLET_NOT_ACTIVE",
+      `Wallet for user ${userId} is ${lockedWallet.status}.`,
+    );
+  }
+
+  return {
+    id: lockedWallet.id,
+    userId: lockedWallet.userId,
+    balance: toBigInt(lockedWallet.balance),
+    lockedBalance: toBigInt(lockedWallet.lockedBalance),
+    status: "ACTIVE",
+    version: lockedWallet.version,
+  };
+}
+
 function validateWalletMutationInput(input: WalletMutationInput) {
   if (!input.userId.trim()) {
     throw new WalletMutationError("INVALID_MUTATION", "userId is required.");
@@ -352,7 +384,8 @@ function assertIdempotencyMatch(
     ledger.type !== input.type ||
     ledger.delta !== input.delta ||
     ledger.referenceType !== input.referenceType ||
-    ledger.referenceId !== input.referenceId;
+    ledger.referenceId !== input.referenceId ||
+    !jsonValueMatches(ledger.metadata, input.metadata ?? {});
 
   if (mismatched) {
     throw new WalletMutationError(
@@ -376,4 +409,29 @@ function getRows<T>(result: unknown): T[] {
 
 function toBigInt(value: bigint | string) {
   return typeof value === "bigint" ? value : BigInt(value);
+}
+
+function jsonValueMatches(left: unknown, right: unknown) {
+  return stableJsonStringify(left) === stableJsonStringify(right);
+}
+
+function stableJsonStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJsonStringify(item)).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(
+      ([leftKey], [rightKey]) => leftKey.localeCompare(rightKey),
+    );
+
+    return `{${entries
+      .map(
+        ([key, entryValue]) =>
+          `${JSON.stringify(key)}:${stableJsonStringify(entryValue)}`,
+      )
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value) ?? "undefined";
 }

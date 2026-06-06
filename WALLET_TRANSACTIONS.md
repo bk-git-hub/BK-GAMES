@@ -1,6 +1,6 @@
 # BK Games Wallet Transactions
 
-Last updated: 2026-06-05
+Last updated: 2026-06-06
 
 This document explains the current wallet mutation helper.
 
@@ -32,19 +32,22 @@ Implemented:
 - Daily reward claim service using the wallet mutation helper inside the same transaction.
 - Manual smoke script: `pnpm --filter @bk-games/db smoke:wallet`
 - Daily reward smoke script: `pnpm --filter @bk-games/db smoke:daily-reward`
+- Blackjack initial bet transaction helper: `packages/db/src/blackjack-betting.ts`
+- Blackjack betting smoke script: `pnpm --filter @bk-games/db smoke:blackjack-betting`
 
 Not implemented yet:
 
-- Blackjack bet/refund/settlement integration.
+- Blackjack double/split/insurance/surrender bet integration.
+- Blackjack refund/settlement integration.
 - Locked-balance hold/release helper.
 - Admin point adjustment UI/API.
-- Socket.IO auth.
 
 ## Main API
 
 ```ts
 applyWalletMutation(input);
 claimDailyReward(input);
+placeBlackjackInitialBet(input);
 ```
 
 Important input fields:
@@ -209,12 +212,20 @@ Expected shape:
 }
 ```
 
+The blackjack betting smoke script checks:
+
+- A temporary user, wallet, and blackjack table can place an initial bet.
+- The bet creates a wallet `BET` ledger and debits the wallet once.
+- Retrying the same `commandId` returns the same ledger and round seat.
+- Final balance is `9500` after a `10000` grant and one `500` bet.
+- Temporary test data is deleted afterward.
+
 ## Next Work
 
 Next recommended implementation:
 
 ```text
-server-side daily reward entry point
+blackjack engine/state machine and settlement
 ```
 
 Recommended boundary:

@@ -11,6 +11,8 @@
     "test": "echo \"db tests are not configured yet\"",
     "smoke:wallet": "tsx scripts/wallet-transactions-smoke.ts",
     "smoke:daily-reward": "tsx scripts/daily-rewards-smoke.ts",
+    "smoke:blackjack-betting": "tsx scripts/blackjack-betting-smoke.ts",
+    "seed:blackjack-main": "tsx scripts/seed-blackjack-main.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"

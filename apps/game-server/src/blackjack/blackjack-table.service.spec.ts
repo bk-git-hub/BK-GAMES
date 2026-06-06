@@ -131,4 +131,84 @@ describe('BlackjackTableService', () => {
       },
     ]);
   });
+
+  it('confirms a reserved bet and exposes the public bet amount', () => {
+    const service = new BlackjackTableService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    const reservation = service.reserveBet({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      amount: 500n,
+      commandId: 'command-1',
+    });
+    const betPlaced = service.confirmBet({
+      tableId: reservation.tableId,
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: reservation.seatNo,
+      amount: reservation.amount,
+      commandId: reservation.commandId,
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    expect(reservation.kind).toBe('reserved');
+    expect(betPlaced.event.type).toBe('BET_PLACED');
+    expect(betPlaced.state.seats).toEqual([
+      {
+        seatNo: 1,
+        userId: 'user-alice',
+        nickname: 'Alice',
+        status: 'OCCUPIED',
+        connected: true,
+        betAmount: '500',
+      },
+    ]);
+  });
+
+  it('blocks leaving a seat with an active bet', () => {
+    const service = new BlackjackTableService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    service.reserveBet({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      amount: 500n,
+      commandId: 'command-1',
+    });
+    service.confirmBet({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      amount: 500n,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    expect(() =>
+      service.leaveSeat({
+        tableId: 'main',
+        socketId: 'socket-alice',
+        user: alice,
+        seatNo: 1,
+      }),
+    ).toThrow(BlackjackTableError);
+  });
 });

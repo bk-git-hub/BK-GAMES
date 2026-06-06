@@ -228,7 +228,9 @@ The database package now includes the first real wallet authorization boundary f
 
 The game server now has a trusted Socket.IO identity bridge using short-lived game tokens. Socket commands should use the verified token identity, not browser payload user ids.
 
-Next work should expose daily rewards through a server-side entry point and continue applying authorization rules to betting/gameplay flows.
+Initial blackjack betting now uses the verified socket identity and never accepts a browser-supplied user id for wallet debit.
+
+Next work should expose daily rewards through a server-side entry point and continue applying authorization rules to later gameplay actions such as double, split, surrender, insurance, and settlement.
 
 ## Next Recommended Auth Work
 
@@ -237,7 +239,7 @@ Recommended order:
 1. Add server helpers for `requireSession` and `requireUserId`.
 2. Expose daily reward claim through a trusted server-side entry point.
 3. Wire the frontend Socket.IO client to request and send game tokens.
-4. Add wallet-backed blackjack betting authorization.
+4. Add wallet-backed authorization for double, split, surrender, insurance, and settlement.
 5. Add role-based admin checks.
 
 ## Verification Completed

@@ -4,7 +4,7 @@ This file is the handoff document for multiple Codex chat threads working on the
 
 Every new thread should read this file first, then read `AGENTS.md`, then inspect the current git status before making changes.
 
-Last updated: 2026-06-05
+Last updated: 2026-06-06
 
 ## Current Repository State
 
@@ -14,6 +14,7 @@ Last updated: 2026-06-05
 - Latest known committed baseline before Better Auth work: `e93780b chore: require commits after agent changes`
 - Previous Docker setup commit: `948c0b0 chore(dev): add docker postgres setup`
 - Previous DB schema commit: `e9e154c feat(db): add blackjack schema and migrations`
+- Previous game token bridge commit: `1d915fd feat(auth): add game token socket bridge`
 - Initial commit: `f419b8b chore: initialize bk-games monorepo`
 
 ## Project Summary
@@ -382,7 +383,8 @@ As of 2026-06-05:
 - `docker-compose.yml` defines the local PostgreSQL service.
 - `bk-games-postgres` is running and healthy.
 - `localhost:5432` accepts PostgreSQL connections through the Docker container.
-- Drizzle migration has been applied to the local `bk_games` database.
+- Drizzle migrations through `0001_oval_forgotten_one.sql` have been applied to the local `bk_games` database.
+- The `main` blackjack table seed has been applied with `pnpm --filter @bk-games/db seed:blackjack-main`.
 - `packages/db/drizzle.config.ts` and `packages/db/src/client.ts` explicitly load the root `.env`, because filtered package commands run from `packages/db`.
 - `psql`, `postgres`, and `pg_ctl` are still not installed directly on Windows, but `psql` is available inside the Postgres container through `docker exec`.
 
@@ -396,11 +398,11 @@ Next task should build on the realtime blackjack table skeleton.
 
 Recommended order:
 
-- Wire the frontend Socket.IO client to request and send game tokens.
-- Add blackjack betting phase commands and wallet bet debits.
-- Then build the pure blackjack engine/state machine for dealing, player actions, dealer turn, and settlement.
+- Build the pure blackjack engine/state machine for dealing, player actions, dealer turn, and settlement.
+- Add player action commands for hit, stand, double, split, surrender, and insurance/even-money decisions.
+- Then wire frontend Socket.IO client to request game tokens, join the table, take seats, and place bets against the backend contract.
 
-The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, and game-server sockets can verify short-lived game tokens from `POST /api/game-token`.
+The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, game-server sockets can verify short-lived game tokens from `POST /api/game-token`, and initial blackjack bets now debit wallets through an idempotent DB transaction.
 
 ## Suggested Next Scope Report
 
@@ -408,11 +410,11 @@ Use this before starting the next backend blackjack slice:
 
 ```text
 이번 작업 범위:
-- 목표: frontend socket token wiring 또는 blackjack betting phase 구현
-- 수정 예상: apps/web, apps/game-server, packages/shared, 필요 시 packages/db
+- 목표: blackjack engine/state machine 기본 구현
+- 수정 예상: packages/game-engine, apps/game-server, packages/shared, 필요 시 packages/db
 - 실행 명령: pnpm --filter game-server test, pnpm typecheck, pnpm lint, pnpm test, pnpm build
-- 제외: 전체 blackjack settlement 구현, admin UI 구현
-- 검증: socket command/state transition 테스트와 전체 workspace 검증
+- 제외: frontend UI, admin UI, 배포 설정
+- 검증: game-engine unit test, socket command/state transition test, 전체 workspace 검증
 ```
 
 ## Update Rules For This File
@@ -463,3 +465,9 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - Shared blackjack socket contracts were added in `packages/shared`, and `apps/game-server` now has an in-memory realtime table skeleton for join, take-seat, leave-seat, disconnect, and table-state broadcasts. Impact: backend and frontend threads should use the shared event names and payload types instead of stringly typed socket events.
 - The screenshot Notion upload rule was removed because uploading screenshots to Notion is not allowed. Future screenshot requests should report screenshots in chat or provide local artifact paths instead.
 - Trusted game token bridge was added: `POST /api/game-token` issues short-lived HS256 tokens from the Better Auth session, and `apps/game-server` verifies Socket.IO `handshake.auth.token`. Dev query/user fallback is only allowed when `GAME_SOCKET_DEV_AUTH=true`.
+
+### 2026-06-06
+
+- Initial blackjack betting was added. `blackjack_tables.code` now provides stable table codes, `seed:blackjack-main` creates the `main` table, and `placeBlackjackInitialBet` records the round, round seat, initial hand, action command, BET ledger, and wallet debit in one DB transaction.
+- `bet:place` now requires `commandId`, `tableId`, `seatNo`, and string point `amount`. The game-server reserves the runtime seat before DB work, confirms the bet after DB success, broadcasts table state without wallet balance, and emits `wallet:updated` only to `user:{userId}`.
+- `pnpm --filter @bk-games/db smoke:blackjack-betting` verifies bet idempotency: retrying the same command reuses the same ledger and round seat without a second debit.

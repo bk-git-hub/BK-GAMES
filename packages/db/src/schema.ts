@@ -332,6 +332,7 @@ export const blackjackTables = pgTable(
   "blackjack_tables",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    code: text("code").notNull(),
     name: text("name").notNull(),
     status: text("status").default("OPEN").notNull(),
     minInitialBet: pointAmount("min_initial_bet").notNull(),
@@ -384,7 +385,12 @@ export const blackjackTables = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [
+    uniqueIndex("blackjack_tables_code_unique").on(table.code),
     index("blackjack_tables_status_idx").on(table.status),
+    check(
+      "blackjack_tables_code_not_empty",
+      sql`length(trim(${table.code})) > 0`,
+    ),
     check(
       "blackjack_tables_status_check",
       sql`${table.status} in ('OPEN', 'MAINTENANCE', 'CLOSED')`,

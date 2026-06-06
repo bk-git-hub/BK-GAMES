@@ -76,6 +76,13 @@ export type BlackjackLeaveSeatPayload = {
   seatNo: number;
 };
 
+export type BlackjackPlaceBetPayload = {
+  commandId: string;
+  tableId: string;
+  seatNo: number;
+  amount: string;
+};
+
 export type BlackjackSeatSnapshot = {
   seatNo: number;
   userId: string;
@@ -91,6 +98,13 @@ export type BlackjackDealerSnapshot = {
   score: number | null;
 };
 
+export type BlackjackBettingLimitsSnapshot = {
+  minInitialBet: string;
+  maxInitialBet: string;
+  maxTotalBetPerSeat: string;
+  maxTotalBetPerUser: string;
+};
+
 export type BlackjackTimerSnapshot = {
   phaseEndsAt: string | null;
   turnEndsAt: string | null;
@@ -101,6 +115,7 @@ export type BlackjackTableState = {
   status: BlackjackTableStatus;
   phase: BlackjackTablePhase;
   seats: BlackjackSeatSnapshot[];
+  bettingLimits: BlackjackBettingLimitsSnapshot;
   dealer: BlackjackDealerSnapshot;
   round: null;
   timers: BlackjackTimerSnapshot;
@@ -112,6 +127,7 @@ export type BlackjackTableEventType =
   | "TABLE_JOINED"
   | "SEAT_TAKEN"
   | "SEAT_LEFT"
+  | "BET_PLACED"
   | "PLAYER_DISCONNECTED";
 
 export type BlackjackTableEventPayload = {
@@ -125,12 +141,26 @@ export type BlackjackTableEventPayload = {
 
 export type BlackjackSocketErrorCode =
   | "UNAUTHORIZED"
+  | "TABLE_NOT_FOUND"
+  | "TABLE_NOT_OPEN"
   | "INVALID_TABLE_ID"
   | "INVALID_SEAT_NO"
+  | "INVALID_COMMAND_ID"
+  | "INVALID_BET_AMOUNT"
   | "SEAT_OCCUPIED"
   | "SEAT_NOT_OCCUPIED"
   | "SEAT_NOT_OWNED"
+  | "SEAT_HAS_ACTIVE_BET"
   | "SEAT_LIMIT_REACHED"
+  | "BETTING_CLOSED"
+  | "BET_ALREADY_PLACED"
+  | "BET_IN_PROGRESS"
+  | "BET_TOO_LOW"
+  | "BET_TOO_HIGH"
+  | "WALLET_NOT_FOUND"
+  | "WALLET_NOT_ACTIVE"
+  | "INSUFFICIENT_BALANCE"
+  | "IDEMPOTENCY_CONFLICT"
   | "INVALID_SOCKET_USER"
   | "UNKNOWN_ERROR";
 
@@ -138,6 +168,13 @@ export type BlackjackSocketErrorPayload = {
   code: BlackjackSocketErrorCode;
   message: string;
   event?: BlackjackClientEvent;
+};
+
+export type BlackjackWalletUpdatedPayload = {
+  balance: string;
+  delta: string;
+  reason: "BET_PLACED";
+  ledgerId: string;
 };
 
 export function blackjackTableRoom(tableId: string) {

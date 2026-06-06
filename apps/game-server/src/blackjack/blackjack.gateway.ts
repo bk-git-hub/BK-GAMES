@@ -14,12 +14,15 @@ import {
   type BlackjackClientEvent,
   type BlackjackJoinTablePayload,
   type BlackjackLeaveSeatPayload,
+  type BlackjackPlaceBetPayload,
   type BlackjackSocketErrorPayload,
   type BlackjackSocketUser,
   type BlackjackTakeSeatPayload,
+  type BlackjackWalletUpdatedPayload,
 } from '@bk-games/shared';
 import { Server, Socket } from 'socket.io';
 import { GameTokenService } from '../auth/game-token.service';
+import { WalletService } from '../wallet/wallet.service';
 import {
   BlackjackTableError,
   BlackjackTableService,
@@ -40,6 +43,7 @@ export class BlackjackGateway {
   constructor(
     private readonly tableService: BlackjackTableService,
     private readonly gameTokenService: GameTokenService,
+    private readonly walletService: WalletService,
   ) {}
 
   handleDisconnect(socket: Socket) {
@@ -110,13 +114,79 @@ export class BlackjackGateway {
     });
   }
 
+  @SubscribeMessage(BLACKJACK_CLIENT_EVENTS.BET_PLACE)
+  handleBetPlace(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: BlackjackPlaceBetPayload,
+  ) {
+    void this.handleCommand(
+      socket,
+      BLACKJACK_CLIENT_EVENTS.BET_PLACE,
+      async () => {
+        const user = this.resolveSocketUser(socket);
+        const amount = parsePointAmount(body.amount);
+        const reservation = this.tableService.reserveBet({
+          tableId: body.tableId,
+          seatNo: body.seatNo,
+          socketId: socket.id,
+          user,
+          amount,
+          commandId: body.commandId,
+        });
+
+        try {
+          const betResult = await this.walletService.placeBlackjackInitialBet({
+            tableId: reservation.tableId,
+            seatNo: reservation.seatNo,
+            userId: user.userId,
+            amount: reservation.amount,
+            commandId: reservation.commandId,
+          });
+          const update = this.tableService.confirmBet({
+            tableId: reservation.tableId,
+            seatNo: reservation.seatNo,
+            socketId: socket.id,
+            user,
+            amount: reservation.amount,
+            commandId: reservation.commandId,
+            roundId: betResult.round.id,
+            roundSeatId: betResult.roundSeat.id,
+          });
+
+          void socket.join(blackjackTableRoom(update.state.tableId));
+          void socket.join(blackjackUserRoom(user.userId));
+          this.emitTableUpdate(update);
+          this.emitWalletUpdated(user.userId, {
+            balance: betResult.walletMutation.wallet.balance.toString(),
+            delta: betResult.walletMutation.ledger.delta.toString(),
+            reason: 'BET_PLACED',
+            ledgerId: betResult.walletMutation.ledger.id,
+          });
+        } catch (error) {
+          if (reservation.kind === 'reserved') {
+            this.tableService.cancelBetReservation({
+              tableId: reservation.tableId,
+              seatNo: reservation.seatNo,
+              amount: reservation.amount,
+              commandId: reservation.commandId,
+            });
+          }
+
+          throw error;
+        }
+      },
+    );
+  }
+
   private handleCommand(
     socket: Socket,
     event: BlackjackClientEvent,
-    command: () => void,
+    command: () => void | Promise<void>,
   ) {
     try {
-      command();
+      void Promise.resolve(command()).catch((error: unknown) =>
+        this.emitError(socket, event, error),
+      );
     } catch (error) {
       this.emitError(socket, event, error);
     }
@@ -133,6 +203,15 @@ export class BlackjackGateway {
       .emit(BLACKJACK_SERVER_EVENTS.TABLE_EVENT, update.event);
   }
 
+  private emitWalletUpdated(
+    userId: string,
+    payload: BlackjackWalletUpdatedPayload,
+  ) {
+    this.server
+      .to(blackjackUserRoom(userId))
+      .emit(BLACKJACK_SERVER_EVENTS.WALLET_UPDATED, payload);
+  }
+
   private emitError(
     socket: Socket,
     event: BlackjackClientEvent,
@@ -143,11 +222,13 @@ export class BlackjackGateway {
         ? { code: error.code, message: error.message, event }
         : error instanceof BlackjackGatewayError
           ? { code: error.code, message: error.message, event }
-          : {
-              code: 'UNKNOWN_ERROR',
-              message: 'Unexpected blackjack socket error.',
-              event,
-            };
+          : isSocketErrorLike(error)
+            ? { code: error.code, message: error.message, event }
+            : {
+                code: 'UNKNOWN_ERROR',
+                message: 'Unexpected blackjack socket error.',
+                event,
+              };
 
     socket.emit(BLACKJACK_SERVER_EVENTS.ERROR, payload);
   }
@@ -241,3 +322,55 @@ function readHandshakeValue(value: unknown) {
 
   return null;
 }
+
+function parsePointAmount(amount: unknown) {
+  if (typeof amount !== 'string' || !/^[1-9]\d*$/.test(amount.trim())) {
+    throw new BlackjackGatewayError(
+      'INVALID_BET_AMOUNT',
+      'Bet amount must be a positive integer string.',
+    );
+  }
+
+  return BigInt(amount.trim());
+}
+
+function isSocketErrorLike(
+  error: unknown,
+): error is { code: BlackjackSocketErrorPayload['code']; message: string } {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { code?: unknown; message?: unknown };
+
+  return (
+    typeof candidate.code === 'string' &&
+    socketErrorCodes.has(candidate.code) &&
+    typeof candidate.message === 'string'
+  );
+}
+
+const socketErrorCodes = new Set<string>([
+  'UNAUTHORIZED',
+  'TABLE_NOT_FOUND',
+  'TABLE_NOT_OPEN',
+  'INVALID_TABLE_ID',
+  'INVALID_SEAT_NO',
+  'INVALID_COMMAND_ID',
+  'INVALID_BET_AMOUNT',
+  'SEAT_OCCUPIED',
+  'SEAT_NOT_OCCUPIED',
+  'SEAT_NOT_OWNED',
+  'SEAT_HAS_ACTIVE_BET',
+  'SEAT_LIMIT_REACHED',
+  'BETTING_CLOSED',
+  'BET_ALREADY_PLACED',
+  'BET_IN_PROGRESS',
+  'BET_TOO_LOW',
+  'BET_TOO_HIGH',
+  'WALLET_NOT_FOUND',
+  'WALLET_NOT_ACTIVE',
+  'INSUFFICIENT_BALANCE',
+  'IDEMPOTENCY_CONFLICT',
+  'INVALID_SOCKET_USER',
+]);

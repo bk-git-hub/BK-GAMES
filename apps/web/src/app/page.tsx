@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { ensureUserGameAccount } from "@bk-games/db";
-import { LogIn } from "lucide-react";
+import { DoorOpen, LogIn } from "lucide-react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Badge } from "@/components/ui/badge";
@@ -73,7 +73,16 @@ export default async function Home() {
             </span>
           </div>
           {session ? (
-            <SignOutButton />
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/lobby"
+                className={buttonVariants({ variant: "default" })}
+              >
+                <DoorOpen />
+                Enter lobby
+              </Link>
+              <SignOutButton />
+            </div>
           ) : (
             <Link
               href="/auth"

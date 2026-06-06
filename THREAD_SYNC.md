@@ -98,11 +98,6 @@ A Notion page was created for user-friendly tracking:
 - Title: `BK Games 프로젝트 운영 노트`
 - URL: `https://app.notion.com/p/376793efb801812cb673d8774361bed9`
 
-A separate Notion page is used for requested screenshots:
-
-- Title: `Screenshots`
-- URL: `https://app.notion.com/p/bk-99/Screenshots-377793efb8018067b688c2624754e965`
-
 It contains:
 
 - Project structure
@@ -114,8 +109,6 @@ It contains:
 - Docker vs direct PostgreSQL explanation
 
 Future threads should update the Notion page when the user asks for user-facing project tracking, but should not rely on Notion as the only source of truth for implementation.
-
-When the user asks for screenshots, upload the captured screenshots to the Screenshots page as well as reporting them in the chat. If Notion upload is unavailable, report the reason and provide the local screenshot path or another usable fallback.
 
 ## Completed Work
 
@@ -468,4 +461,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - Frontend wording was aligned with the product direction: BK Games is a free-points multiplayer game platform, and blackjack is the first game rather than the whole project. Impact: tracked web metadata/home copy and this handoff summary now use platform framing; local gitignored implementation docs were updated the same way.
 - Daily reward claim was implemented in `packages/db/src/daily-rewards.ts`, using deterministic idempotency and one DB transaction across `wallets`, `point_ledgers`, and `daily_reward_claims`.
 - Shared blackjack socket contracts were added in `packages/shared`, and `apps/game-server` now has an in-memory realtime table skeleton for join, take-seat, leave-seat, disconnect, and table-state broadcasts. Impact: backend and frontend threads should use the shared event names and payload types instead of stringly typed socket events.
-- `AGENTS.md` was updated with a screenshot handling rule: requested screenshots should be uploaded to the Notion Screenshots page, with a fallback reported if Notion upload is unavailable.
+- The screenshot Notion upload rule was removed because uploading screenshots to Notion is not allowed. Future screenshot requests should report screenshots in chat or provide local artifact paths instead.

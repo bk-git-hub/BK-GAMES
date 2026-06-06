@@ -124,6 +124,7 @@ export type BlackjackTableEventPayload = {
 };
 
 export type BlackjackSocketErrorCode =
+  | "UNAUTHORIZED"
   | "INVALID_TABLE_ID"
   | "INVALID_SEAT_NO"
   | "SEAT_OCCUPIED"

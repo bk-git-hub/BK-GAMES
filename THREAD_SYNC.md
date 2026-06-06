@@ -396,11 +396,11 @@ Next task should build on the realtime blackjack table skeleton.
 
 Recommended order:
 
-- Add trusted session/user plumbing between `apps/web` and `apps/game-server`.
+- Wire the frontend Socket.IO client to request and send game tokens.
 - Add blackjack betting phase commands and wallet bet debits.
 - Then build the pure blackjack engine/state machine for dealing, player actions, dealer turn, and settlement.
 
-The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, and daily rewards go through `claimDailyReward`.
+The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, and game-server sockets can verify short-lived game tokens from `POST /api/game-token`.
 
 ## Suggested Next Scope Report
 
@@ -408,10 +408,10 @@ Use this before starting the next backend blackjack slice:
 
 ```text
 이번 작업 범위:
-- 목표: blackjack betting phase 또는 socket auth bridge 구현
-- 수정 예상: apps/game-server, packages/shared, 필요 시 packages/db
+- 목표: frontend socket token wiring 또는 blackjack betting phase 구현
+- 수정 예상: apps/web, apps/game-server, packages/shared, 필요 시 packages/db
 - 실행 명령: pnpm --filter game-server test, pnpm typecheck, pnpm lint, pnpm test, pnpm build
-- 제외: 프론트엔드 UI, 전체 blackjack settlement 구현, admin UI 구현
+- 제외: 전체 blackjack settlement 구현, admin UI 구현
 - 검증: socket command/state transition 테스트와 전체 workspace 검증
 ```
 
@@ -462,3 +462,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - Daily reward claim was implemented in `packages/db/src/daily-rewards.ts`, using deterministic idempotency and one DB transaction across `wallets`, `point_ledgers`, and `daily_reward_claims`.
 - Shared blackjack socket contracts were added in `packages/shared`, and `apps/game-server` now has an in-memory realtime table skeleton for join, take-seat, leave-seat, disconnect, and table-state broadcasts. Impact: backend and frontend threads should use the shared event names and payload types instead of stringly typed socket events.
 - The screenshot Notion upload rule was removed because uploading screenshots to Notion is not allowed. Future screenshot requests should report screenshots in chat or provide local artifact paths instead.
+- Trusted game token bridge was added: `POST /api/game-token` issues short-lived HS256 tokens from the Better Auth session, and `apps/game-server` verifies Socket.IO `handshake.auth.token`. Dev query/user fallback is only allowed when `GAME_SOCKET_DEV_AUTH=true`.

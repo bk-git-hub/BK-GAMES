@@ -19,6 +19,7 @@ import {
   type BlackjackTakeSeatPayload,
 } from '@bk-games/shared';
 import { Server, Socket } from 'socket.io';
+import { GameTokenService } from '../auth/game-token.service';
 import {
   BlackjackTableError,
   BlackjackTableService,
@@ -36,7 +37,10 @@ export class BlackjackGateway {
   @WebSocketServer()
   server!: Server;
 
-  constructor(private readonly tableService: BlackjackTableService) {}
+  constructor(
+    private readonly tableService: BlackjackTableService,
+    private readonly gameTokenService: GameTokenService,
+  ) {}
 
   handleDisconnect(socket: Socket) {
     const updates = this.tableService.disconnectSocket(socket.id);
@@ -137,11 +141,13 @@ export class BlackjackGateway {
     const payload: BlackjackSocketErrorPayload =
       error instanceof BlackjackTableError
         ? { code: error.code, message: error.message, event }
-        : {
-            code: 'UNKNOWN_ERROR',
-            message: 'Unexpected blackjack socket error.',
-            event,
-          };
+        : error instanceof BlackjackGatewayError
+          ? { code: error.code, message: error.message, event }
+          : {
+              code: 'UNKNOWN_ERROR',
+              message: 'Unexpected blackjack socket error.',
+              event,
+            };
 
     socket.emit(BLACKJACK_SERVER_EVENTS.ERROR, payload);
   }
@@ -150,6 +156,31 @@ export class BlackjackGateway {
     socket: Socket,
     nicknameOverride?: string,
   ): BlackjackSocketUser {
+    const token = readSocketToken(socket);
+
+    if (token) {
+      const user = this.gameTokenService.verify(token);
+
+      if (!user) {
+        throw new BlackjackGatewayError(
+          'UNAUTHORIZED',
+          'Invalid or expired game token.',
+        );
+      }
+
+      return {
+        ...user,
+        nickname: nicknameOverride?.trim() || user.nickname,
+      };
+    }
+
+    if (!this.gameTokenService.isDevAuthEnabled()) {
+      throw new BlackjackGatewayError(
+        'UNAUTHORIZED',
+        'Game token is required.',
+      );
+    }
+
     const auth = socket.handshake.auth as SocketAuthShape | undefined;
     const query = socket.handshake.query;
     const userId =
@@ -172,10 +203,32 @@ export class BlackjackGateway {
 }
 
 type SocketAuthShape = {
+  token?: unknown;
   userId?: unknown;
   nickname?: unknown;
   role?: unknown;
 };
+
+class BlackjackGatewayError extends Error {
+  constructor(
+    readonly code: BlackjackSocketErrorPayload['code'],
+    message: string,
+  ) {
+    super(message);
+    this.name = 'BlackjackGatewayError';
+  }
+}
+
+function readSocketToken(socket: Socket) {
+  const auth = socket.handshake.auth as SocketAuthShape | undefined;
+  const token = auth?.token;
+
+  if (typeof token === 'string' && token.trim()) {
+    return token.trim();
+  }
+
+  return null;
+}
 
 function readHandshakeValue(value: unknown) {
   if (typeof value === 'string' && value.trim()) {

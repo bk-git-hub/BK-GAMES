@@ -43,8 +43,7 @@ Not implemented yet:
 - Admin role enforcement.
 - Initial point grant.
 - Daily reward API/UI entry point.
-- Game-server Socket.IO authentication.
-- Game token issuance for realtime socket handshakes.
+- Frontend Socket.IO client wiring for authenticated blackjack tables.
 
 ## Package Dependencies
 
@@ -103,6 +102,13 @@ Wallet transactions:
 - `packages/db/src/daily-rewards.ts`
 - `WALLET_TRANSACTIONS.md`
 
+Game token bridge:
+
+- `apps/web/src/app/api/game-token/route.ts`
+- `apps/game-server/src/auth/game-token.service.ts`
+- `apps/game-server/src/auth/socket-auth.guard.ts`
+- `apps/game-server/src/blackjack/blackjack.gateway.ts`
+
 Dev database:
 
 - `docker-compose.yml`
@@ -144,6 +150,18 @@ Dev database:
 6. Unique constraints make repeated calls safe.
 
 The browser never sends the `userId` used for bootstrap. The user id comes from the trusted server-side Better Auth session.
+
+### Game Token For Socket.IO
+
+1. The authenticated browser calls `POST /api/game-token`.
+2. The Next.js route reads the Better Auth session server-side.
+3. The route calls `ensureUserGameAccount` so profile/wallet rows exist.
+4. The route signs a short-lived HS256 game token with `GAME_TOKEN_SECRET`.
+5. The Socket.IO client sends the token in `handshake.auth.token`.
+6. The NestJS game server verifies issuer, audience, expiration, signature, user id, nickname, and role.
+7. Blackjack socket commands use the verified token identity instead of browser-supplied `userId`.
+
+The game-server dev fallback is disabled by default. It only accepts handshake/query identity when `GAME_SOCKET_DEV_AUTH=true`.
 
 ## Database Tables Used By Better Auth
 
@@ -208,7 +226,9 @@ Current implementation covers authentication.
 
 The database package now includes the first real wallet authorization boundary for daily rewards: callers must provide a trusted server-side `userId`, and repeated claims are constrained by deterministic idempotency plus `daily_reward_claims`.
 
-Next work should expose this through a server-side entry point and continue applying authorization rules to game-server flows.
+The game server now has a trusted Socket.IO identity bridge using short-lived game tokens. Socket commands should use the verified token identity, not browser payload user ids.
+
+Next work should expose daily rewards through a server-side entry point and continue applying authorization rules to betting/gameplay flows.
 
 ## Next Recommended Auth Work
 
@@ -216,8 +236,8 @@ Recommended order:
 
 1. Add server helpers for `requireSession` and `requireUserId`.
 2. Expose daily reward claim through a trusted server-side entry point.
-3. Define how the NestJS game server receives trusted identity from the web app.
-4. Add Socket.IO handshake validation.
+3. Wire the frontend Socket.IO client to request and send game tokens.
+4. Add wallet-backed blackjack betting authorization.
 5. Add role-based admin checks.
 
 ## Verification Completed

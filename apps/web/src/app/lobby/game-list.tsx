@@ -1,8 +1,9 @@
 import Image from "next/image";
+import Link from "next/link";
 import { ArrowRight, Club } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,7 +16,7 @@ const games = [
   {
     description: "The first real-time table game for BK Games.",
     name: "Blackjack",
-    status: "Next",
+    status: "Open",
   },
 ];
 
@@ -61,15 +62,16 @@ export function GameList() {
                   {game.description}
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                disabled
-                className="w-full sm:w-fit"
+              <Link
+                href="/blackjack"
+                className={buttonVariants({
+                  className: "w-full sm:w-fit",
+                  variant: "default",
+                })}
               >
-                Table page later
+                Open table
                 <ArrowRight />
-              </Button>
+              </Link>
             </div>
           </article>
         ))}

@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { ensureUserGameAccount } from "@bk-games/db";
-import type { GameTokenRole } from "@bk-games/shared";
+import type { GameTokenRole } from "@bk-games/shared/src/types";
 import { SignJWT } from "jose";
 
 import { auth } from "@/lib/auth";

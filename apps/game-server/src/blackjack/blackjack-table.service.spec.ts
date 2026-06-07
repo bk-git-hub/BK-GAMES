@@ -587,7 +587,7 @@ describe('BlackjackTableService', () => {
     expect(roundStarted.state.seats[0]).toEqual(
       expect.objectContaining({
         cards: [],
-        score: 0,
+        score: null,
         isCurrentTurn: false,
         availableActions: [],
       }),

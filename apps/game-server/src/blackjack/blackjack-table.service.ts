@@ -1484,7 +1484,7 @@ export class BlackjackTableService {
   ): BlackjackSeatSnapshot {
     const hands = getHands(seat);
     const projectedHand = this.getProjectedSeatHand(table, seat);
-    const evaluatedHand = projectedHand
+    const evaluatedHand = projectedHand?.cards.length
       ? evaluateHand(projectedHand.cards)
       : null;
     const handSnapshots = hands.map((hand) =>
@@ -1503,7 +1503,7 @@ export class BlackjackTableService {
       score: evaluatedHand?.total ?? null,
       isSoft: evaluatedHand?.isSoft ?? false,
       isCurrentTurn: table.round?.currentTurnSeatNo === seat.seatNo,
-      availableActions: projectedHand
+      availableActions: projectedHand?.cards.length
         ? this.getAvailableHandActions(table, seat, projectedHand)
         : [],
       activeHandNo:
@@ -1523,17 +1523,19 @@ export class BlackjackTableService {
     seat: BlackjackSeatRuntime,
     hand: BlackjackSeatHandRuntime,
   ): BlackjackHandSnapshot {
-    const evaluatedHand = evaluateHand(hand.cards);
+    const evaluatedHand = hand.cards.length ? evaluateHand(hand.cards) : null;
 
     return {
       handNo: hand.handNo,
       betAmount: hand.betAmount.toString(),
       handStatus: hand.status,
       cards: hand.cards.map((card) => toCardSnapshot(card)),
-      score: evaluatedHand.total,
-      isSoft: evaluatedHand.isSoft,
+      score: evaluatedHand?.total ?? null,
+      isSoft: evaluatedHand?.isSoft ?? false,
       isCurrentTurn: isCurrentTurnHand(table, seat, hand),
-      availableActions: this.getAvailableHandActions(table, seat, hand),
+      availableActions: hand.cards.length
+        ? this.getAvailableHandActions(table, seat, hand)
+        : [],
       outcome: hand.outcome ?? null,
       outcomeReason: hand.outcomeReason ?? null,
       payoutAmount: hand.payoutAmount?.toString() ?? null,

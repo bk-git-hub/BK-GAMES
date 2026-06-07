@@ -27,6 +27,7 @@ const defaultMaxInitialBet = BigInt(6000);
 const defaultMaxTotalBetPerSeat = BigInt(24000);
 const defaultMaxTotalBetPerUser = BigInt(42000);
 const zero = BigInt(0);
+const minimumStaleWaitingBetRoundGraceMs = 60_000;
 
 export type BlackjackBettingErrorCode =
   | "TABLE_NOT_FOUND"
@@ -164,6 +165,26 @@ type LockedBlackjackTableRow = Omit<
   status: string;
   surrenderMode: string;
   cardCountingMode: string;
+};
+
+type StaleWaitingBetRoundRow = {
+  id: string;
+  roundNo: number;
+};
+
+type StaleRoundSeatRow = {
+  id: string;
+  userId: string;
+  seatNo: number;
+  totalWagerAmount: bigint | string;
+};
+
+type StaleSideBetRow = {
+  id: string;
+  roundSeatId: string;
+  userId: string;
+  seatNo: number;
+  amount: bigint | string;
 };
 
 type LockedDoubleDownContext = {
@@ -837,6 +858,8 @@ async function getOrCreateWaitingBetRound(
   tx: WalletMutationTransaction,
   table: BlackjackRuntimeTable,
 ) {
+  await cancelStaleWaitingBetRounds(tx, table);
+
   const existingRound = await findCurrentRound(tx, table.id);
 
   if (existingRound) {
@@ -873,6 +896,170 @@ async function getOrCreateWaitingBetRound(
   }
 
   return round;
+}
+
+async function cancelStaleWaitingBetRounds(
+  tx: WalletMutationTransaction,
+  table: BlackjackRuntimeTable,
+) {
+  const staleCutoff = getStaleWaitingBetRoundCutoff(table);
+  const result = await tx.execute(sql<StaleWaitingBetRoundRow>`
+    select
+      id,
+      round_no as "roundNo"
+    from blackjack_rounds
+    where table_id = ${table.id}
+      and status = 'WAITING_BETS'
+      and coalesce(betting_closes_at, created_at) < ${staleCutoff}
+    order by created_at asc
+    for update
+  `);
+  const rounds = getRows<StaleWaitingBetRoundRow>(result);
+
+  for (const round of rounds) {
+    await cancelWaitingBetRound(tx, table, round);
+  }
+}
+
+async function cancelWaitingBetRound(
+  tx: WalletMutationTransaction,
+  table: BlackjackRuntimeTable,
+  round: StaleWaitingBetRoundRow,
+) {
+  const cancelledAt = new Date();
+  const seatResult = await tx.execute(sql<StaleRoundSeatRow>`
+    select
+      id,
+      user_id as "userId",
+      seat_no as "seatNo",
+      total_wager_amount as "totalWagerAmount"
+    from blackjack_round_seats
+    where round_id = ${round.id}
+      and status = 'ACTIVE'
+    order by seat_no asc
+    for update
+  `);
+  const seats = getRows<StaleRoundSeatRow>(seatResult);
+
+  for (const seat of seats) {
+    const refundAmount = toBigInt(seat.totalWagerAmount);
+
+    if (refundAmount > zero) {
+      await applyWalletMutationInTransaction(
+        tx,
+        buildCancelRefundWalletMutationInput({
+          tableCode: table.code,
+          roundId: round.id,
+          roundSeatId: seat.id,
+          seatNo: seat.seatNo,
+          userId: seat.userId,
+          amount: refundAmount,
+          source: "ROUND_SEAT",
+        }),
+      );
+    }
+  }
+
+  const sideBetResult = await tx.execute(sql<StaleSideBetRow>`
+    select
+      sb.id,
+      sb.round_seat_id as "roundSeatId",
+      rs.user_id as "userId",
+      rs.seat_no as "seatNo",
+      sb.amount
+    from blackjack_side_bets sb
+    inner join blackjack_round_seats rs on rs.id = sb.round_seat_id
+    where sb.round_id = ${round.id}
+      and sb.status = 'PLACED'
+    order by rs.seat_no asc, sb.created_at asc
+    for update
+  `);
+  const sideBets = getRows<StaleSideBetRow>(sideBetResult);
+
+  for (const sideBet of sideBets) {
+    const refundAmount = toBigInt(sideBet.amount);
+
+    if (refundAmount > zero) {
+      await applyWalletMutationInTransaction(
+        tx,
+        buildCancelRefundWalletMutationInput({
+          tableCode: table.code,
+          roundId: round.id,
+          roundSeatId: sideBet.roundSeatId,
+          seatNo: sideBet.seatNo,
+          userId: sideBet.userId,
+          amount: refundAmount,
+          source: "SIDE_BET",
+          sideBetId: sideBet.id,
+        }),
+      );
+    }
+  }
+
+  await tx.execute(sql`
+    update blackjack_hands
+    set
+      status = 'CANCELLED',
+      payout_amount = final_bet_amount,
+      net_amount = 0,
+      outcome = 'CANCELLED',
+      outcome_reason = 'ROUND_CANCELLED',
+      settled_at = ${cancelledAt},
+      updated_at = ${cancelledAt}
+    where round_id = ${round.id}
+      and status <> 'SETTLED'
+      and status <> 'CANCELLED'
+  `);
+
+  await tx.execute(sql`
+    update blackjack_side_bets
+    set
+      status = 'CANCELLED',
+      payout_amount = amount,
+      net_amount = 0,
+      outcome = 'CANCELLED',
+      outcome_reason = 'ROUND_CANCELLED',
+      settled_at = ${cancelledAt}
+    where round_id = ${round.id}
+      and status = 'PLACED'
+  `);
+
+  await tx.execute(sql`
+    update blackjack_round_seats
+    set
+      status = 'CANCELLED',
+      total_payout_amount = total_wager_amount,
+      net_amount = 0,
+      settled_at = ${cancelledAt},
+      updated_at = ${cancelledAt}
+    where round_id = ${round.id}
+      and status = 'ACTIVE'
+  `);
+
+  await tx
+    .insert(blackjackActions)
+    .values({
+      roundId: round.id,
+      actorType: "SYSTEM",
+      actionType: "CANCEL",
+      actionSequence: await nextActionSequence(tx, round.id),
+      commandId: `server:cancel-stale-waiting:${round.id}`,
+      payload: {
+        tableCode: table.code,
+        reason: "STALE_WAITING_BETS",
+        roundNo: round.roundNo,
+      },
+    })
+    .onConflictDoNothing();
+
+  await tx
+    .update(blackjackRounds)
+    .set({
+      status: "CANCELLED",
+      settledAt: cancelledAt,
+      updatedAt: cancelledAt,
+    })
+    .where(eq(blackjackRounds.id, round.id));
 }
 
 async function findCurrentRound(
@@ -1484,6 +1671,54 @@ function buildBetWalletMutationInput(
       commandId: input.commandId,
     } satisfies JsonObject,
   };
+}
+
+function buildCancelRefundWalletMutationInput(input: {
+  tableCode: string;
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  amount: bigint;
+  source: "ROUND_SEAT" | "SIDE_BET";
+  sideBetId?: string;
+}) {
+  const refundTarget =
+    input.source === "SIDE_BET" ? input.sideBetId : input.roundSeatId;
+  const metadata: JsonObject = {
+    tableCode: input.tableCode,
+    seatNo: input.seatNo,
+    roundSeatId: input.roundSeatId,
+    amount: input.amount.toString(),
+    reason: "STALE_WAITING_BETS",
+    source: input.source,
+  };
+
+  if (input.sideBetId) {
+    metadata.sideBetId = input.sideBetId;
+  }
+
+  return {
+    userId: input.userId,
+    category: "GAME" as const,
+    gameType: "BLACKJACK" as const,
+    type: "CANCEL_REFUND" as const,
+    delta: input.amount,
+    referenceType: "BLACKJACK_ROUND",
+    referenceId: input.roundId,
+    idempotencyKey: `blackjack:cancel-refund:${input.roundId}:${input.source}:${refundTarget}`,
+    memo: `Blackjack cancelled waiting round refund for seat ${input.seatNo}`,
+    metadata,
+  };
+}
+
+function getStaleWaitingBetRoundCutoff(table: BlackjackRuntimeTable) {
+  const graceMs = Math.max(
+    table.bettingTimeoutSeconds * 2 * 1000,
+    minimumStaleWaitingBetRoundGraceMs,
+  );
+
+  return new Date(Date.now() - graceMs);
 }
 
 function buildDoubleWalletMutationInput(

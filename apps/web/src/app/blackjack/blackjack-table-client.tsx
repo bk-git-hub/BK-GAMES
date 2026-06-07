@@ -140,19 +140,12 @@ export function BlackjackTableClient({
           </div>
         ) : null}
 
-        {table.roundResultReview ? (
-          <RoundResultReviewBanner
-            endsAt={table.roundResultReview.endsAt}
-            myUserId={table.player?.id ?? null}
-            state={table.roundResultReview.state}
-          />
-        ) : null}
-
         <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="order-2 xl:order-1">
             <CasinoTable
               cardAnimationKeys={cardAnimationKeys}
               myUserId={table.player?.id ?? null}
+              roundResultReview={table.roundResultReview}
               selectedSeatNo={selectedSeatNo}
               state={visibleState}
             />
@@ -276,96 +269,21 @@ function TableHeader({
   );
 }
 
-function RoundResultReviewBanner({
-  endsAt,
-  myUserId,
-  state,
-}: {
-  endsAt: string;
-  myUserId: string | null;
-  state: BlackjackTableState;
-}) {
-  const countdown = useCountdown(endsAt);
-  const results = getRoundResults(state);
-  const myResults = results.filter((result) => result.userId === myUserId);
-  const headlineResults = myResults.length ? myResults : results.slice(0, 3);
-
-  return (
-    <section className="rounded-2xl border border-amber-200/40 bg-amber-200/12 px-4 py-3 text-amber-50 shadow-2xl shadow-black/20">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/70">
-            Round result
-          </p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-normal">
-            Review the outcome
-          </h2>
-          <p className="mt-1 text-sm text-amber-50/70">
-            Next round appears in {countdown ?? "a moment"}.
-          </p>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[520px]">
-          {headlineResults.length ? (
-            headlineResults.map((result) => (
-              <div
-                className={cn(
-                  "rounded-xl border px-3 py-2",
-                  result.userId === myUserId
-                    ? "border-amber-200/70 bg-black/30"
-                    : "border-white/10 bg-black/20",
-                )}
-                key={`${result.seatNo}:${result.handNo ?? "seat"}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="truncate text-sm font-semibold">
-                    {result.userId === myUserId ? "You" : result.nickname}
-                  </p>
-                  <span className="text-xs text-amber-100/65">
-                    Seat {result.seatNo}
-                    {result.handNo ? ` · Hand ${result.handNo}` : ""}
-                  </span>
-                </div>
-                <div className="mt-1 flex items-center justify-between gap-3 text-sm">
-                  <span>{formatOutcome(result.outcome, result.reason)}</span>
-                  <span
-                    className={cn(
-                      "font-semibold",
-                      result.netAmount && Number(result.netAmount) > 0
-                        ? "text-emerald-200"
-                        : "text-amber-50",
-                    )}
-                  >
-                    {result.netAmount
-                      ? formatSignedPoints(result.netAmount)
-                      : "Settled"}
-                  </span>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-4 text-sm text-amber-50/70 sm:col-span-2">
-              Settlement received. Check the table cards before the next round.
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function CasinoTable({
   cardAnimationKeys,
   myUserId,
+  roundResultReview,
   selectedSeatNo,
   state,
 }: {
   cardAnimationKeys: ReadonlySet<string>;
   myUserId: string | null;
+  roundResultReview: { endsAt: string; state: BlackjackTableState } | null;
   selectedSeatNo: number | null;
   state: BlackjackTableState | null;
 }) {
   const countdown = useCountdown(state?.timers.phaseEndsAt ?? null);
+  const resultCountdown = useCountdown(roundResultReview?.endsAt ?? null);
 
   return (
     <section className="relative min-h-[620px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#10251d] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:min-h-[760px]">
@@ -408,18 +326,26 @@ function CasinoTable({
         </p>
       </div>
 
-      <div className="absolute left-1/2 top-[47%] z-10 -translate-x-1/2 text-center">
-        <p className="text-3xl font-semibold uppercase tracking-[0.3em] text-emerald-50/20 sm:text-5xl">
-          Blackjack
-        </p>
-        <p className="mt-2 text-xs uppercase tracking-[0.26em] text-emerald-50/35">
-          {state
-            ? `${formatPoints(state.bettingLimits.minInitialBet)} - ${formatPoints(
-                state.bettingLimits.maxInitialBet,
-              )} pts`
-            : "Table limits loading"}
-        </p>
-      </div>
+      {roundResultReview ? (
+        <RoundResultTableOverlay
+          countdown={resultCountdown}
+          myUserId={myUserId}
+          state={roundResultReview.state}
+        />
+      ) : (
+        <div className="absolute left-1/2 top-[47%] z-10 -translate-x-1/2 text-center">
+          <p className="text-3xl font-semibold uppercase tracking-[0.3em] text-emerald-50/20 sm:text-5xl">
+            Blackjack
+          </p>
+          <p className="mt-2 text-xs uppercase tracking-[0.26em] text-emerald-50/35">
+            {state
+              ? `${formatPoints(state.bettingLimits.minInitialBet)} - ${formatPoints(
+                  state.bettingLimits.maxInitialBet,
+                )} pts`
+              : "Table limits loading"}
+          </p>
+        </div>
+      )}
 
       <div className="absolute inset-x-4 bottom-10 top-[42%] z-20">
         {state?.seats.length ? (
@@ -437,6 +363,94 @@ function CasinoTable({
         )}
       </div>
     </section>
+  );
+}
+
+function RoundResultTableOverlay({
+  countdown,
+  myUserId,
+  state,
+}: {
+  countdown: string | null;
+  myUserId: string | null;
+  state: BlackjackTableState;
+}) {
+  const results = getRoundResults(state);
+  const myResults = results.filter((result) => result.userId === myUserId);
+  const headlineResults = myResults.length ? myResults : results.slice(0, 4);
+  const dealerScore = state.dealer.score ?? state.dealer.visibleScore;
+
+  return (
+    <div
+      className="absolute left-1/2 top-[39%] z-30 w-[min(90%,680px)] -translate-x-1/2 rounded-2xl border border-amber-200/50 bg-[#07130f]/92 p-4 text-amber-50 shadow-2xl shadow-black/45 backdrop-blur-md"
+      role="status"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/70">
+            Round result
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-normal">
+            Review the outcome
+          </h2>
+          <p className="mt-1 text-sm text-amber-50/70">
+            Next round in {countdown ?? "a moment"}.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <FeltBadge>Dealer {dealerScore ?? "-"}</FeltBadge>
+          <FeltBadge>{state.phase}</FeltBadge>
+        </div>
+      </div>
+
+      <div className="mt-4 grid max-h-[240px] gap-2 overflow-auto pr-1 sm:grid-cols-2">
+        {headlineResults.length ? (
+          headlineResults.map((result) => (
+            <div
+              className={cn(
+                "rounded-xl border px-3 py-2",
+                result.userId === myUserId
+                  ? "border-amber-200/70 bg-amber-200/10"
+                  : "border-white/10 bg-black/25",
+              )}
+              key={`${result.seatNo}:${result.handNo ?? "seat"}`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="truncate text-sm font-semibold">
+                  {result.userId === myUserId ? "You" : result.nickname}
+                </p>
+                <span className="text-xs text-amber-100/65">
+                  Seat {result.seatNo}
+                  {result.handNo ? ` · Hand ${result.handNo}` : ""}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3 text-sm">
+                <span>{formatOutcome(result.outcome, result.reason)}</span>
+                <span
+                  className={cn(
+                    "font-semibold",
+                    result.netAmount && Number(result.netAmount) > 0
+                      ? "text-emerald-200"
+                      : "text-amber-50",
+                  )}
+                >
+                  {result.netAmount
+                    ? formatSignedPoints(result.netAmount)
+                    : "Settled"}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-amber-50/55">
+                Score {formatScore(result.score, result.isSoft)}
+              </p>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-4 text-sm text-amber-50/70 sm:col-span-2">
+            Settlement received. Check the cards before the next round.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1216,10 +1230,12 @@ function isTableCommandLockedPhase(phase: BlackjackTablePhase | undefined) {
 
 type RoundResultRow = {
   handNo: number | null;
+  isSoft: boolean;
   netAmount: string | null;
   nickname: string;
   outcome: BlackjackSeatSnapshot["outcome"];
   reason: BlackjackSeatSnapshot["outcomeReason"];
+  score: number | null;
   seatNo: number;
   userId: string;
 };
@@ -1235,10 +1251,12 @@ function getRoundResults(state: BlackjackTableState): RoundResultRow[] {
       )
       .map((hand) => ({
         handNo: hand.handNo,
+        isSoft: hand.isSoft,
         netAmount: hand.netAmount,
         nickname: seat.nickname,
         outcome: hand.outcome,
         reason: hand.outcomeReason,
+        score: hand.score,
         seatNo: seat.seatNo,
         userId: seat.userId,
       }));
@@ -1255,10 +1273,12 @@ function getRoundResults(state: BlackjackTableState): RoundResultRow[] {
       return [
         {
           handNo: null,
+          isSoft: seat.isSoft,
           netAmount: seat.netAmount,
           nickname: seat.nickname,
           outcome: seat.outcome,
           reason: seat.outcomeReason,
+          score: seat.score,
           seatNo: seat.seatNo,
           userId: seat.userId,
         },
@@ -1327,11 +1347,15 @@ function formatNullablePoints(value: string | null) {
 }
 
 function formatHandScore(hand: BlackjackHandSnapshot | null) {
-  if (!hand || hand.score === null) {
+  return hand ? formatScore(hand.score, hand.isSoft) : "-";
+}
+
+function formatScore(score: number | null, isSoft: boolean) {
+  if (score === null) {
     return "-";
   }
 
-  return `${hand.score}${hand.isSoft ? " soft" : ""}`;
+  return `${score}${isSoft ? " soft" : ""}`;
 }
 
 function formatSignedPoints(value: string) {

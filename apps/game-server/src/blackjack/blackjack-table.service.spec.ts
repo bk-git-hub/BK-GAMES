@@ -116,10 +116,14 @@ jest.mock('./blackjack-engine.port', () => {
     getAvailablePlayerActions: (
       context: {
         cards: readonly MockCard[];
+        isAfterSplit?: boolean;
+        isSplitAces?: boolean;
         currentHandCount?: number;
+        hitSplitAcesAllowed?: boolean;
       },
       rules: {
         doubleAllowed?: boolean;
+        doubleAfterSplitAllowed?: boolean;
         splitAllowed?: boolean;
         surrenderAllowed?: boolean;
         maxSplitHands?: number;
@@ -131,9 +135,17 @@ jest.mock('./blackjack-engine.port', () => {
         return [];
       }
 
+      if (context.isSplitAces && !context.hitSplitAcesAllowed) {
+        return ['STAND'];
+      }
+
       const actions = ['HIT', 'STAND'];
 
-      if (context.cards.length === 2 && rules.doubleAllowed) {
+      if (
+        context.cards.length === 2 &&
+        rules.doubleAllowed &&
+        (!context.isAfterSplit || rules.doubleAfterSplitAllowed)
+      ) {
         actions.push('DOUBLE');
       }
 
@@ -286,6 +298,36 @@ function expireBettingWindowOrFail(
   }
 
   return update;
+}
+
+function confirmSplitAction(input: {
+  service: BlackjackTableService;
+  tableId: string;
+  socketId: string;
+  user: typeof alice;
+  seatNo: number;
+  commandId: string;
+}) {
+  const reservation = input.service.reserveSplit({
+    tableId: input.tableId,
+    socketId: input.socketId,
+    user: input.user,
+    seatNo: input.seatNo,
+    commandId: input.commandId,
+  });
+
+  return input.service.confirmSplit({
+    tableId: input.tableId,
+    socketId: input.socketId,
+    user: input.user,
+    seatNo: reservation.seatNo,
+    commandId: reservation.commandId,
+    roundId: reservation.roundId,
+    roundSeatId: reservation.roundSeatId,
+    sourceHandNo: reservation.sourceHandNo,
+    newHandNo: reservation.newHandNo,
+    amount: reservation.amount,
+  });
 }
 
 describe('BlackjackTableService', () => {
@@ -1197,6 +1239,175 @@ describe('BlackjackTableService', () => {
         finalValue: 10,
         outcome: 'WIN',
         outcomeReason: 'DEALER_BUST',
+      }),
+    ]);
+  });
+
+  it('allows normal pairs to resplit up to four total hands by default', () => {
+    const service = createRiggedService([
+      card('8', 'clubs'),
+      card('5', 'clubs'),
+      card('8', 'diamonds'),
+      card('9', 'clubs'),
+      card('2', 'clubs'),
+      card('8', 'hearts'),
+      card('3', 'clubs'),
+      card('8', 'spades'),
+      card('4', 'clubs'),
+      card('8', 'clubs'),
+    ]);
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+    expireBettingWindowOrFail(service);
+
+    const firstSplit = confirmSplitAction({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'split-command-1',
+    });
+
+    expect(firstSplit.state.seats[0]?.hands).toHaveLength(2);
+    expect(firstSplit.state.seats[0]?.hands[0]).toEqual(
+      expect.objectContaining({
+        handNo: 1,
+        cards: [
+          { rank: '8', suit: 'clubs' },
+          { rank: '8', suit: 'hearts' },
+        ],
+        availableActions: ['HIT', 'STAND', 'SPLIT'],
+      }),
+    );
+
+    const secondSplit = confirmSplitAction({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'split-command-2',
+    });
+
+    expect(secondSplit.state.seats[0]?.hands).toHaveLength(3);
+    expect(secondSplit.state.seats[0]?.hands[0]).toEqual(
+      expect.objectContaining({
+        handNo: 1,
+        cards: [
+          { rank: '8', suit: 'clubs' },
+          { rank: '8', suit: 'spades' },
+        ],
+        availableActions: ['HIT', 'STAND', 'SPLIT'],
+      }),
+    );
+
+    const thirdSplit = confirmSplitAction({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'split-command-3',
+    });
+
+    expect(thirdSplit.state.seats[0]).toEqual(
+      expect.objectContaining({
+        betAmount: '2000',
+        activeHandNo: 1,
+      }),
+    );
+    expect(thirdSplit.state.seats[0]?.hands).toHaveLength(4);
+    expect(thirdSplit.state.seats[0]?.hands[0]).toEqual(
+      expect.objectContaining({
+        handNo: 1,
+        cards: [
+          { rank: '8', suit: 'clubs' },
+          { rank: '8', suit: 'clubs' },
+        ],
+        availableActions: ['HIT', 'STAND'],
+      }),
+    );
+  });
+
+  it('stands split aces and blocks ace resplit by default', () => {
+    const service = createRiggedService([
+      card('A', 'clubs'),
+      card('5', 'clubs'),
+      card('A', 'diamonds'),
+      card('9', 'clubs'),
+      card('A', 'hearts'),
+      card('A', 'spades'),
+      card('4', 'clubs'),
+    ]);
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+    expireBettingWindowOrFail(service);
+
+    const split = confirmSplitAction({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'split-aces-command-1',
+    });
+
+    expect(split.event.type).toBe('DEALER_PLAYED');
+    expect(split.state.phase).toBe('SETTLING');
+    expect(split.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: null,
+      currentTurnHandNo: null,
+    });
+    expect(split.state.seats[0]?.hands).toEqual([
+      expect.objectContaining({
+        handNo: 1,
+        handStatus: 'STOOD',
+        cards: [
+          { rank: 'A', suit: 'clubs' },
+          { rank: 'A', suit: 'spades' },
+        ],
+        availableActions: [],
+      }),
+      expect.objectContaining({
+        handNo: 2,
+        handStatus: 'STOOD',
+        cards: [
+          { rank: 'A', suit: 'diamonds' },
+          { rank: 'A', suit: 'hearts' },
+        ],
+        availableActions: [],
       }),
     ]);
   });

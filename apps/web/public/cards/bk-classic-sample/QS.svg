@@ -5,6 +5,7 @@
     </filter>
     <style>
       .rank { font-family: Georgia, 'Times New Roman', serif; font-size: 48px; font-weight: 800; }
+      .center-rank { font-family: Georgia, 'Times New Roman', serif; font-size: 116px; font-weight: 800; }
     </style>
   </defs>
   <rect x="10" y="10" width="400" height="568" rx="24" fill="#fbf7ec" filter="url(#shadow)"/>
@@ -29,17 +30,14 @@
     
     <rect x="126" y="124" width="168" height="324" rx="20" fill="#fffdf7" stroke="#171717" stroke-width="2.5" opacity="0.96"/>
     <rect x="141" y="140" width="138" height="292" rx="14" fill="none" stroke="#d6a94d" stroke-width="2" opacity="0.72"/>
-    <path d="M156 272 H264 M156 376 H264" stroke="#dedbd2" stroke-width="3" stroke-linecap="round"/>
+    <path d="M156 278 H264 M156 390 H264" stroke="#dedbd2" stroke-width="3" stroke-linecap="round"/>
     
     <g transform="translate(210 190)" fill="#d6a94d">
       <path d="M-68 34 C-44 -16 -20 18 0 -34 C20 18 44 -16 68 34 L52 62 H-52 Z"/>
       <circle cx="-68" cy="34" r="7"/><circle cx="0" cy="-34" r="7"/><circle cx="68" cy="34" r="7"/>
     </g>
-    <g transform="translate(210 320)">
-      <path d="M0 -78 L58 -20 L26 72 H-26 L-58 -20 Z" fill="none" stroke="#d6a94d" stroke-width="7" stroke-linejoin="round"/>
-      <path d="M0 -56 L38 -18 L18 48 H-18 L-38 -18 Z" fill="#d6a94d" opacity="0.18"/>
-      <g transform="translate(0 4) scale(0.88)" fill="#171717"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
-    </g>
+    
+    <text x="210" y="358" text-anchor="middle" class="center-rank" fill="#171717">Q</text>
     <path d="M174 418 H246" stroke="#d6a94d" stroke-width="5" stroke-linecap="round" opacity="0.78"/>
   
 </svg>

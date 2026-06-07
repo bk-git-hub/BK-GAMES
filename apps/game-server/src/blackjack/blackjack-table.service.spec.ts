@@ -125,6 +125,7 @@ jest.mock('./blackjack-engine.port', () => {
         doubleAllowed?: boolean;
         doubleAfterSplitAllowed?: boolean;
         splitAllowed?: boolean;
+        allowTenValueSplit?: boolean;
         surrenderAllowed?: boolean;
         maxSplitHands?: number;
       } = {},
@@ -152,7 +153,10 @@ jest.mock('./blackjack-engine.port', () => {
       if (
         context.cards.length === 2 &&
         rules.splitAllowed &&
-        context.cards[0]?.rank === context.cards[1]?.rank &&
+        (context.cards[0]?.rank === context.cards[1]?.rank ||
+          (rules.allowTenValueSplit === true &&
+            rankValue(context.cards[0]?.rank ?? '2') === 10 &&
+            rankValue(context.cards[1]?.rank ?? '2') === 10)) &&
         (context.currentHandCount ?? 1) < (rules.maxSplitHands ?? 4)
       ) {
         actions.push('SPLIT');
@@ -242,6 +246,7 @@ function configuredTable(
     evenMoneyAllowed: false,
     doubleAllowed: true,
     splitAllowed: true,
+    allowTenValueSplit: true,
     doubleAfterSplitAllowed: false,
     maxSplitHands: 4,
     resplitAcesAllowed: false,
@@ -1552,6 +1557,81 @@ describe('BlackjackTableService', () => {
         finalValue: 12,
         outcome: 'WIN',
         outcomeReason: 'DEALER_BUST',
+      }),
+    ]);
+  });
+
+  it('allows mixed ten-value cards to split by default', () => {
+    const service = createRiggedService([
+      card('K', 'clubs'),
+      card('5', 'clubs'),
+      card('Q', 'diamonds'),
+      card('9', 'clubs'),
+      card('2', 'clubs'),
+      card('3', 'clubs'),
+    ]);
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    const started = startActiveRoundOrFail(service);
+
+    expect(started.state.seats[0]?.cards).toEqual([
+      { rank: 'K', suit: 'clubs' },
+      { rank: 'Q', suit: 'diamonds' },
+    ]);
+    expect(started.state.seats[0]?.availableActions).toEqual(
+      expect.arrayContaining(['SPLIT']),
+    );
+
+    const reservation = service.reserveSplit({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'split-ten-value-command-1',
+    });
+    const split = service.confirmSplit({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: reservation.commandId,
+      roundId: reservation.roundId,
+      roundSeatId: reservation.roundSeatId,
+      sourceHandNo: reservation.sourceHandNo,
+      newHandNo: reservation.newHandNo,
+      amount: reservation.amount,
+    });
+
+    expect(split.state.seats[0]?.hands).toEqual([
+      expect.objectContaining({
+        handNo: 1,
+        cards: [
+          { rank: 'K', suit: 'clubs' },
+          { rank: '3', suit: 'clubs' },
+        ],
+      }),
+      expect.objectContaining({
+        handNo: 2,
+        cards: [
+          { rank: 'Q', suit: 'diamonds' },
+          { rank: '2', suit: 'clubs' },
+        ],
       }),
     ]);
   });

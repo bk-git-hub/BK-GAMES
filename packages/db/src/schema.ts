@@ -48,6 +48,7 @@ export type BlackjackRuleSnapshot = {
   doubleAllowed: boolean;
   doubleAfterSplitAllowed: boolean;
   splitAllowed: boolean;
+  allowTenValueSplit: boolean;
   maxSplitHands: number;
   resplitAcesAllowed: boolean;
   hitSplitAcesAllowed: boolean;
@@ -366,6 +367,9 @@ export const blackjackTables = pgTable(
       .default(false)
       .notNull(),
     splitAllowed: boolean("split_allowed").default(true).notNull(),
+    allowTenValueSplit: boolean("allow_ten_value_split")
+      .default(true)
+      .notNull(),
     maxSplitHands: integer("max_split_hands").default(4).notNull(),
     resplitAcesAllowed: boolean("resplit_aces_allowed")
       .default(false)

@@ -32,6 +32,7 @@ export class BlackjackTableConfigService {
       doubleAllowed: table.doubleAllowed,
       splitAllowed: table.splitAllowed,
       doubleAfterSplitAllowed: table.doubleAfterSplitAllowed,
+      allowTenValueSplit: table.allowTenValueSplit,
       maxSplitHands: table.maxSplitHands,
       resplitAcesAllowed: table.resplitAcesAllowed,
       hitSplitAcesAllowed: table.hitSplitAcesAllowed,
@@ -62,6 +63,7 @@ type BlackjackDbTable = {
   doubleAllowed: boolean;
   doubleAfterSplitAllowed: boolean;
   splitAllowed: boolean;
+  allowTenValueSplit: boolean;
   maxSplitHands: number;
   resplitAcesAllowed: boolean;
   hitSplitAcesAllowed: boolean;

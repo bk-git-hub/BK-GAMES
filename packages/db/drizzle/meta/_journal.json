@@ -15,6 +15,13 @@
       "when": 1780735507249,
       "tag": "0001_oval_forgotten_one",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780874204075,
+      "tag": "0002_fancy_newton_destine",
+      "breakpoints": true
     }
   ]
 }

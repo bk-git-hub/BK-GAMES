@@ -35,6 +35,7 @@ export type BlackjackTableOptions = {
   doubleAllowed?: boolean;
   splitAllowed?: boolean;
   doubleAfterSplitAllowed?: boolean;
+  allowTenValueSplit?: boolean;
   maxSplitHands?: number;
   resplitAcesAllowed?: boolean;
   hitSplitAcesAllowed?: boolean;
@@ -60,6 +61,7 @@ export type BlackjackTableConfig = {
   doubleAllowed: boolean;
   splitAllowed: boolean;
   doubleAfterSplitAllowed: boolean;
+  allowTenValueSplit: boolean;
   maxSplitHands: number;
   resplitAcesAllowed: boolean;
   hitSplitAcesAllowed: boolean;
@@ -82,6 +84,7 @@ export class BlackjackTableService {
   private readonly doubleAllowed: boolean;
   private readonly splitAllowed: boolean;
   private readonly doubleAfterSplitAllowed: boolean;
+  private readonly allowTenValueSplit: boolean;
   private readonly maxSplitHands: number;
   private readonly resplitAcesAllowed: boolean;
   private readonly hitSplitAcesAllowed: boolean;
@@ -103,6 +106,7 @@ export class BlackjackTableService {
     this.doubleAllowed = options?.doubleAllowed ?? true;
     this.splitAllowed = options?.splitAllowed ?? true;
     this.doubleAfterSplitAllowed = options?.doubleAfterSplitAllowed ?? false;
+    this.allowTenValueSplit = options?.allowTenValueSplit ?? true;
     this.maxSplitHands = normalizeMaxSplitHands(options?.maxSplitHands ?? 4);
     this.resplitAcesAllowed = options?.resplitAcesAllowed ?? false;
     this.hitSplitAcesAllowed = options?.hitSplitAcesAllowed ?? false;
@@ -1406,6 +1410,7 @@ export class BlackjackTableService {
       doubleAllowed: this.doubleAllowed,
       splitAllowed: this.splitAllowed,
       doubleAfterSplitAllowed: this.doubleAfterSplitAllowed,
+      allowTenValueSplit: this.allowTenValueSplit,
       maxSplitHands: this.maxSplitHands,
       resplitAcesAllowed: this.resplitAcesAllowed,
       hitSplitAcesAllowed: this.hitSplitAcesAllowed,
@@ -1432,6 +1437,7 @@ export class BlackjackTableService {
     table.doubleAllowed = config.doubleAllowed;
     table.splitAllowed = config.splitAllowed;
     table.doubleAfterSplitAllowed = config.doubleAfterSplitAllowed;
+    table.allowTenValueSplit = config.allowTenValueSplit;
     table.maxSplitHands = config.maxSplitHands;
     table.resplitAcesAllowed = config.resplitAcesAllowed;
     table.hitSplitAcesAllowed = config.hitSplitAcesAllowed;
@@ -2058,6 +2064,7 @@ export class BlackjackTableService {
         doubleAfterSplitAllowed: table.doubleAfterSplitAllowed,
         splitAllowed:
           table.splitAllowed && (!hand.isSplitAces || table.resplitAcesAllowed),
+        allowTenValueSplit: table.allowTenValueSplit,
         surrenderAllowed:
           table.surrenderMode !== 'NONE' && hand.isSplitHand !== true,
         maxSplitHands: table.maxSplitHands,
@@ -2428,6 +2435,7 @@ type BlackjackTableRuntime = {
   doubleAllowed: boolean;
   splitAllowed: boolean;
   doubleAfterSplitAllowed: boolean;
+  allowTenValueSplit: boolean;
   maxSplitHands: number;
   resplitAcesAllowed: boolean;
   hitSplitAcesAllowed: boolean;

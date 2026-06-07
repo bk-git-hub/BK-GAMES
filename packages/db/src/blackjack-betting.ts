@@ -151,6 +151,7 @@ export type BlackjackRuntimeTable = {
   doubleAllowed: boolean;
   doubleAfterSplitAllowed: boolean;
   splitAllowed: boolean;
+  allowTenValueSplit: boolean;
   maxSplitHands: number;
   resplitAcesAllowed: boolean;
   hitSplitAcesAllowed: boolean;
@@ -833,6 +834,7 @@ async function lockBlackjackTableByCode(
       double_allowed as "doubleAllowed",
       double_after_split_allowed as "doubleAfterSplitAllowed",
       split_allowed as "splitAllowed",
+      allow_ten_value_split as "allowTenValueSplit",
       max_split_hands as "maxSplitHands",
       resplit_aces_allowed as "resplitAcesAllowed",
       hit_split_aces_allowed as "hitSplitAcesAllowed",
@@ -2138,6 +2140,7 @@ function toRuntimeTable(
     doubleAllowed: table.doubleAllowed,
     doubleAfterSplitAllowed: table.doubleAfterSplitAllowed,
     splitAllowed: table.splitAllowed,
+    allowTenValueSplit: table.allowTenValueSplit,
     maxSplitHands: table.maxSplitHands,
     resplitAcesAllowed: table.resplitAcesAllowed,
     hitSplitAcesAllowed: table.hitSplitAcesAllowed,
@@ -2162,6 +2165,7 @@ function buildRuleSnapshot(
     doubleAllowed: table.doubleAllowed,
     doubleAfterSplitAllowed: table.doubleAfterSplitAllowed,
     splitAllowed: table.splitAllowed,
+    allowTenValueSplit: table.allowTenValueSplit,
     maxSplitHands: table.maxSplitHands,
     resplitAcesAllowed: table.resplitAcesAllowed,
     hitSplitAcesAllowed: table.hitSplitAcesAllowed,

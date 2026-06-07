@@ -1,0 +1,1 @@
+ALTER TABLE "blackjack_tables" ADD COLUMN "allow_ten_value_split" boolean DEFAULT true NOT NULL;

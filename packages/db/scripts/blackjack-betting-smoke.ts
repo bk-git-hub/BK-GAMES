@@ -134,6 +134,7 @@ try {
         doubleAllowed: true,
         doubleAfterSplitAllowed: true,
         splitAllowed: true,
+        allowTenValueSplit: true,
         maxSplitHands: 4,
         resplitAcesAllowed: false,
         hitSplitAcesAllowed: false,

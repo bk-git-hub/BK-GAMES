@@ -43,6 +43,8 @@ export class BlackjackGateway {
   server!: Server;
 
   private readonly bettingWindowTimers = new Map<string, NodeJS.Timeout>();
+  private readonly dealingStepTimers = new Map<string, NodeJS.Timeout>();
+  private readonly dealerTurnTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private readonly tableService: BlackjackTableService,
@@ -474,6 +476,8 @@ export class BlackjackGateway {
       .to(room)
       .emit(BLACKJACK_SERVER_EVENTS.TABLE_EVENT, update.event);
     this.scheduleBettingWindowIfNeeded(update);
+    this.scheduleDealingStepIfNeeded(update);
+    this.scheduleDealerTurnStepIfNeeded(update);
   }
 
   private emitWalletUpdated(
@@ -574,6 +578,48 @@ export class BlackjackGateway {
     this.bettingWindowTimers.set(tableId, timer);
   }
 
+  private scheduleDealingStepIfNeeded(update: BlackjackTableMutationResult) {
+    const tableId = update.state.tableId;
+    const existingTimer = this.dealingStepTimers.get(tableId);
+
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      this.dealingStepTimers.delete(tableId);
+    }
+
+    if (update.state.phase !== 'DEALING') {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.dealingStepTimers.delete(tableId);
+      void this.advanceDealing(tableId);
+    }, blackjackDealingStepDelayMs);
+
+    this.dealingStepTimers.set(tableId, timer);
+  }
+
+  private scheduleDealerTurnStepIfNeeded(update: BlackjackTableMutationResult) {
+    const tableId = update.state.tableId;
+    const existingTimer = this.dealerTurnTimers.get(tableId);
+
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      this.dealerTurnTimers.delete(tableId);
+    }
+
+    if (update.state.phase !== 'DEALER_TURN') {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.dealerTurnTimers.delete(tableId);
+      void this.advanceDealerTurn(tableId);
+    }, blackjackDealerTurnStepDelayMs);
+
+    this.dealerTurnTimers.set(tableId, timer);
+  }
+
   private async expireBettingWindow(tableId: string) {
     try {
       const update = this.tableService.expireBettingWindow({ tableId });
@@ -595,6 +641,60 @@ export class BlackjackGateway {
             },
       );
     }
+  }
+
+  private async advanceDealing(tableId: string) {
+    try {
+      const update = this.tableService.advanceDealing({ tableId });
+
+      if (!update) {
+        return;
+      }
+
+      this.emitTableUpdate(update);
+      await this.settleRoundIfNeeded(update);
+    } catch (error) {
+      this.emitTableError(
+        tableId,
+        error,
+        'Unexpected blackjack dealing timer error.',
+      );
+    }
+  }
+
+  private async advanceDealerTurn(tableId: string) {
+    try {
+      const update = this.tableService.advanceDealerTurn({ tableId });
+
+      if (!update) {
+        return;
+      }
+
+      this.emitTableUpdate(update);
+      await this.settleRoundIfNeeded(update);
+    } catch (error) {
+      this.emitTableError(
+        tableId,
+        error,
+        'Unexpected blackjack dealer timer error.',
+      );
+    }
+  }
+
+  private emitTableError(
+    tableId: string,
+    error: unknown,
+    fallbackMessage: string,
+  ) {
+    this.server.to(blackjackTableRoom(tableId)).emit(
+      BLACKJACK_SERVER_EVENTS.ERROR,
+      isSocketErrorLike(error)
+        ? { code: error.code, message: error.message }
+        : {
+            code: 'UNKNOWN_ERROR',
+            message: fallbackMessage,
+          },
+    );
   }
 
   private emitError(
@@ -749,6 +849,9 @@ function isSocketErrorLike(
     typeof candidate.message === 'string'
   );
 }
+
+const blackjackDealingStepDelayMs = 650;
+const blackjackDealerTurnStepDelayMs = 750;
 
 const socketErrorCodes = new Set<string>([
   'UNAUTHORIZED',

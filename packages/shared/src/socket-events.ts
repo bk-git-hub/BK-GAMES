@@ -36,7 +36,7 @@ export type BlackjackTablePhase =
 
 export type BlackjackSeatStatus = "OCCUPIED" | "SITTING_OUT";
 
-export type BlackjackCardSnapshot = {
+export type BlackjackVisibleCardSnapshot = {
   rank:
     | "A"
     | "2"
@@ -52,8 +52,16 @@ export type BlackjackCardSnapshot = {
     | "Q"
     | "K";
   suit: "clubs" | "diamonds" | "hearts" | "spades";
-  hidden?: boolean;
+  hidden?: false;
 };
+
+export type BlackjackHiddenCardSnapshot = {
+  hidden: true;
+};
+
+export type BlackjackCardSnapshot =
+  | BlackjackVisibleCardSnapshot
+  | BlackjackHiddenCardSnapshot;
 
 export type BlackjackSocketUser = {
   userId: string;
@@ -201,17 +209,36 @@ export type BlackjackTableEventType =
   | "SEAT_LEFT"
   | "BET_PLACED"
   | "ROUND_STARTED"
+  | "CARD_DEALT"
+  | "DEALER_HOLE_CARD_DEALT"
+  | "DEALER_HOLE_CARD_REVEALED"
+  | "DEALER_CARD_DEALT"
   | "PLAYER_ACTED"
   | "DEALER_PLAYED"
   | "ROUND_SETTLED"
   | "ROUND_RESET"
   | "PLAYER_DISCONNECTED";
 
+export type BlackjackCardEventTarget =
+  | {
+      type: "PLAYER";
+      seatNo: number;
+      handNo: number;
+      cardIndex: number;
+    }
+  | {
+      type: "DEALER";
+      cardIndex: number;
+      hidden: boolean;
+    };
+
 export type BlackjackTableEventPayload = {
   tableId: string;
   type: BlackjackTableEventType;
   actorUserId: string;
   seatNo?: number;
+  card?: BlackjackCardSnapshot;
+  cardTarget?: BlackjackCardEventTarget;
   stateVersion: number;
   createdAt: string;
 };

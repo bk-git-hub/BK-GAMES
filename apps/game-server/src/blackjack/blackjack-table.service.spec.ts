@@ -1782,6 +1782,126 @@ describe('BlackjackTableService', () => {
     ]);
   });
 
+  it('advances from a split seat to the next occupied seat for the same user', () => {
+    const service = createRiggedService([
+      card('9', 'clubs'),
+      card('8', 'clubs'),
+      card('7', 'clubs'),
+      card('5', 'clubs'),
+      card('2', 'clubs'),
+      card('8', 'diamonds'),
+      card('3', 'clubs'),
+      card('9', 'diamonds'),
+      card('4', 'clubs'),
+      card('5', 'diamonds'),
+      card('10', 'clubs'),
+    ]);
+
+    for (const seatNo of [1, 2, 3]) {
+      service.takeSeat({
+        tableId: 'main',
+        socketId: 'socket-alice',
+        user: alice,
+        seatNo,
+      });
+      confirmInitialBet({
+        service,
+        tableId: 'main',
+        socketId: 'socket-alice',
+        user: alice,
+        seatNo,
+        commandId: `command-${seatNo}`,
+        roundId: 'round-1',
+        roundSeatId: `round-seat-${seatNo}`,
+      });
+    }
+
+    startActiveRoundOrFail(service);
+
+    const seatOneStand = service.playerAction({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      action: 'STAND',
+    });
+
+    expect(seatOneStand.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: 2,
+      currentTurnHandNo: 1,
+    });
+
+    const split = confirmSplitAction({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 2,
+      commandId: 'split-seat-2-command',
+    });
+
+    expect(split.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: 2,
+      currentTurnHandNo: 1,
+    });
+
+    const seatTwoFirstStand = service.playerAction({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 2,
+      action: 'STAND',
+    });
+
+    expect(seatTwoFirstStand.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: 2,
+      currentTurnHandNo: 2,
+    });
+
+    const seatTwoSecondStand = service.playerAction({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 2,
+      action: 'STAND',
+    });
+
+    expect(seatTwoSecondStand.state.phase).toBe('PLAYER_TURNS');
+    expect(seatTwoSecondStand.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: 3,
+      currentTurnHandNo: 1,
+    });
+    expect(seatTwoSecondStand.state.seats[2]).toEqual(
+      expect.objectContaining({
+        seatNo: 3,
+        activeHandNo: 1,
+        isCurrentTurn: true,
+      }),
+    );
+    expect(seatTwoSecondStand.state.seats[2]?.availableActions).toContain(
+      'HIT',
+    );
+    expect(seatTwoSecondStand.state.seats[2]?.availableActions).toContain(
+      'STAND',
+    );
+    expect(seatTwoSecondStand.state.seats[2]?.hands[0]).toEqual(
+      expect.objectContaining({
+        handNo: 1,
+        isCurrentTurn: true,
+      }),
+    );
+    expect(
+      seatTwoSecondStand.state.seats[2]?.hands[0]?.availableActions,
+    ).toContain('HIT');
+    expect(
+      seatTwoSecondStand.state.seats[2]?.hands[0]?.availableActions,
+    ).toContain('STAND');
+  });
+
   it('allows normal pairs to resplit up to four total hands by default', () => {
     const service = createRiggedService([
       card('8', 'clubs'),

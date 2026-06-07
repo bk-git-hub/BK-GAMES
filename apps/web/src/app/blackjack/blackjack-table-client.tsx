@@ -7,9 +7,11 @@ import {
   ArrowLeft,
   CircleDot,
   Coins,
+  LogOut,
   PlugZap,
   RefreshCw,
   Send,
+  Timer,
 } from "lucide-react";
 import {
   type BlackjackCardSnapshot,
@@ -17,28 +19,26 @@ import {
   type BlackjackPlayerAction,
   type BlackjackSeatSnapshot,
   type BlackjackTableEventPayload,
+  type BlackjackTablePhase,
   type BlackjackTableState,
   type BlackjackWalletUpdatedPayload,
 } from "@bk-games/shared/src/socket-events";
 
 import { useBlackjackTable } from "./use-blackjack-table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 type BlackjackTableClientProps = {
   initialWalletBalance: string;
   userEmail: string;
   userName: string;
+};
+
+type ActionPrompt = {
+  detail: string;
+  tone: "active" | "neutral" | "waiting" | "warning";
+  title: string;
 };
 
 const pointFormatter = new Intl.NumberFormat("en-US");
@@ -50,7 +50,7 @@ export function BlackjackTableClient({
 }: BlackjackTableClientProps) {
   const table = useBlackjackTable({ initialWalletBalance });
   const [betAmount, setBetAmount] = useState("");
-  const [seatNoInput, setSeatNoInput] = useState("");
+  const [seatNoInput, setSeatNoInput] = useState("1");
   const mySeats = useMemo(
     () =>
       table.tableState?.seats.filter(
@@ -71,105 +71,67 @@ export function BlackjackTableClient({
     activeHand?.availableActions ?? activeSeat?.availableActions ?? [];
   const bettingAmount =
     betAmount.trim() || table.tableState?.bettingLimits.minInitialBet || "";
-  const canSendSeatCommand =
-    table.connectionStatus === "connected" && selectedSeatNo !== null;
+  const canUseTable =
+    table.connectionStatus === "connected" && table.tableState?.status === "OPEN";
+  const canSendSeatCommand = canUseTable && selectedSeatNo !== null;
   const canBet =
     canSendSeatCommand &&
     Boolean(bettingAmount) &&
     mySeats.some((seat) => seat.seatNo === selectedSeatNo);
+  const prompt = getActionPrompt({
+    activeSeat,
+    actions: availableActions,
+    connectionStatus: table.connectionStatus,
+    selectedSeatNo,
+    state: table.tableState,
+  });
 
   return (
-    <main className="bg-background text-foreground min-h-screen">
-      <section className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-col gap-1">
-            <Link
-              href="/lobby"
-              className="text-muted-foreground flex w-fit items-center gap-2 text-sm font-medium"
-            >
-              <ArrowLeft />
-              Lobby
-            </Link>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-semibold tracking-normal">
-                Blackjack table
-              </h1>
-              <StatusBadge status={table.connectionStatus} />
-            </div>
-            <p className="text-muted-foreground text-sm">
-              {userName} · {userEmail}
-            </p>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[360px]">
-            <WalletPanel
-              balance={table.walletBalance}
-              update={table.lastWalletUpdate}
-            />
-            <ConnectionPanel
-              message={table.statusMessage}
-              onJoin={table.joinTable}
-              onReconnect={table.reconnect}
-              status={table.connectionStatus}
-            />
-          </div>
-        </header>
+    <main className="min-h-screen bg-[#07130f] text-white">
+      <section className="mx-auto flex min-h-screen w-full max-w-[1500px] flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <TableHeader
+          balance={table.walletBalance}
+          connectionStatus={table.connectionStatus}
+          message={table.statusMessage}
+          update={table.lastWalletUpdate}
+          userEmail={userEmail}
+          userName={userName}
+        />
 
         {table.socketError ? (
           <div
-            className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm"
+            className="rounded-xl border border-red-400/40 bg-red-500/15 px-4 py-3 text-sm text-red-100"
             role="alert"
           >
-            {table.socketError.code}: {table.socketError.message}
+            <span className="font-semibold">{table.socketError.code}</span>:{" "}
+            {table.socketError.message}
           </div>
         ) : null}
 
         {table.roundNotice ? (
-          <div className="bg-muted text-muted-foreground rounded-lg border px-3 py-2 text-sm">
+          <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm text-emerald-50">
             {table.roundNotice}
           </div>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
-          <div className="flex flex-col gap-4">
-            <TableStatus state={table.tableState} />
-            <DealerPanel state={table.tableState} />
-            <SeatGrid
+        <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="order-2 xl:order-1">
+            <CasinoTable
               myUserId={table.player?.id ?? null}
-              onLeaveSeat={table.leaveSeat}
-              seats={table.tableState?.seats ?? []}
-            />
-          </div>
-
-          <aside className="flex flex-col gap-4">
-            <SeatControls
-              betAmount={betAmount}
-              canBet={canBet}
-              canSendSeatCommand={canSendSeatCommand}
-              onBetAmountChange={setBetAmount}
-              onLeaveSeat={() => {
-                if (selectedSeatNo !== null) {
-                  table.leaveSeat(selectedSeatNo);
-                }
-              }}
-              onPlaceBet={() => {
-                if (selectedSeatNo !== null && bettingAmount) {
-                  table.placeBet(selectedSeatNo, bettingAmount);
-                }
-              }}
-              onSeatNoChange={setSeatNoInput}
-              onTakeSeat={() => {
-                if (selectedSeatNo !== null) {
-                  table.takeSeat(selectedSeatNo);
-                }
-              }}
-              seatNoInput={seatNoInput}
               selectedSeatNo={selectedSeatNo}
               state={table.tableState}
             />
-            <ActionControls
+          </div>
+
+          <aside className="order-1 flex flex-col gap-4 xl:order-2">
+            <ActionRail
               activeHand={activeHand}
               activeSeat={activeSeat}
               actions={availableActions}
+              betAmount={betAmount}
+              canBet={canBet}
+              canSendSeatCommand={canSendSeatCommand}
+              connectionStatus={table.connectionStatus}
               onAction={(action) => {
                 if (!activeSeat) {
                   return;
@@ -181,6 +143,29 @@ export function BlackjackTableClient({
                   seatNo: activeSeat.seatNo,
                 });
               }}
+              onBetAmountChange={setBetAmount}
+              onJoin={table.joinTable}
+              onLeaveSeat={() => {
+                if (selectedSeatNo !== null) {
+                  table.leaveSeat(selectedSeatNo);
+                }
+              }}
+              onPlaceBet={() => {
+                if (selectedSeatNo !== null && bettingAmount) {
+                  table.placeBet(selectedSeatNo, bettingAmount);
+                }
+              }}
+              onReconnect={table.reconnect}
+              onSeatNoChange={setSeatNoInput}
+              onTakeSeat={() => {
+                if (selectedSeatNo !== null) {
+                  table.takeSeat(selectedSeatNo);
+                }
+              }}
+              prompt={prompt}
+              seatNoInput={seatNoInput}
+              selectedSeatNo={selectedSeatNo}
+              state={table.tableState}
             />
             <EventStream events={table.events} />
           </aside>
@@ -190,513 +175,495 @@ export function BlackjackTableClient({
   );
 }
 
-function WalletPanel({
+function TableHeader({
   balance,
+  connectionStatus,
+  message,
   update,
+  userEmail,
+  userName,
 }: {
   balance: string;
-  update: BlackjackWalletUpdatedPayload | null;
-}) {
-  return (
-    <Card size="sm">
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Coins />
-          <CardTitle>Wallet</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-1">
-        <p className="text-lg font-semibold">{formatPoints(balance)} pts</p>
-        <p className="text-muted-foreground text-xs">
-          {update
-            ? `${update.reason} ${formatSignedPoints(update.delta)}`
-            : "Waiting for private wallet updates."}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ConnectionPanel({
-  message,
-  onJoin,
-  onReconnect,
-  status,
-}: {
+  connectionStatus: string;
   message: string | null;
-  onJoin: () => void;
-  onReconnect: () => void;
-  status: string;
+  update: BlackjackWalletUpdatedPayload | null;
+  userEmail: string;
+  userName: string;
 }) {
   return (
-    <Card size="sm">
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <PlugZap />
-          <CardTitle>Connection</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        <p className="text-muted-foreground text-xs">
-          {message ?? status.replaceAll("-", " ")}
-        </p>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={onJoin}
-            disabled={status !== "connected"}
-          >
-            <Send />
-            Join main
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={onReconnect}>
-            <RefreshCw />
-            Reconnect
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TableStatus({ state }: { state: BlackjackTableState | null }) {
-  const countdown = useCountdown(state?.timers.phaseEndsAt ?? null);
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <CardTitle>Table main</CardTitle>
-          <CardDescription>
-            Version {state?.version ?? "-"} · Updated{" "}
-            {state ? formatTime(state.updatedAt) : "-"}
-          </CardDescription>
+    <header className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur md:grid-cols-[1fr_auto] md:items-center">
+      <div className="flex min-w-0 items-center gap-3">
+        <Link
+          href="/lobby"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/15"
+          aria-label="Back to lobby"
+        >
+          <ArrowLeft className="size-4" />
+        </Link>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-normal">
+              BK Games Blackjack
+            </h1>
+            <StatusBadge status={connectionStatus} />
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">{state?.status ?? "NO_STATE"}</Badge>
-            <Badge variant="outline">{state?.phase ?? "CONNECTING"}</Badge>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-lg border px-3 py-2">
-          <p className="text-sm font-medium">Betting timer</p>
-          <p className="text-muted-foreground text-sm">
-            {countdown ?? "No active betting window"}
+          <p className="truncate text-sm text-white/55">
+            {userName} · {userEmail}
           </p>
         </div>
-        <div className="rounded-lg border px-3 py-2">
-          <p className="text-sm font-medium">Betting limits</p>
-          <p className="text-muted-foreground text-sm">
-            {state
-              ? `${formatPoints(state.bettingLimits.minInitialBet)} - ${formatPoints(
-                  state.bettingLimits.maxInitialBet,
-                )} pts`
-              : "Waiting for table state"}
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 md:min-w-[390px]">
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/45">
+            <Coins className="size-3.5" />
+            Wallet
+          </div>
+          <div className="mt-1 flex items-end justify-between gap-3">
+            <p className="text-lg font-semibold">{formatPoints(balance)} pts</p>
+            <p className="truncate text-xs text-emerald-200/80">
+              {update ? `${update.reason} ${formatSignedPoints(update.delta)}` : ""}
+            </p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/45">
+            <PlugZap className="size-3.5" />
+            Connection
+          </div>
+          <p className="mt-1 truncate text-sm text-white/75">
+            {message ?? connectionStatus.replaceAll("-", " ")}
           </p>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </header>
   );
 }
 
-function DealerPanel({ state }: { state: BlackjackTableState | null }) {
-  const dealer = state?.dealer;
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <CardTitle>Dealer</CardTitle>
-            <CardDescription>
-              Visible score {dealer?.visibleScore ?? "-"} · Final score{" "}
-              {dealer?.score ?? "-"}
-            </CardDescription>
-          </div>
-          <Badge variant="outline">{dealer?.cards.length ?? 0} cards</Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <CardRow cards={dealer?.cards ?? []} emptyLabel="Dealer has no cards" />
-      </CardContent>
-    </Card>
-  );
-}
-
-function SeatGrid({
+function CasinoTable({
   myUserId,
-  onLeaveSeat,
-  seats,
+  selectedSeatNo,
+  state,
 }: {
   myUserId: string | null;
-  onLeaveSeat: (seatNo: number) => void;
-  seats: BlackjackSeatSnapshot[];
+  selectedSeatNo: number | null;
+  state: BlackjackTableState | null;
 }) {
+  const countdown = useCountdown(state?.timers.phaseEndsAt ?? null);
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <CardTitle>Seats</CardTitle>
-            <CardDescription>Current players at this table</CardDescription>
-          </div>
-          <Badge variant="secondary">{seats.length}</Badge>
+    <section className="relative min-h-[620px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#10251d] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:min-h-[760px]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(46,181,126,0.24),rgba(10,42,31,0)_42%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0))]" />
+      <div className="absolute inset-x-8 bottom-8 top-16 rounded-[48%] border-[18px] border-[#2a1710] bg-[#0f6a4b] shadow-[inset_0_0_80px_rgba(0,0,0,0.35),0_30px_80px_rgba(0,0,0,0.35)] sm:border-[24px]" />
+      <div className="absolute inset-x-16 bottom-16 top-28 rounded-[48%] border border-emerald-100/20" />
+
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-white">Table main</p>
+          <p className="text-xs text-white/50">
+            Version {state?.version ?? "-"} · Updated{" "}
+            {state ? formatTime(state.updatedAt) : "-"}
+          </p>
         </div>
-      </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-2">
-        {seats.length ? (
-          seats.map((seat) => (
-            <SeatCard
-              key={seat.seatNo}
+        <div className="flex flex-wrap gap-2">
+          <FeltBadge>{state?.status ?? "NO_STATE"}</FeltBadge>
+          <FeltBadge>{state?.phase ?? "CONNECTING"}</FeltBadge>
+          <FeltBadge>
+            <Timer className="size-3" />
+            {countdown ?? "No timer"}
+          </FeltBadge>
+        </div>
+      </div>
+
+      <div className="absolute left-1/2 top-[18%] z-10 flex w-[min(76%,520px)] -translate-x-1/2 flex-col items-center gap-3 text-center">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.34em] text-emerald-100/75">
+          Dealer
+        </div>
+        <CardFan
+          cards={state?.dealer.cards ?? []}
+          emptyLabel="Waiting for deal"
+          size="lg"
+        />
+        <p className="text-xs text-emerald-50/70">
+          Visible {state?.dealer.visibleScore ?? "-"} · Final{" "}
+          {state?.dealer.score ?? "-"}
+        </p>
+      </div>
+
+      <div className="absolute left-1/2 top-[47%] z-10 -translate-x-1/2 text-center">
+        <p className="text-3xl font-semibold uppercase tracking-[0.3em] text-emerald-50/20 sm:text-5xl">
+          Blackjack
+        </p>
+        <p className="mt-2 text-xs uppercase tracking-[0.26em] text-emerald-50/35">
+          {state
+            ? `${formatPoints(state.bettingLimits.minInitialBet)} - ${formatPoints(
+                state.bettingLimits.maxInitialBet,
+              )} pts`
+            : "Table limits loading"}
+        </p>
+      </div>
+
+      <div className="absolute inset-x-4 bottom-10 top-[42%] z-20">
+        {state?.seats.length ? (
+          state.seats.map((seat, index) => (
+            <SeatSpot
+              index={index}
               isMine={seat.userId === myUserId}
-              onLeaveSeat={onLeaveSeat}
+              key={seat.seatNo}
               seat={seat}
             />
           ))
         ) : (
-          <p className="text-muted-foreground rounded-lg border px-3 py-4 text-sm md:col-span-2">
-            No occupied seats yet.
-          </p>
+          <EmptySeatSpot selectedSeatNo={selectedSeatNo} />
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
-function SeatCard({
+function SeatSpot({
+  index,
   isMine,
-  onLeaveSeat,
   seat,
 }: {
+  index: number;
   isMine: boolean;
-  onLeaveSeat: (seatNo: number) => void;
   seat: BlackjackSeatSnapshot;
 }) {
+  const activeHand = findActiveHand(seat) ?? seat.hands[0] ?? null;
+  const cards = activeHand?.cards.length ? activeHand.cards : seat.cards;
+
   return (
     <article
       className={cn(
-        "flex flex-col gap-3 rounded-lg border p-3",
-        seat.isCurrentTurn && "ring-ring ring-2",
+        "absolute flex w-[210px] flex-col gap-2 rounded-2xl border bg-[#06150f]/85 p-3 text-white shadow-2xl backdrop-blur-md",
+        seatPositionClass(index),
+        isMine ? "border-amber-300/80" : "border-white/15",
+        seat.isCurrentTurn && "ring-2 ring-amber-200",
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-medium">Seat {seat.seatNo}</h2>
-            {isMine ? <Badge variant="default">You</Badge> : null}
-            {seat.isCurrentTurn ? <Badge variant="secondary">Turn</Badge> : null}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold">Seat {seat.seatNo}</p>
+            {isMine ? (
+              <span className="rounded-full bg-amber-300 px-2 py-0.5 text-xs font-semibold text-zinc-950">
+                You
+              </span>
+            ) : null}
           </div>
-          <p className="text-muted-foreground truncate text-sm">
-            {seat.nickname}
-          </p>
+          <p className="truncate text-xs text-white/55">{seat.nickname}</p>
         </div>
-        <Badge variant={seat.connected ? "outline" : "destructive"}>
-          {seat.connected ? "Connected" : "Offline"}
-        </Badge>
+        <span
+          className={cn(
+            "size-2.5 rounded-full",
+            seat.connected ? "bg-emerald-300" : "bg-red-300",
+          )}
+        />
       </div>
 
-      <div className="grid gap-2 text-sm sm:grid-cols-2">
-        <Metric label="Status" value={seat.handStatus} />
-        <Metric label="Bet" value={formatNullablePoints(seat.betAmount)} />
-        <Metric
-          label="Active hand"
-          value={seat.activeHandNo ? `#${seat.activeHandNo}` : "-"}
-        />
-        <Metric
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <MiniMetric label="Bet" value={formatNullablePoints(seat.betAmount)} />
+        <MiniMetric
           label="Score"
           value={seat.score ? `${seat.score}${seat.isSoft ? " soft" : ""}` : "-"}
         />
       </div>
 
-      <CardRow cards={seat.cards} emptyLabel="No cards" />
-      <HandList hands={seat.hands} />
+      <CardFan cards={cards} emptyLabel="No cards" size="sm" />
 
-      {isMine ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="w-full"
-          onClick={() => onLeaveSeat(seat.seatNo)}
-        >
-          Leave seat
-        </Button>
-      ) : null}
+      <div className="flex flex-wrap gap-1">
+        <FeltBadge>{seat.handStatus}</FeltBadge>
+        {seat.activeHandNo ? <FeltBadge>Hand {seat.activeHandNo}</FeltBadge> : null}
+        {seat.outcome ? <FeltBadge>{seat.outcome}</FeltBadge> : null}
+      </div>
     </article>
   );
 }
 
-function HandList({ hands }: { hands: BlackjackHandSnapshot[] }) {
-  if (!hands.length) {
-    return (
-      <p className="text-muted-foreground rounded-lg border px-3 py-2 text-sm">
-        No active hands.
-      </p>
-    );
-  }
-
+function EmptySeatSpot({ selectedSeatNo }: { selectedSeatNo: number | null }) {
   return (
-    <div className="flex flex-col gap-2">
-      {hands.map((hand) => (
-        <div
-          key={hand.handNo}
-          className={cn(
-            "flex flex-col gap-2 rounded-lg border px-3 py-2",
-            hand.isCurrentTurn && "bg-muted",
-          )}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium">Hand {hand.handNo}</span>
-              <Badge variant="outline">{hand.handStatus}</Badge>
-              {hand.isCurrentTurn ? <Badge variant="secondary">Active</Badge> : null}
-            </div>
-            <span className="text-muted-foreground text-xs">
-              {formatPoints(hand.betAmount)} pts
-            </span>
-          </div>
-          <CardRow cards={hand.cards} emptyLabel="No cards" />
-          <div className="grid gap-2 text-xs sm:grid-cols-2">
-            <Metric
-              label="Score"
-              value={
-                hand.score ? `${hand.score}${hand.isSoft ? " soft" : ""}` : "-"
-              }
-            />
-            <Metric label="Outcome" value={hand.outcome ?? "-"} />
-            <Metric label="Payout" value={formatNullablePoints(hand.payoutAmount)} />
-            <Metric label="Net" value={formatNullablePoints(hand.netAmount)} />
-          </div>
-          {hand.availableActions.length ? (
-            <div className="flex flex-wrap gap-1">
-              {hand.availableActions.map((action) => (
-                <Badge key={action} variant="secondary">
-                  {formatActionLabel(action)}
-                </Badge>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ))}
+    <div className="absolute bottom-[3%] left-1/2 flex w-[190px] -translate-x-1/2 flex-col items-center gap-2 rounded-full border border-dashed border-emerald-100/35 bg-emerald-950/30 px-5 py-4 text-center text-emerald-50/75">
+      <p className="text-sm font-semibold">Seat {selectedSeatNo ?? 1}</p>
+      <p className="text-xs">Open</p>
     </div>
   );
 }
 
-function SeatControls({
+function ActionRail({
+  activeHand,
+  activeSeat,
+  actions,
   betAmount,
   canBet,
   canSendSeatCommand,
+  connectionStatus,
+  onAction,
   onBetAmountChange,
+  onJoin,
   onLeaveSeat,
   onPlaceBet,
+  onReconnect,
   onSeatNoChange,
   onTakeSeat,
+  prompt,
   seatNoInput,
   selectedSeatNo,
   state,
 }: {
+  activeHand: BlackjackHandSnapshot | null;
+  activeSeat: BlackjackSeatSnapshot | null;
+  actions: BlackjackPlayerAction[];
   betAmount: string;
   canBet: boolean;
   canSendSeatCommand: boolean;
+  connectionStatus: string;
+  onAction: (action: BlackjackPlayerAction) => void;
   onBetAmountChange: (value: string) => void;
+  onJoin: () => void;
   onLeaveSeat: () => void;
   onPlaceBet: () => void;
+  onReconnect: () => void;
   onSeatNoChange: (value: string) => void;
   onTakeSeat: () => void;
+  prompt: ActionPrompt;
   seatNoInput: string;
   selectedSeatNo: number | null;
   state: BlackjackTableState | null;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Seat and bet</CardTitle>
-        <CardDescription>Seat selection and initial wager</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          Seat number
-          <Input
-            inputMode="numeric"
-            min={1}
-            pattern="[0-9]*"
-            placeholder={selectedSeatNo ? String(selectedSeatNo) : "Seat"}
-            type="number"
-            value={seatNoInput}
-            onChange={(event) => onSeatNoChange(event.target.value)}
-          />
-        </label>
-        <div className="grid gap-2 sm:grid-cols-2">
+    <section className="rounded-3xl border border-white/10 bg-white/[0.07] p-4 shadow-2xl shadow-black/25 backdrop-blur">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p
+            className={cn(
+              "text-sm font-semibold uppercase tracking-[0.18em]",
+              prompt.tone === "active" && "text-amber-200",
+              prompt.tone === "waiting" && "text-emerald-200",
+              prompt.tone === "warning" && "text-red-200",
+              prompt.tone === "neutral" && "text-white/60",
+            )}
+          >
+            Next move
+          </p>
+          <h2 className="mt-1 text-3xl font-semibold tracking-normal">
+            {prompt.title}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-white/62">{prompt.detail}</p>
+        </div>
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="border-white/15 bg-white/10 text-white hover:bg-white/15"
+          onClick={onReconnect}
+          aria-label="Reconnect"
+        >
+          <RefreshCw />
+        </Button>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Seat</p>
+            <FeltBadge>{selectedSeatNo ? `Seat ${selectedSeatNo}` : "No seat"}</FeltBadge>
+          </div>
+          <label className="flex flex-col gap-2 text-sm text-white/70">
+            Seat number
+            <Input
+              className="border-white/15 bg-white/10 text-white placeholder:text-white/35"
+              inputMode="numeric"
+              min={1}
+              pattern="[0-9]*"
+              type="number"
+              value={seatNoInput}
+              onChange={(event) => onSeatNoChange(event.target.value)}
+            />
+          </label>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              className="bg-emerald-300 text-zinc-950 hover:bg-emerald-200"
+              disabled={!canSendSeatCommand}
+              onClick={onTakeSeat}
+            >
+              Take seat
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/15 bg-white/10 text-white hover:bg-white/15"
+              disabled={!canSendSeatCommand}
+              onClick={onLeaveSeat}
+            >
+              <LogOut />
+              Leave
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Bet</p>
+            <FeltBadge>
+              {state
+                ? `${formatPoints(state.bettingLimits.minInitialBet)} - ${formatPoints(
+                    state.bettingLimits.maxInitialBet,
+                  )}`
+                : "Loading"}
+            </FeltBadge>
+          </div>
+          <label className="flex flex-col gap-2 text-sm text-white/70">
+            Bet amount
+            <Input
+              className="border-white/15 bg-white/10 text-white placeholder:text-white/35"
+              inputMode="numeric"
+              min={1}
+              pattern="[0-9]*"
+              placeholder={state?.bettingLimits.minInitialBet ?? "Amount"}
+              type="number"
+              value={betAmount}
+              onChange={(event) => onBetAmountChange(event.target.value)}
+            />
+          </label>
           <Button
             type="button"
-            variant="outline"
-            disabled={!canSendSeatCommand}
-            onClick={onTakeSeat}
+            className="mt-3 h-11 w-full bg-amber-300 text-base font-semibold text-zinc-950 hover:bg-amber-200"
+            disabled={!canBet}
+            onClick={onPlaceBet}
           >
-            Take seat
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!canSendSeatCommand}
-            onClick={onLeaveSeat}
-          >
-            Leave seat
+            Place bet
           </Button>
         </div>
-        <Separator />
-        <label className="flex flex-col gap-1 text-sm">
-          Bet amount
-          <Input
-            inputMode="numeric"
-            min={1}
-            pattern="[0-9]*"
-            placeholder={state?.bettingLimits.minInitialBet ?? "Amount"}
-            type="number"
-            value={betAmount}
-            onChange={(event) => onBetAmountChange(event.target.value)}
-          />
-        </label>
-        <Button type="button" disabled={!canBet} onClick={onPlaceBet}>
-          Place bet
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
 
-function ActionControls({
-  activeHand,
-  activeSeat,
-  actions,
-  onAction,
-}: {
-  activeHand: BlackjackHandSnapshot | null;
-  activeSeat: BlackjackSeatSnapshot | null;
-  actions: BlackjackPlayerAction[];
-  onAction: (action: BlackjackPlayerAction) => void;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Actions</CardTitle>
-        <CardDescription>
-          {activeSeat
-            ? `Seat ${activeSeat.seatNo}, hand ${activeHand?.handNo ?? "-"}`
-            : "No owned active seat"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {actions.length ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {actions.map((action) => (
-              <Button
-                key={action}
-                type="button"
-                variant={moneyChangingActions.has(action) ? "default" : "outline"}
-                onClick={() => onAction(action)}
-              >
-                {formatActionLabel(action)}
-              </Button>
-            ))}
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Actions</p>
+            <FeltBadge>
+              {activeSeat
+                ? `Seat ${activeSeat.seatNo} · Hand ${activeHand?.handNo ?? "-"}`
+                : "No active seat"}
+            </FeltBadge>
           </div>
-        ) : (
-          <p className="text-muted-foreground rounded-lg border px-3 py-3 text-sm">
-            No actions available.
-          </p>
-        )}
-      </CardContent>
-    </Card>
+          {actions.length ? (
+            <div className="grid grid-cols-2 gap-2">
+              {actions.map((action) => (
+                <Button
+                  key={action}
+                  type="button"
+                  className={cn(
+                    "h-11 font-semibold",
+                    moneyChangingActions.has(action)
+                      ? "bg-amber-300 text-zinc-950 hover:bg-amber-200"
+                      : "bg-white text-zinc-950 hover:bg-emerald-50",
+                  )}
+                  onClick={() => onAction(action)}
+                >
+                  {formatActionLabel(action)}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-white/15 px-3 py-4 text-sm text-white/55">
+              {state ? phaseLabel(state.phase) : "Waiting for table state"}
+            </div>
+          )}
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="border-white/15 bg-white/10 text-white hover:bg-white/15"
+          disabled={connectionStatus !== "connected"}
+          onClick={onJoin}
+        >
+          <Send />
+          Join main table
+        </Button>
+      </div>
+    </section>
   );
 }
 
 function EventStream({ events }: { events: BlackjackTableEventPayload[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Events</CardTitle>
-        <CardDescription>Latest table events</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
+    <section className="rounded-3xl border border-white/10 bg-white/[0.07] p-4 shadow-2xl shadow-black/20 backdrop-blur">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">Table events</h2>
+        <FeltBadge>{events.length}</FeltBadge>
+      </div>
+      <div className="flex max-h-[280px] flex-col gap-2 overflow-auto pr-1">
         {events.length ? (
           events.map((event) => <EventRow event={event} key={eventKey(event)} />)
         ) : (
-          <p className="text-muted-foreground rounded-lg border px-3 py-3 text-sm">
-            No table events yet.
+          <p className="rounded-xl border border-dashed border-white/15 px-3 py-4 text-sm text-white/55">
+            No events yet.
           </p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
 function EventRow({ event }: { event: BlackjackTableEventPayload }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border px-3 py-2 text-sm">
+    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Badge
-          variant={
+        <span
+          className={cn(
+            "rounded-full px-2 py-0.5 text-xs font-semibold",
             event.type === "ROUND_SETTLED" || event.type === "ROUND_RESET"
-              ? "default"
-              : "secondary"
-          }
+              ? "bg-amber-300 text-zinc-950"
+              : "bg-emerald-300/15 text-emerald-100",
+          )}
         >
           {event.type}
-        </Badge>
-        <span className="text-muted-foreground text-xs">
-          {formatTime(event.createdAt)}
         </span>
+        <span className="text-xs text-white/45">{formatTime(event.createdAt)}</span>
       </div>
-      <p className="text-muted-foreground text-xs">
+      <p className="mt-1 text-xs text-white/45">
         Seat {event.seatNo ?? "-"} · v{event.stateVersion}
       </p>
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const isConnected = status === "connected";
-
-  return (
-    <Badge variant={isConnected ? "default" : "outline"}>
-      <CircleDot />
-      {status.replaceAll("-", " ")}
-    </Badge>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border px-2 py-1">
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="truncate text-sm font-medium">{value}</p>
-    </div>
-  );
-}
-
-function CardRow({
+function CardFan({
   cards,
   emptyLabel,
+  size,
 }: {
   cards: BlackjackCardSnapshot[];
   emptyLabel: string;
+  size: "lg" | "sm";
 }) {
   if (!cards.length) {
     return (
-      <p className="text-muted-foreground rounded-lg border px-3 py-2 text-sm">
+      <div
+        className={cn(
+          "flex items-center justify-center rounded-2xl border border-dashed border-emerald-50/25 bg-emerald-950/25 text-emerald-50/55",
+          size === "lg" ? "h-24 w-48 text-sm" : "h-16 w-full text-xs",
+        )}
+      >
         {emptyLabel}
-      </p>
+      </div>
     );
   }
 
   return (
-    <div className="flex min-h-24 flex-wrap items-center gap-2">
+    <div
+      className={cn(
+        "flex items-center justify-center",
+        size === "lg" ? "min-h-28 gap-3" : "min-h-14 gap-1.5",
+      )}
+    >
       {cards.map((card, index) => (
-        <PlayingCard card={card} index={index} key={`${cardKey(card)}:${index}`} />
+        <PlayingCard
+          card={card}
+          index={index}
+          key={`${cardKey(card)}:${index}`}
+          size={size}
+        />
       ))}
     </div>
   );
@@ -705,17 +672,28 @@ function CardRow({
 function PlayingCard({
   card,
   index,
+  size,
 }: {
   card: BlackjackCardSnapshot;
   index: number;
+  size: "lg" | "sm";
 }) {
+  const cardClass =
+    size === "lg"
+      ? "h-[104px] w-[74px] rounded-lg"
+      : "h-[58px] w-[42px] rounded-md";
+
   if (card.hidden) {
     return (
       <div
         aria-label="Hidden card"
-        className="bg-muted flex h-[88px] w-[63px] shrink-0 items-center justify-center rounded-md border text-xs font-medium"
+        className={cn(
+          "flex shrink-0 items-center justify-center border border-amber-200/40 bg-zinc-950 text-[10px] font-semibold text-amber-200 shadow-xl",
+          cardClass,
+          index % 2 === 0 ? "rotate-[-3deg]" : "rotate-[3deg]",
+        )}
       >
-        Hidden
+        BK
       </div>
     );
   }
@@ -724,13 +702,49 @@ function PlayingCard({
     <Image
       alt={`${card.rank} of ${card.suit}`}
       className={cn(
-        "h-[88px] w-auto shrink-0 rounded-md",
-        index % 2 === 0 ? "rotate-[-2deg]" : "rotate-[2deg]",
+        "h-auto shrink-0 shadow-xl",
+        cardClass,
+        index % 2 === 0 ? "rotate-[-3deg]" : "rotate-[3deg]",
       )}
       height={588}
       src={`/cards/royal-noir/${card.rank}${suitCode(card.suit)}.svg`}
       width={420}
     />
+  );
+}
+
+function FeltBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-xs font-medium text-white/75">
+      {children}
+    </span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const isConnected = status === "connected";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold",
+        isConnected
+          ? "bg-emerald-300 text-zinc-950"
+          : "border border-white/15 bg-white/10 text-white/65",
+      )}
+    >
+      <CircleDot className="size-3" />
+      {status.replaceAll("-", " ")}
+    </span>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+      <p className="text-[10px] uppercase tracking-wide text-white/40">{label}</p>
+      <p className="truncate text-xs font-semibold text-white">{value}</p>
+    </div>
   );
 }
 
@@ -759,6 +773,100 @@ function useCountdown(endsAt: string | null) {
   const secondRemainder = seconds % 60;
 
   return `${minutes}:${String(secondRemainder).padStart(2, "0")}`;
+}
+
+function getActionPrompt({
+  activeSeat,
+  actions,
+  connectionStatus,
+  selectedSeatNo,
+  state,
+}: {
+  activeSeat: BlackjackSeatSnapshot | null;
+  actions: BlackjackPlayerAction[];
+  connectionStatus: string;
+  selectedSeatNo: number | null;
+  state: BlackjackTableState | null;
+}): ActionPrompt {
+  if (connectionStatus !== "connected") {
+    return {
+      detail: "The table is opening a secure game socket.",
+      title: "Connecting",
+      tone: "neutral",
+    };
+  }
+
+  if (!state) {
+    return {
+      detail: "Join the main table if state does not arrive automatically.",
+      title: "Join table",
+      tone: "neutral",
+    };
+  }
+
+  if (!activeSeat) {
+    return {
+      detail: `Seat ${selectedSeatNo ?? 1} is selected for this table.`,
+      title: "Choose a seat",
+      tone: "active",
+    };
+  }
+
+  if (actions.length) {
+    return {
+      detail: `Seat ${activeSeat.seatNo} is waiting on a hand decision.`,
+      title: "Your turn",
+      tone: "active",
+    };
+  }
+
+  if (activeSeat.handStatus === "WAITING_BET") {
+    return {
+      detail: `Limits are ${formatPoints(
+        state.bettingLimits.minInitialBet,
+      )} to ${formatPoints(state.bettingLimits.maxInitialBet)} points.`,
+      title: "Place your bet",
+      tone: "active",
+    };
+  }
+
+  if (state.phase === "WAITING_BETS") {
+    return {
+      detail: "Your seat is in the betting window.",
+      title: "Bet locked",
+      tone: "waiting",
+    };
+  }
+
+  if (state.phase === "SETTLED") {
+    return {
+      detail: "Settlement is complete and the table will reset for the next bet.",
+      title: "Round settled",
+      tone: "waiting",
+    };
+  }
+
+  return {
+    detail: phaseLabel(state.phase),
+    title: "Table running",
+    tone: "waiting",
+  };
+}
+
+function phaseLabel(phase: BlackjackTablePhase) {
+  const labels: Record<BlackjackTablePhase, string> = {
+    CANCELLED: "Round cancelled.",
+    DEALER_TURN: "Dealer is playing.",
+    DEALING: "Cards are being dealt.",
+    INSURANCE_DECISION: "Insurance decision window.",
+    PLAYER_TURNS: "Waiting for the active player.",
+    SETTLED: "Round settled.",
+    SETTLING: "Round is settling.",
+    WAITING: "Table is waiting.",
+    WAITING_BETS: "Betting window is open.",
+  };
+
+  return labels[phase];
 }
 
 function findActiveHand(seat: BlackjackSeatSnapshot) {
@@ -831,6 +939,20 @@ function suitCode(suit: BlackjackCardSnapshot["suit"]) {
 
 function eventKey(event: BlackjackTableEventPayload) {
   return `${event.type}:${event.stateVersion}:${event.createdAt}:${event.seatNo ?? "table"}`;
+}
+
+function seatPositionClass(index: number) {
+  const positions = [
+    "left-1/2 bottom-[2%] -translate-x-1/2",
+    "left-[6%] bottom-[13%]",
+    "right-[6%] bottom-[13%]",
+    "left-[16%] bottom-[38%]",
+    "right-[16%] bottom-[38%]",
+    "left-[34%] bottom-[0%]",
+    "right-[34%] bottom-[0%]",
+  ];
+
+  return positions[index % positions.length];
 }
 
 const moneyChangingActions = new Set<BlackjackPlayerAction>([

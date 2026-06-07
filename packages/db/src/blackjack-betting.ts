@@ -27,7 +27,6 @@ const defaultMaxInitialBet = BigInt(6000);
 const defaultMaxTotalBetPerSeat = BigInt(24000);
 const defaultMaxTotalBetPerUser = BigInt(42000);
 const zero = BigInt(0);
-const ten = BigInt(10);
 
 export type BlackjackBettingErrorCode =
   | "TABLE_NOT_FOUND"
@@ -1433,7 +1432,7 @@ function calculateMaxInitialBetFromBalance(
   availableBalance: bigint,
   table: BlackjackRuntimeTable,
 ) {
-  const walletCap = availableBalance / ten;
+  const walletCap = availableBalance;
 
   return walletCap < table.maxInitialBet ? walletCap : table.maxInitialBet;
 }

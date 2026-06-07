@@ -85,7 +85,7 @@ try {
     userId,
     category: "ADMIN",
     type: "ADMIN_ADJUST",
-    delta: 10_000n,
+    delta: 100n,
     referenceType: "BLACKJACK_BET_SMOKE",
     referenceId: `grant:${userId}`,
     idempotencyKey: `blackjack-bet-smoke:grant:${userId}`,
@@ -95,7 +95,7 @@ try {
     tableCode,
     seatNo: 1,
     userId,
-    amount: 500n,
+    amount: 100n,
     commandId: "command-1",
   };
   const bet = await placeBlackjackInitialBet(betInput);
@@ -122,11 +122,11 @@ try {
   };
 
   if (
-    summary.firstBalance !== "9500" ||
+    summary.firstBalance !== "0" ||
     !summary.retryIdempotent ||
     !summary.sameLedger ||
     !summary.sameRoundSeat ||
-    summary.finalBalance !== "9500" ||
+    summary.finalBalance !== "0" ||
     summary.ledgerCount !== 2
   ) {
     throw new Error(

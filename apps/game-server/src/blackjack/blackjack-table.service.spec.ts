@@ -516,6 +516,165 @@ describe('BlackjackTableService', () => {
     ]);
   });
 
+  it('peeks under a ten-value upcard and settles dealer blackjack immediately', () => {
+    const service = createRiggedService([
+      card('8', 'clubs'),
+      card('K', 'clubs'),
+      card('7', 'diamonds'),
+      card('A', 'clubs'),
+    ]);
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    const roundStarted = expireBettingWindowOrFail(service);
+
+    expect(roundStarted.event.type).toBe('ROUND_STARTED');
+    expect(roundStarted.state.phase).toBe('SETTLING');
+    expect(roundStarted.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: null,
+      currentTurnHandNo: null,
+    });
+    expect(roundStarted.state.dealer).toEqual({
+      cards: [
+        { rank: 'K', suit: 'clubs' },
+        { rank: 'A', suit: 'clubs' },
+      ],
+      visibleScore: 21,
+      score: 21,
+    });
+    expect(roundStarted.state.seats[0]).toEqual(
+      expect.objectContaining({
+        seatNo: 1,
+        cards: [
+          { rank: '8', suit: 'clubs' },
+          { rank: '7', suit: 'diamonds' },
+        ],
+        isCurrentTurn: false,
+        availableActions: [],
+      }),
+    );
+    expect(roundStarted.settlement?.dealer.hasBlackjack).toBe(true);
+    expect(roundStarted.settlement?.seats).toEqual([
+      expect.objectContaining({
+        roundSeatId: 'round-seat-1',
+        handNo: 1,
+        outcome: 'LOSE',
+        outcomeReason: 'DEALER_BLACKJACK',
+      }),
+    ]);
+  });
+
+  it('continues to player turns when the dealer ten-value peek is not blackjack', () => {
+    const service = createRiggedService([
+      card('8', 'clubs'),
+      card('K', 'clubs'),
+      card('7', 'diamonds'),
+      card('6', 'clubs'),
+    ]);
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    const roundStarted = expireBettingWindowOrFail(service);
+
+    expect(roundStarted.state.phase).toBe('PLAYER_TURNS');
+    expect(roundStarted.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: 1,
+      currentTurnHandNo: 1,
+    });
+    expect(roundStarted.state.dealer).toEqual({
+      cards: [
+        { rank: 'K', suit: 'clubs' },
+        { rank: '6', suit: 'clubs', hidden: true },
+      ],
+      visibleScore: 10,
+      score: null,
+    });
+    expect(roundStarted.state.seats[0]).toEqual(
+      expect.objectContaining({
+        isCurrentTurn: true,
+        availableActions: ['HIT', 'STAND', 'DOUBLE', 'SURRENDER'],
+      }),
+    );
+    expect(roundStarted.settlement).toBeUndefined();
+  });
+
+  it('peeks an ace-upcard dealer blackjack immediately when insurance is not offered', () => {
+    const service = createRiggedService([
+      card('8', 'clubs'),
+      card('A', 'clubs'),
+      card('7', 'diamonds'),
+      card('K', 'clubs'),
+    ]);
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    const roundStarted = expireBettingWindowOrFail(service);
+
+    expect(roundStarted.state.phase).toBe('SETTLING');
+    expect(roundStarted.state.dealer).toEqual({
+      cards: [
+        { rank: 'A', suit: 'clubs' },
+        { rank: 'K', suit: 'clubs' },
+      ],
+      visibleScore: 21,
+      score: 21,
+    });
+    expect(roundStarted.settlement?.dealer.hasBlackjack).toBe(true);
+    expect(roundStarted.settlement?.seats).toEqual([
+      expect.objectContaining({
+        outcome: 'LOSE',
+        outcomeReason: 'DEALER_BLACKJACK',
+      }),
+    ]);
+  });
+
   it('waits for the betting window before dealing all confirmed seats', () => {
     const service = createDeterministicService();
 
@@ -925,6 +1084,14 @@ describe('BlackjackTableService', () => {
       roundId: 'round-1',
       currentTurnSeatNo: 1,
       currentTurnHandNo: 1,
+    });
+    expect(started.state.dealer).toEqual({
+      cards: [
+        { rank: 'A', suit: 'clubs' },
+        { rank: 'K', suit: 'clubs', hidden: true },
+      ],
+      visibleScore: 11,
+      score: null,
     });
     expect(started.state.seats[0]).toEqual(
       expect.objectContaining({

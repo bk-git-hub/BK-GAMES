@@ -1334,7 +1334,8 @@ export class BlackjackTableService {
       return { cards: [], visibleScore: null, score: null };
     }
 
-    const dealerCardsAreHidden = table.phase === 'PLAYER_TURNS';
+    const dealerCardsAreHidden =
+      table.phase === 'PLAYER_TURNS' || table.phase === 'INSURANCE_DECISION';
     const cards = table.round.dealerCards.map((card, index) =>
       toCardSnapshot(card, dealerCardsAreHidden && index > 0),
     );
@@ -1449,6 +1450,10 @@ export class BlackjackTableService {
       return true;
     }
 
+    if (this.maybeResolveDealerPeek(table)) {
+      return true;
+    }
+
     this.advanceTurnOrPlayDealer(table);
 
     return true;
@@ -1560,14 +1565,29 @@ export class BlackjackTableService {
     table.round.currentTurnSeatNo = null;
     table.round.currentTurnHandNo = null;
 
-    if (evaluateHand(table.round.dealerCards).isBlackjack) {
-      table.phase = 'SETTLING';
+    if (this.maybeResolveDealerPeek(table)) {
       return true;
     }
 
     this.advanceTurnOrPlayDealer(table);
 
     return false;
+  }
+
+  private maybeResolveDealerPeek(table: BlackjackTableRuntime) {
+    if (!table.round || !isDealerPeekUpcard(table)) {
+      return false;
+    }
+
+    if (!evaluateHand(table.round.dealerCards).isBlackjack) {
+      return false;
+    }
+
+    table.phase = 'SETTLING';
+    table.round.currentTurnSeatNo = null;
+    table.round.currentTurnHandNo = null;
+
+    return true;
   }
 
   private getInsuranceDecisionContext(
@@ -2460,6 +2480,18 @@ function isAcePair(cards: readonly BlackjackCard[]) {
 
 function isDealerUpcardAce(table: BlackjackTableRuntime) {
   return table.round?.dealerCards[0]?.rank === 'A';
+}
+
+function isDealerPeekUpcard(table: BlackjackTableRuntime) {
+  const rank = table.round?.dealerCards[0]?.rank;
+
+  return (
+    rank === 'A' ||
+    rank === '10' ||
+    rank === 'J' ||
+    rank === 'Q' ||
+    rank === 'K'
+  );
 }
 
 function toCardSnapshot(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -42,6 +42,7 @@ type ActionPrompt = {
 };
 
 const pointFormatter = new Intl.NumberFormat("en-US");
+const cardEventAnimationMs = 1400;
 
 export function BlackjackTableClient({
   initialWalletBalance,
@@ -51,15 +52,17 @@ export function BlackjackTableClient({
   const table = useBlackjackTable({ initialWalletBalance });
   const [betAmount, setBetAmount] = useState("");
   const [seatNoInput, setSeatNoInput] = useState("1");
+  const visibleState = table.tableState;
+  const cardAnimationKeys = useCardEventAnimations(table.events);
   const mySeats = useMemo(
     () =>
-      table.tableState?.seats.filter(
-        (seat) => seat.userId === table.player?.id,
-      ) ?? [],
-    [table.player?.id, table.tableState?.seats],
+      visibleState?.seats.filter((seat) => seat.userId === table.player?.id) ??
+      [],
+    [table.player?.id, visibleState?.seats],
   );
   const selectedSeatNo =
     parsePositiveInteger(seatNoInput) ?? mySeats[0]?.seatNo ?? null;
+  const selectedSeat = mySeats.find((seat) => seat.seatNo === selectedSeatNo);
   const activeSeat =
     mySeats.find((seat) => seat.isCurrentTurn || seat.activeHandNo !== null) ??
     mySeats[0] ??
@@ -70,20 +73,38 @@ export function BlackjackTableClient({
   const availableActions =
     activeHand?.availableActions ?? activeSeat?.availableActions ?? [];
   const bettingAmount =
-    betAmount.trim() || table.tableState?.bettingLimits.minInitialBet || "";
+    betAmount.trim() || visibleState?.bettingLimits.minInitialBet || "";
+  const isReviewingRoundResult = Boolean(table.roundResultReview);
+  const isCommandLockedPhase = isTableCommandLockedPhase(visibleState?.phase);
   const canUseTable =
-    table.connectionStatus === "connected" && table.tableState?.status === "OPEN";
-  const canSendSeatCommand = canUseTable && selectedSeatNo !== null;
+    table.connectionStatus === "connected" && visibleState?.status === "OPEN";
+  const canSendSeatCommand =
+    canUseTable &&
+    selectedSeatNo !== null &&
+    !isCommandLockedPhase &&
+    !isReviewingRoundResult;
   const canBet =
     canSendSeatCommand &&
+    !isReviewingRoundResult &&
     Boolean(bettingAmount) &&
-    mySeats.some((seat) => seat.seatNo === selectedSeatNo);
+    visibleState?.phase === "WAITING_BETS" &&
+    selectedSeat?.handStatus === "WAITING_BET";
+  const canSendPlayerAction =
+    canUseTable &&
+    !isCommandLockedPhase &&
+    !isReviewingRoundResult &&
+    availableActions.length > 0;
+  const canJoinTable =
+    table.connectionStatus === "connected" &&
+    !isCommandLockedPhase &&
+    !isReviewingRoundResult;
   const prompt = getActionPrompt({
     activeSeat,
     actions: availableActions,
     connectionStatus: table.connectionStatus,
+    isReviewingRoundResult,
     selectedSeatNo,
-    state: table.tableState,
+    state: visibleState,
   });
 
   return (
@@ -114,12 +135,21 @@ export function BlackjackTableClient({
           </div>
         ) : null}
 
+        {table.roundResultReview ? (
+          <RoundResultReviewBanner
+            endsAt={table.roundResultReview.endsAt}
+            myUserId={table.player?.id ?? null}
+            state={table.roundResultReview.state}
+          />
+        ) : null}
+
         <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="order-2 xl:order-1">
             <CasinoTable
+              cardAnimationKeys={cardAnimationKeys}
               myUserId={table.player?.id ?? null}
               selectedSeatNo={selectedSeatNo}
-              state={table.tableState}
+              state={visibleState}
             />
           </div>
 
@@ -130,8 +160,9 @@ export function BlackjackTableClient({
               actions={availableActions}
               betAmount={betAmount}
               canBet={canBet}
+              canJoinTable={canJoinTable}
+              canSendPlayerAction={canSendPlayerAction}
               canSendSeatCommand={canSendSeatCommand}
-              connectionStatus={table.connectionStatus}
               onAction={(action) => {
                 if (!activeSeat) {
                   return;
@@ -165,7 +196,7 @@ export function BlackjackTableClient({
               prompt={prompt}
               seatNoInput={seatNoInput}
               selectedSeatNo={selectedSeatNo}
-              state={table.tableState}
+              state={visibleState}
             />
             <EventStream events={table.events} />
           </aside>
@@ -240,16 +271,97 @@ function TableHeader({
   );
 }
 
+function RoundResultReviewBanner({
+  endsAt,
+  myUserId,
+  state,
+}: {
+  endsAt: string;
+  myUserId: string | null;
+  state: BlackjackTableState;
+}) {
+  const countdown = useCountdown(endsAt);
+  const results = getRoundResults(state);
+  const myResults = results.filter((result) => result.userId === myUserId);
+  const headlineResults = myResults.length ? myResults : results.slice(0, 3);
+
+  return (
+    <section className="rounded-2xl border border-amber-200/40 bg-amber-200/12 px-4 py-3 text-amber-50 shadow-2xl shadow-black/20">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/70">
+            Round result
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-normal">
+            Review the outcome
+          </h2>
+          <p className="mt-1 text-sm text-amber-50/70">
+            Next round appears in {countdown ?? "a moment"}.
+          </p>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[520px]">
+          {headlineResults.length ? (
+            headlineResults.map((result) => (
+              <div
+                className={cn(
+                  "rounded-xl border px-3 py-2",
+                  result.userId === myUserId
+                    ? "border-amber-200/70 bg-black/30"
+                    : "border-white/10 bg-black/20",
+                )}
+                key={`${result.seatNo}:${result.handNo ?? "seat"}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate text-sm font-semibold">
+                    {result.userId === myUserId ? "You" : result.nickname}
+                  </p>
+                  <span className="text-xs text-amber-100/65">
+                    Seat {result.seatNo}
+                    {result.handNo ? ` · Hand ${result.handNo}` : ""}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-3 text-sm">
+                  <span>{formatOutcome(result.outcome, result.reason)}</span>
+                  <span
+                    className={cn(
+                      "font-semibold",
+                      result.netAmount && Number(result.netAmount) > 0
+                        ? "text-emerald-200"
+                        : "text-amber-50",
+                    )}
+                  >
+                    {result.netAmount
+                      ? formatSignedPoints(result.netAmount)
+                      : "Settled"}
+                  </span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-4 text-sm text-amber-50/70 sm:col-span-2">
+              Settlement received. Check the table cards before the next round.
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CasinoTable({
+  cardAnimationKeys,
   myUserId,
   selectedSeatNo,
   state,
 }: {
+  cardAnimationKeys: ReadonlySet<string>;
   myUserId: string | null;
   selectedSeatNo: number | null;
   state: BlackjackTableState | null;
 }) {
   const countdown = useCountdown(state?.timers.phaseEndsAt ?? null);
+
   return (
     <section className="relative min-h-[620px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#10251d] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:min-h-[760px]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(46,181,126,0.24),rgba(10,42,31,0)_42%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0))]" />
@@ -279,8 +391,10 @@ function CasinoTable({
           Dealer
         </div>
         <CardFan
+          animationKeys={cardAnimationKeys}
           cards={state?.dealer.cards ?? []}
           emptyLabel="Waiting for deal"
+          ownerKeys={["dealer", "table"]}
           size="lg"
         />
         <p className="text-xs text-emerald-50/70">
@@ -306,6 +420,7 @@ function CasinoTable({
         {state?.seats.length ? (
           state.seats.map((seat, index) => (
             <SeatSpot
+              cardAnimationKeys={cardAnimationKeys}
               index={index}
               isMine={seat.userId === myUserId}
               key={seat.seatNo}
@@ -321,16 +436,23 @@ function CasinoTable({
 }
 
 function SeatSpot({
+  cardAnimationKeys,
   index,
   isMine,
   seat,
 }: {
+  cardAnimationKeys: ReadonlySet<string>;
   index: number;
   isMine: boolean;
   seat: BlackjackSeatSnapshot;
 }) {
   const activeHand = findActiveHand(seat) ?? seat.hands[0] ?? null;
   const cards = activeHand?.cards.length ? activeHand.cards : seat.cards;
+  const ownerKeys = [`seat:${seat.seatNo}`, "table"];
+
+  if (activeHand) {
+    ownerKeys.push(`seat:${seat.seatNo}:hand:${activeHand.handNo}`);
+  }
 
   return (
     <article
@@ -369,7 +491,13 @@ function SeatSpot({
         />
       </div>
 
-      <CardFan cards={cards} emptyLabel="No cards" size="sm" />
+      <CardFan
+        animationKeys={cardAnimationKeys}
+        cards={cards}
+        emptyLabel="No cards"
+        ownerKeys={ownerKeys}
+        size="sm"
+      />
 
       <div className="flex flex-wrap gap-1">
         <FeltBadge>{seat.handStatus}</FeltBadge>
@@ -395,8 +523,9 @@ function ActionRail({
   actions,
   betAmount,
   canBet,
+  canJoinTable,
+  canSendPlayerAction,
   canSendSeatCommand,
-  connectionStatus,
   onAction,
   onBetAmountChange,
   onJoin,
@@ -415,8 +544,9 @@ function ActionRail({
   actions: BlackjackPlayerAction[];
   betAmount: string;
   canBet: boolean;
+  canJoinTable: boolean;
+  canSendPlayerAction: boolean;
   canSendSeatCommand: boolean;
-  connectionStatus: string;
   onAction: (action: BlackjackPlayerAction) => void;
   onBetAmountChange: (value: string) => void;
   onJoin: () => void;
@@ -477,6 +607,7 @@ function ActionRail({
               pattern="[0-9]*"
               type="number"
               value={seatNoInput}
+              disabled={!canSendSeatCommand}
               onChange={(event) => onSeatNoChange(event.target.value)}
             />
           </label>
@@ -523,6 +654,7 @@ function ActionRail({
               placeholder={state?.bettingLimits.minInitialBet ?? "Amount"}
               type="number"
               value={betAmount}
+              disabled={!canBet}
               onChange={(event) => onBetAmountChange(event.target.value)}
             />
           </label>
@@ -557,6 +689,7 @@ function ActionRail({
                       ? "bg-amber-300 text-zinc-950 hover:bg-amber-200"
                       : "bg-white text-zinc-950 hover:bg-emerald-50",
                   )}
+                  disabled={!canSendPlayerAction}
                   onClick={() => onAction(action)}
                 >
                   {formatActionLabel(action)}
@@ -574,7 +707,7 @@ function ActionRail({
           type="button"
           variant="outline"
           className="border-white/15 bg-white/10 text-white hover:bg-white/15"
-          disabled={connectionStatus !== "connected"}
+          disabled={!canJoinTable}
           onClick={onJoin}
         >
           <Send />
@@ -628,13 +761,67 @@ function EventRow({ event }: { event: BlackjackTableEventPayload }) {
   );
 }
 
+function useCardEventAnimations(events: BlackjackTableEventPayload[]) {
+  const [animationKeys, setAnimationKeys] = useState<string[]>([]);
+  const lastEventKeyRef = useRef<string | null>(null);
+  const timeoutRefs = useRef<number[]>([]);
+  const latestEvent = events[0] ?? null;
+  const latestEventKey = latestEvent ? eventKey(latestEvent) : null;
+
+  useEffect(() => {
+    if (!latestEvent || !latestEventKey) {
+      return;
+    }
+
+    if (lastEventKeyRef.current === latestEventKey) {
+      return;
+    }
+
+    lastEventKeyRef.current = latestEventKey;
+
+    const nextKeys = extractCardAnimationKeys(latestEvent);
+
+    if (!nextKeys.length) {
+      return;
+    }
+
+    const addTimeoutId = window.setTimeout(() => {
+      setAnimationKeys((currentKeys) => [
+        ...new Set([...currentKeys, ...nextKeys]),
+      ]);
+    }, 0);
+    const removeTimeoutId = window.setTimeout(() => {
+      setAnimationKeys((currentKeys) =>
+        currentKeys.filter((key) => !nextKeys.includes(key)),
+      );
+    }, cardEventAnimationMs);
+
+    timeoutRefs.current.push(addTimeoutId, removeTimeoutId);
+  }, [latestEvent, latestEventKey]);
+
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach((timeoutId) =>
+        window.clearTimeout(timeoutId),
+      );
+      timeoutRefs.current = [];
+    };
+  }, []);
+
+  return useMemo(() => new Set(animationKeys), [animationKeys]);
+}
+
 function CardFan({
+  animationKeys,
   cards,
   emptyLabel,
+  ownerKeys,
   size,
 }: {
+  animationKeys: ReadonlySet<string>;
   cards: BlackjackCardSnapshot[];
   emptyLabel: string;
+  ownerKeys: string[];
   size: "lg" | "sm";
 }) {
   if (!cards.length) {
@@ -660,6 +847,7 @@ function CardFan({
       {cards.map((card, index) => (
         <PlayingCard
           card={card}
+          isFresh={isFreshCard(animationKeys, ownerKeys, card, index)}
           index={index}
           key={`${cardKey(card)}:${index}`}
           size={size}
@@ -672,10 +860,12 @@ function CardFan({
 function PlayingCard({
   card,
   index,
+  isFresh,
   size,
 }: {
   card: BlackjackCardSnapshot;
   index: number;
+  isFresh: boolean;
   size: "lg" | "sm";
 }) {
   const cardClass =
@@ -689,6 +879,8 @@ function PlayingCard({
         aria-label="Hidden card"
         className={cn(
           "flex shrink-0 items-center justify-center border border-amber-200/40 bg-zinc-950 text-[10px] font-semibold text-amber-200 shadow-xl",
+          isFresh &&
+            "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-500",
           cardClass,
           index % 2 === 0 ? "rotate-[-3deg]" : "rotate-[3deg]",
         )}
@@ -703,6 +895,8 @@ function PlayingCard({
       alt={`${card.rank} of ${card.suit}`}
       className={cn(
         "h-auto shrink-0 shadow-xl",
+        isFresh &&
+          "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-500",
         cardClass,
         index % 2 === 0 ? "rotate-[-3deg]" : "rotate-[3deg]",
       )}
@@ -779,12 +973,14 @@ function getActionPrompt({
   activeSeat,
   actions,
   connectionStatus,
+  isReviewingRoundResult,
   selectedSeatNo,
   state,
 }: {
   activeSeat: BlackjackSeatSnapshot | null;
   actions: BlackjackPlayerAction[];
   connectionStatus: string;
+  isReviewingRoundResult: boolean;
   selectedSeatNo: number | null;
   state: BlackjackTableState | null;
 }): ActionPrompt {
@@ -801,6 +997,14 @@ function getActionPrompt({
       detail: "Join the main table if state does not arrive automatically.",
       title: "Join table",
       tone: "neutral",
+    };
+  }
+
+  if (isReviewingRoundResult) {
+    return {
+      detail: "Results are held briefly so you can check the dealer cards and payout.",
+      title: "Review result",
+      tone: "waiting",
     };
   }
 
@@ -869,6 +1073,90 @@ function phaseLabel(phase: BlackjackTablePhase) {
   return labels[phase];
 }
 
+function isTableCommandLockedPhase(phase: BlackjackTablePhase | undefined) {
+  return phase === "DEALING" || phase === "DEALER_TURN" || phase === "SETTLING";
+}
+
+type RoundResultRow = {
+  handNo: number | null;
+  netAmount: string | null;
+  nickname: string;
+  outcome: BlackjackSeatSnapshot["outcome"];
+  reason: BlackjackSeatSnapshot["outcomeReason"];
+  seatNo: number;
+  userId: string;
+};
+
+function getRoundResults(state: BlackjackTableState): RoundResultRow[] {
+  return state.seats.flatMap((seat) => {
+    const handResults: RoundResultRow[] = seat.hands
+      .filter(
+        (hand) =>
+          hand.outcome !== null ||
+          hand.netAmount !== null ||
+          hand.payoutAmount !== null,
+      )
+      .map((hand) => ({
+        handNo: hand.handNo,
+        netAmount: hand.netAmount,
+        nickname: seat.nickname,
+        outcome: hand.outcome,
+        reason: hand.outcomeReason,
+        seatNo: seat.seatNo,
+        userId: seat.userId,
+      }));
+
+    if (handResults.length) {
+      return handResults;
+    }
+
+    if (
+      seat.outcome !== null ||
+      seat.netAmount !== null ||
+      seat.payoutAmount !== null
+    ) {
+      return [
+        {
+          handNo: null,
+          netAmount: seat.netAmount,
+          nickname: seat.nickname,
+          outcome: seat.outcome,
+          reason: seat.outcomeReason,
+          seatNo: seat.seatNo,
+          userId: seat.userId,
+        },
+      ];
+    }
+
+    return [];
+  });
+}
+
+function formatOutcome(
+  outcome: BlackjackSeatSnapshot["outcome"],
+  reason: BlackjackSeatSnapshot["outcomeReason"],
+) {
+  const outcomeLabel = outcome
+    ? outcome
+        .toLowerCase()
+        .split("_")
+        .map((part) => part[0]?.toUpperCase() + part.slice(1))
+        .join(" ")
+    : "Settled";
+
+  if (!reason) {
+    return outcomeLabel;
+  }
+
+  const reasonLabel = reason
+    .toLowerCase()
+    .split("_")
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
+
+  return `${outcomeLabel} · ${reasonLabel}`;
+}
+
 function findActiveHand(seat: BlackjackSeatSnapshot) {
   return (
     seat.hands.find((hand) => hand.handNo === seat.activeHandNo) ??
@@ -921,7 +1209,152 @@ function cardKey(card: BlackjackCardSnapshot) {
   return card.hidden ? "hidden" : `${card.rank}${card.suit}`;
 }
 
-function suitCode(suit: BlackjackCardSnapshot["suit"]) {
+function isFreshCard(
+  animationKeys: ReadonlySet<string>,
+  ownerKeys: string[],
+  card: BlackjackCardSnapshot,
+  index: number,
+) {
+  const identity = cardKey(card);
+
+  return ownerKeys.some(
+    (ownerKey) =>
+      animationKeys.has(`${ownerKey}:card`) ||
+      animationKeys.has(`${ownerKey}:card:${identity}`) ||
+      animationKeys.has(`${ownerKey}:card-index:${index}`),
+  );
+}
+
+function extractCardAnimationKeys(event: BlackjackTableEventPayload) {
+  const record = event as Record<string, unknown>;
+  const type = String(record.type ?? "");
+
+  if (!isCardRelatedEvent(type, record)) {
+    return [];
+  }
+
+  const ownerKeys = extractCardOwnerKeys(record);
+  const cards = extractCards(record);
+  const cardIndex = readNumber(
+    record.cardIndex ?? record.cardNo ?? record.position ?? record.index,
+  );
+  const keys = new Set<string>();
+
+  for (const ownerKey of ownerKeys) {
+    keys.add(`${ownerKey}:card`);
+
+    if (cardIndex !== null) {
+      keys.add(`${ownerKey}:card-index:${cardIndex}`);
+
+      if (cardIndex > 0) {
+        keys.add(`${ownerKey}:card-index:${cardIndex - 1}`);
+      }
+    }
+
+    for (const card of cards) {
+      keys.add(`${ownerKey}:card:${cardKey(card)}`);
+    }
+  }
+
+  return [...keys];
+}
+
+function isCardRelatedEvent(type: string, record: Record<string, unknown>) {
+  const normalizedType = type.toUpperCase();
+
+  return (
+    normalizedType.includes("CARD") ||
+    normalizedType.includes("REVEAL") ||
+    normalizedType.includes("HOLE") ||
+    isRecord(record.card) ||
+    Array.isArray(record.cards)
+  );
+}
+
+function extractCardOwnerKeys(record: Record<string, unknown>) {
+  const ownerKeys = new Set<string>();
+  const type = String(record.type ?? "").toUpperCase();
+  const target = String(
+    record.target ?? record.targetType ?? record.owner ?? record.cardOwner ?? "",
+  ).toUpperCase();
+  const seatNo = readNumber(record.seatNo);
+  const handNo = readNumber(record.handNo);
+
+  if (
+    type.includes("DEALER") ||
+    type.includes("HOLE") ||
+    target === "DEALER" ||
+    isRecord(record.dealer)
+  ) {
+    ownerKeys.add("dealer");
+  }
+
+  if (seatNo !== null) {
+    ownerKeys.add(`seat:${seatNo}`);
+
+    if (handNo !== null) {
+      ownerKeys.add(`seat:${seatNo}:hand:${handNo}`);
+    }
+  }
+
+  if (!ownerKeys.size) {
+    ownerKeys.add("table");
+  }
+
+  return [...ownerKeys];
+}
+
+function extractCards(record: Record<string, unknown>) {
+  const cards: BlackjackCardSnapshot[] = [];
+
+  if (isCardSnapshot(record.card)) {
+    cards.push(record.card);
+  }
+
+  if (Array.isArray(record.cards)) {
+    for (const card of record.cards) {
+      if (isCardSnapshot(card)) {
+        cards.push(card);
+      }
+    }
+  }
+
+  return cards;
+}
+
+function isCardSnapshot(value: unknown): value is BlackjackCardSnapshot {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (value.hidden === true) {
+    return true;
+  }
+
+  return typeof value.rank === "string" && typeof value.suit === "string";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readNumber(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsedValue = Number(value);
+
+    if (Number.isInteger(parsedValue)) {
+      return parsedValue;
+    }
+  }
+
+  return null;
+}
+
+function suitCode(suit: "clubs" | "diamonds" | "hearts" | "spades") {
   if (suit === "clubs") {
     return "C";
   }

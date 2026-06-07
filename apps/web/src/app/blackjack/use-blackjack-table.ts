@@ -21,6 +21,7 @@ import { io, type Socket } from "socket.io-client";
 
 const tableId = "main";
 const eventLimit = 14;
+const roundResultReviewMs = 6500;
 
 type ConnectionStatus =
   | "requesting-token"
@@ -43,10 +44,19 @@ type UseBlackjackTableInput = {
   initialWalletBalance: string;
 };
 
+type RoundResultReview = {
+  endsAt: string;
+  event: BlackjackTableEventPayload;
+  state: BlackjackTableState;
+};
+
 export function useBlackjackTable({
   initialWalletBalance,
 }: UseBlackjackTableInput) {
   const socketRef = useRef<Socket | null>(null);
+  const latestTableStateRef = useRef<BlackjackTableState | null>(null);
+  const lastResultStateRef = useRef<BlackjackTableState | null>(null);
+  const roundResultReviewRef = useRef<RoundResultReview | null>(null);
   const [connectionAttempt, setConnectionAttempt] = useState(0);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("requesting-token");
@@ -55,6 +65,8 @@ export function useBlackjackTable({
     useState<BlackjackWalletUpdatedPayload | null>(null);
   const [player, setPlayer] = useState<GameTokenResponse["user"] | null>(null);
   const [roundNotice, setRoundNotice] = useState<string | null>(null);
+  const [roundResultReview, setRoundResultReview] =
+    useState<RoundResultReview | null>(null);
   const [socketError, setSocketError] =
     useState<BlackjackSocketErrorPayload | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -69,6 +81,8 @@ export function useBlackjackTable({
 
     async function connect() {
       setConnectionStatus("requesting-token");
+      roundResultReviewRef.current = null;
+      setRoundResultReview(null);
       setSocketError(null);
       setStatusMessage(null);
 
@@ -112,6 +126,12 @@ export function useBlackjackTable({
         socket.on(
           BLACKJACK_SERVER_EVENTS.TABLE_STATE,
           (payload: BlackjackTableState) => {
+            latestTableStateRef.current = payload;
+
+            if (hasRoundResult(payload)) {
+              lastResultStateRef.current = payload;
+            }
+
             setTableState(payload);
           },
         );
@@ -124,11 +144,31 @@ export function useBlackjackTable({
             );
 
             if (payload.type === "ROUND_SETTLED") {
-              setRoundNotice("Round settled.");
+              const resultState =
+                lastResultStateRef.current ?? latestTableStateRef.current;
+
+              if (resultState) {
+                const nextReview = {
+                  endsAt: new Date(
+                    Date.now() + roundResultReviewMs,
+                  ).toISOString(),
+                  event: payload,
+                  state: resultState,
+                };
+
+                roundResultReviewRef.current = nextReview;
+                setRoundResultReview(nextReview);
+              }
+
+              setRoundNotice("Round settled. Review the result before reset.");
             }
 
             if (payload.type === "ROUND_RESET") {
-              setRoundNotice("Round reset.");
+              setRoundNotice(
+                roundResultReviewRef.current
+                  ? "Next round is ready after result review."
+                  : "Round reset.",
+              );
             }
           },
         );
@@ -168,6 +208,25 @@ export function useBlackjackTable({
       socketRef.current = null;
     };
   }, [connectionAttempt]);
+
+  useEffect(() => {
+    if (!roundResultReview) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setRoundResultReview((currentReview) => {
+        if (currentReview?.event.createdAt !== roundResultReview.event.createdAt) {
+          return currentReview;
+        }
+
+        roundResultReviewRef.current = null;
+        return null;
+      });
+    }, Math.max(0, new Date(roundResultReview.endsAt).getTime() - Date.now()));
+
+    return () => window.clearTimeout(timeout);
+  }, [roundResultReview]);
 
   const reconnect = useCallback(() => {
     setConnectionAttempt((attempt) => attempt + 1);
@@ -234,6 +293,7 @@ export function useBlackjackTable({
     player,
     reconnect,
     roundNotice,
+    roundResultReview,
     sendPlayerAction,
     socketError,
     statusMessage,
@@ -291,5 +351,20 @@ function actionRequiresCommandId(action: BlackjackPlayerAction) {
     action === "SPLIT" ||
     action === "INSURANCE" ||
     action === "EVEN_MONEY"
+  );
+}
+
+function hasRoundResult(state: BlackjackTableState) {
+  return state.seats.some(
+    (seat) =>
+      seat.outcome !== null ||
+      seat.netAmount !== null ||
+      seat.payoutAmount !== null ||
+      seat.hands.some(
+        (hand) =>
+          hand.outcome !== null ||
+          hand.netAmount !== null ||
+          hand.payoutAmount !== null,
+      ),
   );
 }

@@ -23,6 +23,7 @@ export type BlackjackSettlementOutcomeReason =
   | "STANDARD"
   | "PLAYER_BUST"
   | "DEALER_BUST"
+  | "SURRENDER"
   | "DEALER_BLACKJACK";
 
 export type SettleBlackjackRoundInput = {
@@ -380,6 +381,17 @@ function calculatePayoutAmount(
   outcome: BlackjackSettlementOutcome,
   outcomeReason: BlackjackSettlementOutcomeReason,
 ) {
+  if (outcomeReason === "SURRENDER") {
+    if (outcome !== "LOSE") {
+      throw new BlackjackSettlementError(
+        "INVALID_SETTLEMENT",
+        "Surrender settlement must be a losing outcome.",
+      );
+    }
+
+    return wagerAmount / BigInt(2);
+  }
+
   if (outcome === "LOSE") {
     return zero;
   }
@@ -415,7 +427,9 @@ function buildSettlementWalletMutationInput(
     category: "GAME" as const,
     gameType: "BLACKJACK" as const,
     type:
-      seatInput.outcome === "PUSH"
+      seatInput.outcomeReason === "SURRENDER"
+        ? ("SURRENDER_REFUND" as const)
+        : seatInput.outcome === "PUSH"
         ? ("PUSH_REFUND" as const)
         : ("PAYOUT" as const),
     delta: payoutAmount,

@@ -29,6 +29,7 @@ export const BLACKJACK_TABLE_OPTIONS = 'BLACKJACK_TABLE_OPTIONS';
 export type BlackjackTableOptions = {
   deckCount?: number;
   dealerHitsSoft17?: boolean;
+  surrenderMode?: BlackjackSurrenderMode;
   randomSource?: RandomSource;
   nowSource?: () => Date;
   bettingWindowMs?: number;
@@ -39,6 +40,7 @@ export class BlackjackTableService {
   private readonly tables = new Map<string, BlackjackTableRuntime>();
   private readonly deckCount: number;
   private readonly dealerHitsSoft17: boolean;
+  private readonly surrenderMode: BlackjackSurrenderMode;
   private readonly randomSource: RandomSource;
   private readonly nowSource: () => Date;
   private readonly bettingWindowMs: number;
@@ -50,6 +52,9 @@ export class BlackjackTableService {
   ) {
     this.deckCount = normalizeDeckCount(options?.deckCount ?? 6);
     this.dealerHitsSoft17 = options?.dealerHitsSoft17 ?? false;
+    this.surrenderMode = normalizeSurrenderMode(
+      options?.surrenderMode ?? 'LATE',
+    );
     this.randomSource = options?.randomSource ?? Math.random;
     this.nowSource = options?.nowSource ?? (() => new Date());
     this.bettingWindowMs = normalizeBettingWindowMs(
@@ -389,6 +394,8 @@ export class BlackjackTableService {
       } else if (hand.total === 21) {
         seat.hand.status = 'STOOD';
       }
+    } else if (action === 'SURRENDER') {
+      seat.hand.status = 'SURRENDERED';
     } else {
       seat.hand.status = 'STOOD';
     }
@@ -525,6 +532,7 @@ export class BlackjackTableService {
       maxTotalBetPerUser: 42_000n,
       deckCount: this.deckCount,
       dealerHitsSoft17: this.dealerHitsSoft17,
+      surrenderMode: this.surrenderMode,
       shoe: [],
       bettingClosesAt: undefined,
       seats: new Map(),
@@ -765,7 +773,7 @@ export class BlackjackTableService {
       {
         doubleAllowed: false,
         splitAllowed: false,
-        surrenderAllowed: false,
+        surrenderAllowed: table.surrenderMode !== 'NONE',
       },
     ).filter(isSocketPlayerAction);
   }
@@ -799,7 +807,11 @@ export class BlackjackTableService {
         }
 
         const hand = evaluateHand(seat.hand.cards);
-        const outcome = calculateHandOutcome(hand, dealerHand);
+        const outcome = calculateHandOutcome(
+          seat.hand.status,
+          hand,
+          dealerHand,
+        );
 
         return {
           roundSeatId: seat.bet.roundSeatId,
@@ -969,6 +981,7 @@ type BlackjackTableRuntime = {
   maxTotalBetPerUser: bigint;
   deckCount: number;
   dealerHitsSoft17: boolean;
+  surrenderMode: BlackjackSurrenderMode;
   shoe: BlackjackCard[];
   round?: BlackjackRoundRuntime;
   bettingClosesAt?: Date;
@@ -1014,6 +1027,8 @@ type BlackjackRoundRuntime = {
   dealerCards: BlackjackCard[];
 };
 
+type BlackjackSurrenderMode = 'NONE' | 'LATE' | 'EARLY';
+
 function normalizeDeckCount(deckCount: number) {
   if (!Number.isInteger(deckCount) || deckCount < 1 || deckCount > 8) {
     throw new BlackjackTableError(
@@ -1034,6 +1049,23 @@ function normalizeBettingWindowMs(bettingWindowMs: number) {
   }
 
   return bettingWindowMs;
+}
+
+function normalizeSurrenderMode(
+  surrenderMode: BlackjackSurrenderMode,
+): BlackjackSurrenderMode {
+  if (
+    surrenderMode !== 'NONE' &&
+    surrenderMode !== 'LATE' &&
+    surrenderMode !== 'EARLY'
+  ) {
+    throw new BlackjackTableError(
+      'UNKNOWN_ERROR',
+      `Unsupported blackjack surrenderMode ${String(surrenderMode)}.`,
+    );
+  }
+
+  return surrenderMode;
 }
 
 function normalizeTableId(tableId: string) {
@@ -1082,7 +1114,7 @@ function normalizeCommandId(commandId: string) {
 }
 
 function normalizePlayerAction(action: unknown): BlackjackSocketPlayerAction {
-  if (action !== 'HIT' && action !== 'STAND') {
+  if (action !== 'HIT' && action !== 'STAND' && action !== 'SURRENDER') {
     throw new BlackjackTableError(
       'ACTION_NOT_ALLOWED',
       `${String(action)} is not supported yet.`,
@@ -1200,7 +1232,7 @@ function toCardSnapshot(
 function isSocketPlayerAction(
   action: BlackjackEnginePlayerAction,
 ): action is BlackjackSocketPlayerAction {
-  return action === 'HIT' || action === 'STAND';
+  return action === 'HIT' || action === 'STAND' || action === 'SURRENDER';
 }
 
 function isSettlementSeatRequest(
@@ -1210,12 +1242,17 @@ function isSettlementSeatRequest(
 }
 
 function calculateHandOutcome(
+  status: BlackjackHandStatus,
   player: ReturnType<typeof evaluateHand>,
   dealer: ReturnType<typeof evaluateHand>,
 ): {
   outcome: BlackjackHandOutcome;
   outcomeReason: BlackjackHandOutcomeReason;
 } {
+  if (status === 'SURRENDERED') {
+    return { outcome: 'LOSE', outcomeReason: 'SURRENDER' };
+  }
+
   if (player.isBust) {
     return { outcome: 'LOSE', outcomeReason: 'PLAYER_BUST' };
   }

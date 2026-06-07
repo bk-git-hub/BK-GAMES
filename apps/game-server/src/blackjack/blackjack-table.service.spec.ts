@@ -113,10 +113,23 @@ jest.mock('./blackjack-engine.port', () => {
         (hand.total === 17 && hand.isSoft && policy.dealerHitsSoft17)
       );
     },
-    getAvailablePlayerActions: (context: { cards: readonly MockCard[] }) => {
+    getAvailablePlayerActions: (
+      context: { cards: readonly MockCard[] },
+      rules: { surrenderAllowed?: boolean } = {},
+    ) => {
       const hand = evaluateHand(context.cards);
 
-      return hand.isBust || hand.isBlackjack ? [] : ['HIT', 'STAND'];
+      if (hand.isBust || hand.isBlackjack) {
+        return [];
+      }
+
+      const actions = ['HIT', 'STAND'];
+
+      if (context.cards.length === 2 && rules.surrenderAllowed) {
+        actions.push('SURRENDER');
+      }
+
+      return actions;
     },
   };
 });
@@ -413,7 +426,7 @@ describe('BlackjackTableService', () => {
         ],
         score: 6,
         isCurrentTurn: true,
-        availableActions: ['HIT', 'STAND'],
+        availableActions: ['HIT', 'STAND', 'SURRENDER'],
       }),
     ]);
   });
@@ -728,6 +741,63 @@ describe('BlackjackTableService', () => {
         },
       ],
     });
+  });
+
+  it('applies player surrender and settles with a surrender outcome', () => {
+    const service = createDeterministicService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+    expireBettingWindowOrFail(service);
+
+    const result = service.playerAction({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      action: 'SURRENDER',
+    });
+
+    expect(result.event.type).toBe('DEALER_PLAYED');
+    expect(result.state.phase).toBe('SETTLING');
+    expect(result.state.seats[0]).toEqual(
+      expect.objectContaining({
+        handStatus: 'SURRENDERED',
+        isCurrentTurn: false,
+        availableActions: [],
+      }),
+    );
+    expect(result.settlement?.seats).toEqual([
+      {
+        roundSeatId: 'round-seat-1',
+        userId: 'user-alice',
+        seatNo: 1,
+        cards: [
+          { rank: '2', suit: 'clubs' },
+          { rank: '4', suit: 'clubs' },
+        ],
+        finalValue: 6,
+        isSoft: false,
+        isNaturalBlackjack: false,
+        busted: false,
+        outcome: 'LOSE',
+        outcomeReason: 'SURRENDER',
+      },
+    ]);
   });
 
   it('confirms settlement results on the public table state', () => {

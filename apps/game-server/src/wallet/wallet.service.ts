@@ -82,7 +82,7 @@ export type BlackjackSettlementSeatResult = {
     wallet: { balance: bigint | string };
     ledger: {
       id: string;
-      type: 'PAYOUT' | 'PUSH_REFUND';
+      type: 'PAYOUT' | 'PUSH_REFUND' | 'SURRENDER_REFUND';
       delta: bigint | string;
     };
   } | null;

@@ -107,6 +107,13 @@ try {
     amount: 500n,
     commandId: "command-2",
   });
+  const thirdBet = await placeBlackjackInitialBet({
+    tableCode,
+    seatNo: 3,
+    userId,
+    amount: 500n,
+    commandId: "command-3",
+  });
 
   const settlementInput = {
     roundId: firstBet.round.id,
@@ -151,6 +158,21 @@ try {
         outcome: "PUSH",
         outcomeReason: "STANDARD",
       },
+      {
+        roundSeatId: thirdBet.roundSeat.id,
+        userId,
+        seatNo: 3,
+        cards: [
+          { rank: "8", suit: "clubs" },
+          { rank: "7", suit: "spades" },
+        ],
+        finalValue: 15,
+        isSoft: false,
+        isNaturalBlackjack: false,
+        busted: false,
+        outcome: "LOSE",
+        outcomeReason: "SURRENDER",
+      },
     ],
   } satisfies SettleBlackjackRoundInput;
 
@@ -165,14 +187,20 @@ try {
     .select()
     .from(pointLedgers)
     .where(eq(pointLedgers.userId, userId));
+  const surrenderLedger = ledgers.find(
+    (ledger) => ledger.type === "SURRENDER_REFUND",
+  );
 
   const summary = {
     userId,
     tableCode,
     firstSeatPayout: settlement.seats[0]?.payoutAmount.toString(),
     secondSeatPayout: settlement.seats[1]?.payoutAmount.toString(),
+    thirdSeatPayout: settlement.seats[2]?.payoutAmount.toString(),
     retryFirstIdempotent: retry.seats[0]?.walletMutation?.idempotent,
     retrySecondIdempotent: retry.seats[1]?.walletMutation?.idempotent,
+    retryThirdIdempotent: retry.seats[2]?.walletMutation?.idempotent,
+    surrenderLedgerDelta: surrenderLedger?.delta.toString(),
     finalBalance: wallet?.balance.toString(),
     ledgerCount: ledgers.length,
   };
@@ -180,10 +208,13 @@ try {
   if (
     summary.firstSeatPayout !== "1000" ||
     summary.secondSeatPayout !== "500" ||
+    summary.thirdSeatPayout !== "250" ||
     !summary.retryFirstIdempotent ||
     !summary.retrySecondIdempotent ||
-    summary.finalBalance !== "10500" ||
-    summary.ledgerCount !== 5
+    !summary.retryThirdIdempotent ||
+    summary.surrenderLedgerDelta !== "250" ||
+    summary.finalBalance !== "10250" ||
+    summary.ledgerCount !== 7
   ) {
     throw new Error(
       `Unexpected blackjack settlement smoke result: ${JSON.stringify(

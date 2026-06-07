@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { BlackjackSettlementRequest } from '../blackjack/blackjack-table.service';
 
 @Injectable()
 export class WalletService {
@@ -11,6 +12,16 @@ export class WalletService {
       userId: input.userId,
       amount: input.amount,
       commandId: input.commandId,
+    });
+  }
+
+  async settleBlackjackRound(input: BlackjackSettlementRequest) {
+    const db = (await import(dbPackageName)) as BlackjackDbModule;
+
+    return db.settleBlackjackRound({
+      roundId: input.roundId,
+      dealer: input.dealer,
+      seats: input.seats,
     });
   }
 }
@@ -27,6 +38,9 @@ type BlackjackDbModule = {
   placeBlackjackInitialBet(
     input: DbPlaceBlackjackInitialBetInput,
   ): Promise<BlackjackInitialBetResult>;
+  settleBlackjackRound(
+    input: DbSettleBlackjackRoundInput,
+  ): Promise<BlackjackSettlementResult>;
 };
 
 type DbPlaceBlackjackInitialBetInput = {
@@ -36,6 +50,8 @@ type DbPlaceBlackjackInitialBetInput = {
   amount: bigint;
   commandId: string;
 };
+
+type DbSettleBlackjackRoundInput = Omit<BlackjackSettlementRequest, 'tableId'>;
 
 export type BlackjackInitialBetResult = {
   round: { id: string };
@@ -47,6 +63,29 @@ export type BlackjackInitialBetResult = {
       delta: bigint | string;
     };
   };
+};
+
+export type BlackjackSettlementResult = {
+  roundId: string;
+  seats: BlackjackSettlementSeatResult[];
+};
+
+export type BlackjackSettlementSeatResult = {
+  roundSeatId: string;
+  userId: string;
+  seatNo: number;
+  outcome: BlackjackSettlementRequest['seats'][number]['outcome'];
+  outcomeReason: BlackjackSettlementRequest['seats'][number]['outcomeReason'];
+  payoutAmount: bigint | string;
+  netAmount: bigint | string;
+  walletMutation: {
+    wallet: { balance: bigint | string };
+    ledger: {
+      id: string;
+      type: 'PAYOUT' | 'PUSH_REFUND';
+      delta: bigint | string;
+    };
+  } | null;
 };
 
 const dbPackageName: string = '@bk-games/db';

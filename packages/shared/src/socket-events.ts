@@ -99,6 +99,15 @@ export type BlackjackHandStatus =
   | "BUSTED"
   | "BLACKJACK";
 
+export type BlackjackHandOutcome = "WIN" | "LOSE" | "PUSH";
+
+export type BlackjackHandOutcomeReason =
+  | "NATURAL_BLACKJACK"
+  | "STANDARD"
+  | "PLAYER_BUST"
+  | "DEALER_BUST"
+  | "DEALER_BLACKJACK";
+
 export type BlackjackSeatSnapshot = {
   seatNo: number;
   userId: string;
@@ -112,6 +121,10 @@ export type BlackjackSeatSnapshot = {
   isSoft: boolean;
   isCurrentTurn: boolean;
   availableActions: BlackjackPlayerAction[];
+  outcome: BlackjackHandOutcome | null;
+  outcomeReason: BlackjackHandOutcomeReason | null;
+  payoutAmount: string | null;
+  netAmount: string | null;
 };
 
 export type BlackjackDealerSnapshot = {
@@ -158,6 +171,7 @@ export type BlackjackTableEventType =
   | "ROUND_STARTED"
   | "PLAYER_ACTED"
   | "DEALER_PLAYED"
+  | "ROUND_SETTLED"
   | "PLAYER_DISCONNECTED";
 
 export type BlackjackTableEventPayload = {
@@ -194,6 +208,10 @@ export type BlackjackSocketErrorCode =
   | "ROUND_NOT_ACTIVE"
   | "NOT_YOUR_TURN"
   | "ACTION_NOT_ALLOWED"
+  | "ROUND_NOT_FOUND"
+  | "ROUND_SEAT_NOT_FOUND"
+  | "INVALID_SETTLEMENT"
+  | "SETTLEMENT_CONFLICT"
   | "INVALID_SOCKET_USER"
   | "UNKNOWN_ERROR";
 
@@ -206,7 +224,7 @@ export type BlackjackSocketErrorPayload = {
 export type BlackjackWalletUpdatedPayload = {
   balance: string;
   delta: string;
-  reason: "BET_PLACED";
+  reason: "BET_PLACED" | "PAYOUT" | "PUSH_REFUND";
   ledgerId: string;
 };
 

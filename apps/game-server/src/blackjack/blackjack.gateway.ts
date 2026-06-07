@@ -163,6 +163,7 @@ export class BlackjackGateway {
             reason: 'BET_PLACED',
             ledgerId: betResult.walletMutation.ledger.id,
           });
+          await this.settleRoundIfNeeded(update);
         } catch (error) {
           if (reservation.kind === 'reserved') {
             this.tableService.cancelBetReservation({
@@ -184,20 +185,25 @@ export class BlackjackGateway {
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: BlackjackPlayerActionPayload,
   ) {
-    this.handleCommand(socket, BLACKJACK_CLIENT_EVENTS.PLAYER_ACTION, () => {
-      const user = this.resolveSocketUser(socket);
-      const update = this.tableService.playerAction({
-        tableId: body.tableId,
-        seatNo: body.seatNo,
-        action: body.action,
-        socketId: socket.id,
-        user,
-      });
+    void this.handleCommand(
+      socket,
+      BLACKJACK_CLIENT_EVENTS.PLAYER_ACTION,
+      async () => {
+        const user = this.resolveSocketUser(socket);
+        const update = this.tableService.playerAction({
+          tableId: body.tableId,
+          seatNo: body.seatNo,
+          action: body.action,
+          socketId: socket.id,
+          user,
+        });
 
-      void socket.join(blackjackTableRoom(update.state.tableId));
-      void socket.join(blackjackUserRoom(user.userId));
-      this.emitTableUpdate(update);
-    });
+        void socket.join(blackjackTableRoom(update.state.tableId));
+        void socket.join(blackjackUserRoom(user.userId));
+        this.emitTableUpdate(update);
+        await this.settleRoundIfNeeded(update);
+      },
+    );
   }
 
   private handleCommand(
@@ -232,6 +238,44 @@ export class BlackjackGateway {
     this.server
       .to(blackjackUserRoom(userId))
       .emit(BLACKJACK_SERVER_EVENTS.WALLET_UPDATED, payload);
+  }
+
+  private async settleRoundIfNeeded(update: BlackjackTableMutationResult) {
+    if (!update.settlement) {
+      return;
+    }
+
+    const settlement = await this.walletService.settleBlackjackRound(
+      update.settlement,
+    );
+
+    for (const seat of settlement.seats) {
+      if (!seat.walletMutation) {
+        continue;
+      }
+
+      this.emitWalletUpdated(seat.userId, {
+        balance: seat.walletMutation.wallet.balance.toString(),
+        delta: seat.walletMutation.ledger.delta.toString(),
+        reason: seat.walletMutation.ledger.type,
+        ledgerId: seat.walletMutation.ledger.id,
+      });
+    }
+
+    const settledUpdate = this.tableService.confirmSettlement({
+      tableId: update.state.tableId,
+      roundId: settlement.roundId,
+      seats: settlement.seats.map((seat) => ({
+        roundSeatId: seat.roundSeatId,
+        seatNo: seat.seatNo,
+        outcome: seat.outcome,
+        outcomeReason: seat.outcomeReason,
+        payoutAmount: BigInt(seat.payoutAmount),
+        netAmount: BigInt(seat.netAmount),
+      })),
+    });
+
+    this.emitTableUpdate(settledUpdate);
   }
 
   private emitError(
@@ -397,5 +441,9 @@ const socketErrorCodes = new Set<string>([
   'ROUND_NOT_ACTIVE',
   'NOT_YOUR_TURN',
   'ACTION_NOT_ALLOWED',
+  'ROUND_NOT_FOUND',
+  'ROUND_SEAT_NOT_FOUND',
+  'INVALID_SETTLEMENT',
+  'SETTLEMENT_CONFLICT',
   'INVALID_SOCKET_USER',
 ]);

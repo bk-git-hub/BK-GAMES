@@ -398,13 +398,13 @@ Next task should build on the realtime blackjack table skeleton.
 
 Recommended order:
 
-- Add wallet-backed blackjack settlement for the current HIT/STAND runtime slice.
+- Add a betting window timer so a round starts after the first bet timeout instead of waiting forever for all occupied seats.
 - Add advanced player action commands for double, split, surrender, and insurance/even-money decisions.
-- Then wire frontend Socket.IO client to request game tokens, join the table, take seats, place bets, and send player actions against the backend contract.
+- Wire frontend Socket.IO client to request game tokens, join the table, take seats, place bets, send player actions, and render settlement results against the backend contract.
 
-The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, game-server sockets can verify short-lived game tokens from `POST /api/game-token`, initial blackjack bets now debit wallets through an idempotent DB transaction, and `packages/game-engine` now has pure blackjack card/hand/action helpers.
+The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, game-server sockets can verify short-lived game tokens from `POST /api/game-token`, initial blackjack bets now debit wallets through an idempotent DB transaction, HIT/STAND rounds now settle through wallet-backed ledgers, and `packages/game-engine` now has pure blackjack card/hand/action helpers.
 
-The game-server now starts an in-memory blackjack round after all occupied seats have confirmed initial bets, deals public player cards plus hidden dealer hole card, supports realtime `player:action` for HIT/STAND, advances player turns, and runs the dealer to `SETTLING` when player turns are complete. Settlement remains intentionally pending.
+The game-server now starts an in-memory blackjack round after all occupied seats have confirmed initial bets, deals public player cards plus hidden dealer hole card, supports realtime `player:action` for HIT/STAND, advances player turns, runs the dealer, calls DB settlement, emits private `wallet:updated` events for payout/refund ledgers, and broadcasts `ROUND_SETTLED`.
 
 ## Suggested Next Scope Report
 
@@ -412,11 +412,11 @@ Use this before starting the next backend blackjack slice:
 
 ```text
 이번 작업 범위:
-- 목표: HIT/STAND blackjack round settlement 연결
-- 수정 예상: apps/game-server, packages/db, packages/shared 필요 시
+- 목표: blackjack betting timer와 seated-but-not-bet 처리
+- 수정 예상: apps/game-server, packages/shared, THREAD_SYNC.md
 - 실행 명령: pnpm --filter game-server test, pnpm typecheck, pnpm lint, pnpm test, pnpm build
 - 제외: frontend UI, admin UI, double/split/surrender/insurance 구현
-- 검증: settlement unit test, wallet idempotency smoke, game-server unit test, 전체 workspace 검증
+- 검증: timer/state transition unit test, game-server unit test, 전체 workspace 검증
 ```
 
 ## Update Rules For This File
@@ -475,3 +475,9 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - `pnpm --filter @bk-games/db smoke:blackjack-betting` verifies bet idempotency: retrying the same command reuses the same ledger and round seat without a second debit.
 - Pure blackjack engine foundation was added in `packages/game-engine`: ordered deck creation, Fisher-Yates shuffle, hand evaluation with soft ace handling, natural blackjack/bust detection, dealer soft-17 policy, pair detection, and player action availability. Verification: `pnpm --filter @bk-games/game-engine test` now covers 9 engine tests.
 - Realtime blackjack round state was wired into `apps/game-server`: `ROUND_STARTED`, `PLAYER_ACTED`, and `DEALER_PLAYED` table events were added; seat snapshots now include hand status, cards, score, current-turn marker, and available actions; dealer snapshots now hide the hole card during player turns. Impact: frontend threads should render from `packages/shared/src/socket-events.ts` instead of local mock shapes.
+
+### 2026-06-07
+
+- Wallet-backed HIT/STAND settlement was added. `packages/db/src/blackjack-settlement.ts` settles current round seats idempotently, calculates payout/refund from DB rule snapshots and stored wagers, updates round/hand/seat result rows, and writes `PAYOUT` or `PUSH_REFUND` ledgers in the same transaction.
+- `apps/game-server` now attaches settlement requests when dealer play reaches `SETTLING`; the gateway calls wallet settlement, emits private wallet updates, then broadcasts `ROUND_SETTLED`. Impact: frontend seat snapshots now include outcome, outcome reason, payout amount, and net amount.
+- `pnpm --filter @bk-games/db smoke:blackjack-settlement` verifies multi-seat same-user settlement idempotency with one standard win and one push refund.

@@ -11,6 +11,8 @@ import {
 } from './blackjack-engine.port';
 import {
   type BlackjackCardSnapshot,
+  type BlackjackHandOutcome,
+  type BlackjackHandOutcomeReason,
   type BlackjackHandStatus,
   type BlackjackPlayerAction as BlackjackSocketPlayerAction,
   type BlackjackSeatSnapshot,
@@ -284,6 +286,7 @@ export class BlackjackTableService {
         user.userId,
         seatNo,
       ),
+      settlement: this.buildSettlementRequestIfReady(table),
     };
   }
 
@@ -375,6 +378,49 @@ export class BlackjackTableService {
         user.userId,
         seatNo,
       ),
+      settlement: this.buildSettlementRequestIfReady(table),
+    };
+  }
+
+  confirmSettlement(
+    input: BlackjackConfirmSettlementInput,
+  ): BlackjackTableMutationResult {
+    const table = this.getOrCreateTable(input.tableId);
+
+    if (!table.round || table.round.roundId !== input.roundId) {
+      throw new BlackjackTableError(
+        'ROUND_NOT_ACTIVE',
+        `Round ${input.roundId} is not active on table ${table.tableId}.`,
+      );
+    }
+
+    for (const settlement of input.seats) {
+      const seat = table.seats.get(settlement.seatNo);
+
+      if (
+        !seat?.hand ||
+        !seat.bet ||
+        seat.bet.roundSeatId !== settlement.roundSeatId
+      ) {
+        throw new BlackjackTableError(
+          'ROUND_SEAT_NOT_FOUND',
+          `Round seat ${settlement.roundSeatId} is not active on table ${table.tableId}.`,
+        );
+      }
+
+      seat.hand.outcome = settlement.outcome;
+      seat.hand.outcomeReason = settlement.outcomeReason;
+      seat.hand.payoutAmount = settlement.payoutAmount;
+      seat.hand.netAmount = settlement.netAmount;
+    }
+
+    table.phase = 'SETTLED';
+    table.round.currentTurnSeatNo = null;
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(table, 'ROUND_SETTLED', 'system'),
     };
   }
 
@@ -487,6 +533,10 @@ export class BlackjackTableService {
       isSoft: hand?.isSoft ?? false,
       isCurrentTurn: table.round?.currentTurnSeatNo === seat.seatNo,
       availableActions: this.getAvailableSeatActions(table, seat),
+      outcome: seat.hand?.outcome ?? null,
+      outcomeReason: seat.hand?.outcomeReason ?? null,
+      payoutAmount: seat.hand?.payoutAmount?.toString() ?? null,
+      netAmount: seat.hand?.netAmount?.toString() ?? null,
     };
   }
 
@@ -650,6 +700,55 @@ export class BlackjackTableService {
     return shuffleDeck(createDeck(table.deckCount), this.randomSource);
   }
 
+  private buildSettlementRequestIfReady(
+    table: BlackjackTableRuntime,
+  ): BlackjackSettlementRequest | undefined {
+    if (!table.round || table.phase !== 'SETTLING') {
+      return undefined;
+    }
+
+    const dealerHand = evaluateHand(table.round.dealerCards);
+    const seats = this.getSortedOccupiedSeats(table)
+      .map((seat): BlackjackSettlementSeatRequest | null => {
+        if (!seat.hand || !seat.bet) {
+          return null;
+        }
+
+        const hand = evaluateHand(seat.hand.cards);
+        const outcome = calculateHandOutcome(hand, dealerHand);
+
+        return {
+          roundSeatId: seat.bet.roundSeatId,
+          userId: seat.userId,
+          seatNo: seat.seatNo,
+          cards: seat.hand.cards.map((card) => toCardSnapshot(card)),
+          finalValue: hand.total,
+          isSoft: hand.isSoft,
+          isNaturalBlackjack: hand.isBlackjack,
+          busted: hand.isBust,
+          outcome: outcome.outcome,
+          outcomeReason: outcome.outcomeReason,
+        };
+      })
+      .filter(isSettlementSeatRequest);
+
+    if (seats.length === 0) {
+      return undefined;
+    }
+
+    return {
+      tableId: table.tableId,
+      roundId: table.round.roundId,
+      dealer: {
+        cards: table.round.dealerCards.map((card) => toCardSnapshot(card)),
+        finalValue: dealerHand.total,
+        hasBlackjack: dealerHand.isBlackjack,
+        busted: dealerHand.isBust,
+      },
+      seats,
+    };
+  }
+
   private toEvent(
     table: BlackjackTableRuntime,
     type: BlackjackTableEventPayload['type'],
@@ -670,6 +769,7 @@ export class BlackjackTableService {
 export type BlackjackTableMutationResult = {
   state: BlackjackTableState;
   event: BlackjackTableEventPayload;
+  settlement?: BlackjackSettlementRequest;
 };
 
 export type BlackjackJoinTableInput = {
@@ -701,6 +801,46 @@ export type BlackjackConfirmBetInput = BlackjackReserveBetInput & {
 export type BlackjackPlayerActionInput = BlackjackJoinTableInput & {
   seatNo: number;
   action: BlackjackSocketPlayerAction;
+};
+
+export type BlackjackConfirmSettlementInput = {
+  tableId: string;
+  roundId: string;
+  seats: BlackjackSettlementSeatResult[];
+};
+
+export type BlackjackSettlementRequest = {
+  tableId: string;
+  roundId: string;
+  dealer: {
+    cards: BlackjackCardSnapshot[];
+    finalValue: number;
+    hasBlackjack: boolean;
+    busted: boolean;
+  };
+  seats: BlackjackSettlementSeatRequest[];
+};
+
+export type BlackjackSettlementSeatRequest = {
+  roundSeatId: string;
+  userId: string;
+  seatNo: number;
+  cards: BlackjackCardSnapshot[];
+  finalValue: number;
+  isSoft: boolean;
+  isNaturalBlackjack: boolean;
+  busted: boolean;
+  outcome: BlackjackHandOutcome;
+  outcomeReason: BlackjackHandOutcomeReason;
+};
+
+export type BlackjackSettlementSeatResult = {
+  roundSeatId: string;
+  seatNo: number;
+  outcome: BlackjackHandOutcome;
+  outcomeReason: BlackjackHandOutcomeReason;
+  payoutAmount: bigint;
+  netAmount: bigint;
 };
 
 export type BlackjackCancelBetReservationInput = {
@@ -772,6 +912,10 @@ type BlackjackBetRuntime = BlackjackPendingBetRuntime & {
 type BlackjackSeatHandRuntime = {
   cards: BlackjackCard[];
   status: BlackjackHandStatus;
+  outcome?: BlackjackHandOutcome;
+  outcomeReason?: BlackjackHandOutcomeReason;
+  payoutAmount?: bigint;
+  netAmount?: bigint;
 };
 
 type BlackjackRoundRuntime = {
@@ -946,4 +1090,48 @@ function isSocketPlayerAction(
   action: BlackjackEnginePlayerAction,
 ): action is BlackjackSocketPlayerAction {
   return action === 'HIT' || action === 'STAND';
+}
+
+function isSettlementSeatRequest(
+  seat: BlackjackSettlementSeatRequest | null,
+): seat is BlackjackSettlementSeatRequest {
+  return seat !== null;
+}
+
+function calculateHandOutcome(
+  player: ReturnType<typeof evaluateHand>,
+  dealer: ReturnType<typeof evaluateHand>,
+): {
+  outcome: BlackjackHandOutcome;
+  outcomeReason: BlackjackHandOutcomeReason;
+} {
+  if (player.isBust) {
+    return { outcome: 'LOSE', outcomeReason: 'PLAYER_BUST' };
+  }
+
+  if (dealer.isBlackjack && !player.isBlackjack) {
+    return { outcome: 'LOSE', outcomeReason: 'DEALER_BLACKJACK' };
+  }
+
+  if (player.isBlackjack && dealer.isBlackjack) {
+    return { outcome: 'PUSH', outcomeReason: 'DEALER_BLACKJACK' };
+  }
+
+  if (player.isBlackjack) {
+    return { outcome: 'WIN', outcomeReason: 'NATURAL_BLACKJACK' };
+  }
+
+  if (dealer.isBust) {
+    return { outcome: 'WIN', outcomeReason: 'DEALER_BUST' };
+  }
+
+  if (player.total > dealer.total) {
+    return { outcome: 'WIN', outcomeReason: 'STANDARD' };
+  }
+
+  if (player.total < dealer.total) {
+    return { outcome: 'LOSE', outcomeReason: 'STANDARD' };
+  }
+
+  return { outcome: 'PUSH', outcomeReason: 'STANDARD' };
 }

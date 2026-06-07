@@ -160,6 +160,10 @@ function expectWaitingSeat(
     isSoft: false,
     isCurrentTurn: false,
     availableActions: [],
+    outcome: null,
+    outcomeReason: null,
+    payoutAmount: null,
+    netAmount: null,
   };
 }
 
@@ -465,6 +469,92 @@ describe('BlackjackTableService', () => {
       visibleScore: 21,
       score: 21,
     });
+    expect(result.settlement).toEqual({
+      tableId: 'main',
+      roundId: 'round-1',
+      dealer: {
+        cards: [
+          { rank: '3', suit: 'clubs' },
+          { rank: '5', suit: 'clubs' },
+          { rank: '6', suit: 'clubs' },
+          { rank: '7', suit: 'clubs' },
+        ],
+        finalValue: 21,
+        hasBlackjack: false,
+        busted: false,
+      },
+      seats: [
+        {
+          roundSeatId: 'round-seat-1',
+          userId: 'user-alice',
+          seatNo: 1,
+          cards: [
+            { rank: '2', suit: 'clubs' },
+            { rank: '4', suit: 'clubs' },
+          ],
+          finalValue: 6,
+          isSoft: false,
+          isNaturalBlackjack: false,
+          busted: false,
+          outcome: 'LOSE',
+          outcomeReason: 'STANDARD',
+        },
+      ],
+    });
+  });
+
+  it('confirms settlement results on the public table state', () => {
+    const service = createDeterministicService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+    service.playerAction({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      action: 'STAND',
+    });
+
+    const result = service.confirmSettlement({
+      tableId: 'main',
+      roundId: 'round-1',
+      seats: [
+        {
+          roundSeatId: 'round-seat-1',
+          seatNo: 1,
+          outcome: 'LOSE',
+          outcomeReason: 'STANDARD',
+          payoutAmount: 0n,
+          netAmount: -500n,
+        },
+      ],
+    });
+
+    expect(result.event.type).toBe('ROUND_SETTLED');
+    expect(result.state.phase).toBe('SETTLED');
+    expect(result.state.seats[0]).toEqual(
+      expect.objectContaining({
+        outcome: 'LOSE',
+        outcomeReason: 'STANDARD',
+        payoutAmount: '0',
+        netAmount: '-500',
+      }),
+    );
   });
 
   it('blocks leaving a seat with an active bet', () => {

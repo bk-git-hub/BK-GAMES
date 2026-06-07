@@ -1750,6 +1750,10 @@ export class BlackjackTableService {
       return;
     }
 
+    if (this.maybeSettleNaturalBlackjacksWithoutDealerPlay(table)) {
+      return;
+    }
+
     this.advanceTurnOrPlayDealer(table);
   }
 
@@ -1853,6 +1857,10 @@ export class BlackjackTableService {
       return true;
     }
 
+    if (this.maybeSettleNaturalBlackjacksWithoutDealerPlay(table)) {
+      return true;
+    }
+
     this.advanceTurnOrPlayDealer(table);
 
     return false;
@@ -1868,6 +1876,42 @@ export class BlackjackTableService {
     }
 
     this.startDealerTurn(table);
+
+    return true;
+  }
+
+  private maybeSettleNaturalBlackjacksWithoutDealerPlay(
+    table: BlackjackTableRuntime,
+  ) {
+    if (!table.round) {
+      return false;
+    }
+
+    const activeHands = this.getSortedOccupiedSeats(table).flatMap((seat) => {
+      if (!seat.bet) {
+        return [];
+      }
+
+      return getHands(seat);
+    });
+
+    if (
+      activeHands.length === 0 ||
+      !activeHands.every(
+        (hand) => hand.status === 'BLACKJACK' && hand.isSplitHand !== true,
+      )
+    ) {
+      return false;
+    }
+
+    if (evaluateHand(table.round.dealerCards).isBlackjack) {
+      return false;
+    }
+
+    table.phase = 'SETTLING';
+    table.round.currentTurnSeatNo = null;
+    table.round.currentTurnHandNo = null;
+    table.round.dealerHoleCardRevealed = true;
 
     return true;
   }

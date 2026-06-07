@@ -889,6 +889,58 @@ describe('BlackjackTableService', () => {
     expect(roundStarted.settlement).toBeUndefined();
   });
 
+  it('settles a natural blackjack immediately when dealer blackjack is impossible', () => {
+    const service = createRiggedService([
+      card('A', 'clubs'),
+      card('5', 'clubs'),
+      card('K', 'diamonds'),
+      card('9', 'clubs'),
+    ]);
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    const roundStarted = startActiveRoundOrFail(service);
+
+    expect(roundStarted.state.phase).toBe('SETTLING');
+    expect(roundStarted.state.dealer).toEqual({
+      cards: [
+        { rank: '5', suit: 'clubs' },
+        { rank: '9', suit: 'clubs' },
+      ],
+      visibleScore: 14,
+      score: 14,
+    });
+    expect(roundStarted.state.seats[0]).toEqual(
+      expect.objectContaining({
+        handStatus: 'BLACKJACK',
+        availableActions: [],
+      }),
+    );
+    expect(roundStarted.settlement?.seats).toEqual([
+      expect.objectContaining({
+        roundSeatId: 'round-seat-1',
+        handNo: 1,
+        outcome: 'WIN',
+        outcomeReason: 'NATURAL_BLACKJACK',
+      }),
+    ]);
+  });
+
   it('peeks an ace-upcard dealer blackjack immediately when insurance is not offered', () => {
     const service = createRiggedService([
       card('8', 'clubs'),

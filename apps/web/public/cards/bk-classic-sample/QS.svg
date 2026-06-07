@@ -5,7 +5,6 @@
     </filter>
     <style>
       .rank { font-family: Georgia, 'Times New Roman', serif; font-size: 48px; font-weight: 800; }
-      .micro { font-family: Inter, Arial, sans-serif; font-size: 12px; letter-spacing: 0; font-weight: 700; }
     </style>
   </defs>
   <rect x="10" y="10" width="400" height="568" rx="24" fill="#fbf7ec" filter="url(#shadow)"/>
@@ -23,23 +22,20 @@
       <text x="0" y="0" text-anchor="middle" class="rank">Q</text>
       <g transform="translate(0 36) scale(0.34)"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
     </g>
-    <g opacity="0.07" fill="#171717">
-      <g transform="translate(210 132) rotate(0) scale(0.34)" fill="#171717"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
-      <g transform="translate(112 294) rotate(0) scale(0.28)" fill="#171717"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
-      <g transform="translate(318 294) rotate(0) scale(0.28)" fill="#171717"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
-      <g transform="translate(210 456) rotate(180) scale(0.34)" fill="#171717"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
+    <g transform="translate(210 132) rotate(0) scale(0.34)" fill="#171717" opacity="0.055"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
+    <g transform="translate(112 294) rotate(0) scale(0.28)" fill="#171717" opacity="0.055"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
+    <g transform="translate(318 294) rotate(0) scale(0.28)" fill="#171717" opacity="0.055"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
+    <g transform="translate(210 456) rotate(180) scale(0.34)" fill="#171717" opacity="0.055"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
+    <rect x="126" y="124" width="168" height="324" rx="20" fill="#fffdf7" stroke="#171717" stroke-width="2.5" opacity="0.96"/>
+    <rect x="141" y="140" width="138" height="292" rx="14" fill="none" stroke="#d6a94d" stroke-width="2" opacity="0.72"/>
+    <path d="M156 272 H264 M156 376 H264" stroke="#dedbd2" stroke-width="3" stroke-linecap="round"/>
+    <g transform="translate(210 194) scale(0.74)" fill="#d6a94d">
+    <path d="M-72 -18 L-38 18 L-10 -32 L0 18 L10 -32 L38 18 L72 -18 L54 54 H-54 Z"/>
+    <circle cx="-72" cy="-18" r="7"/><circle cx="-10" cy="-32" r="7"/><circle cx="10" cy="-32" r="7"/><circle cx="72" cy="-18" r="7"/>
+  </g>
+    <g transform="translate(210 318) scale(1)" fill="#171717">
+      <path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/>
     </g>
-    <rect x="121" y="128" width="178" height="320" rx="20" fill="#ffffff" stroke="#171717" stroke-width="2.5" opacity="0.92"/>
-    <rect x="137" y="144" width="146" height="288" rx="14" fill="none" stroke="#d6a94d" stroke-width="2" opacity="0.7"/>
-    <g transform="translate(210 212) scale(0.86)" fill="#d6a94d">
-      <path d="M-70 -20 L-34 15 L0 -34 L34 15 L70 -20 L52 50 H-52 Z"/>
-      <circle cx="-70" cy="-20" r="8"/><circle cx="0" cy="-34" r="8"/><circle cx="70" cy="-20" r="8"/>
-    </g>
-    <ellipse cx="210" cy="306" rx="74" ry="112" fill="#ffffff" stroke="#232323" stroke-width="3"/>
-       <path d="M170 294 C190 272 220 268 250 294" fill="none" stroke="#d6a94d" stroke-width="4" stroke-linecap="round"/>
-       <circle cx="190" cy="324" r="5" fill="#232323" opacity="0.7"/>
-       <circle cx="230" cy="324" r="5" fill="#232323" opacity="0.7"/>
-       <path d="M194 356 C207 364 223 364 236 356" fill="none" stroke="#232323" stroke-width="3" stroke-linecap="round" opacity="0.65"/>
-    <g transform="translate(210 410) scale(0.38)" fill="#171717"><path d="M0 -48 C-29 -21 -48 -2 -40 23 C-33 45 -8 43 -7 19 C-9 38 -17 51 -30 64 H30 C17 51 9 38 7 19 C8 43 33 45 40 23 C48 -2 29 -21 0 -48 Z"/></g>
+    <path d="M174 406 H246" stroke="#d6a94d" stroke-width="5" stroke-linecap="round" opacity="0.78"/>
   
 </svg>

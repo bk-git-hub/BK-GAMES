@@ -142,6 +142,23 @@ function createDeterministicService() {
   return new BlackjackTableService({ deckCount: 1, randomSource: () => 0 });
 }
 
+function createTimedService(start = new Date('2026-06-07T00:00:00.000Z')) {
+  let now = start;
+  const service = new BlackjackTableService({
+    deckCount: 1,
+    randomSource: () => 0,
+    nowSource: () => now,
+    bettingWindowMs: 20_000,
+  });
+
+  return {
+    service,
+    setNow: (value: Date) => {
+      now = value;
+    },
+  };
+}
+
 function expectWaitingSeat(
   seatNo: number,
   user: typeof alice,
@@ -198,6 +215,22 @@ function confirmInitialBet(input: {
     roundId: input.roundId,
     roundSeatId: input.roundSeatId,
   });
+}
+
+function expireBettingWindowOrFail(
+  service: BlackjackTableService,
+  tableId = 'main',
+) {
+  const update = service.expireBettingWindow({
+    tableId,
+    now: new Date('2999-01-01T00:00:00.000Z'),
+  });
+
+  if (!update) {
+    throw new Error('Expected betting window to expire and start the round.');
+  }
+
+  return update;
 }
 
 describe('BlackjackTableService', () => {
@@ -296,7 +329,7 @@ describe('BlackjackTableService', () => {
     ]);
   });
 
-  it('confirms a reserved bet and starts a one-seat round', () => {
+  it('confirms a reserved bet and opens the betting window', () => {
     const service = createDeterministicService();
 
     service.takeSeat({
@@ -316,13 +349,52 @@ describe('BlackjackTableService', () => {
       roundSeatId: 'round-seat-1',
     });
 
-    expect(betPlaced.event.type).toBe('ROUND_STARTED');
-    expect(betPlaced.state.phase).toBe('PLAYER_TURNS');
-    expect(betPlaced.state.round).toEqual({
+    expect(betPlaced.event.type).toBe('BET_PLACED');
+    expect(betPlaced.state.phase).toBe('WAITING_BETS');
+    expect(betPlaced.state.round).toBeNull();
+    expect(betPlaced.state.timers.phaseEndsAt).not.toBeNull();
+    expect(betPlaced.state.seats).toEqual([
+      expect.objectContaining({
+        seatNo: 1,
+        betAmount: '500',
+        handStatus: 'BET_PLACED',
+        cards: [],
+        score: null,
+        isCurrentTurn: false,
+        availableActions: [],
+      }),
+    ]);
+  });
+
+  it('starts a one-seat round after the betting window expires', () => {
+    const service = createDeterministicService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    const roundStarted = expireBettingWindowOrFail(service);
+
+    expect(roundStarted.event.type).toBe('ROUND_STARTED');
+    expect(roundStarted.state.phase).toBe('PLAYER_TURNS');
+    expect(roundStarted.state.round).toEqual({
       roundId: 'round-1',
       currentTurnSeatNo: 1,
     });
-    expect(betPlaced.state.dealer).toEqual({
+    expect(roundStarted.state.dealer).toEqual({
       cards: [
         { rank: '3', suit: 'clubs' },
         { rank: '5', suit: 'clubs', hidden: true },
@@ -330,7 +402,7 @@ describe('BlackjackTableService', () => {
       visibleScore: 3,
       score: null,
     });
-    expect(betPlaced.state.seats).toEqual([
+    expect(roundStarted.state.seats).toEqual([
       expect.objectContaining({
         seatNo: 1,
         betAmount: '500',
@@ -346,7 +418,7 @@ describe('BlackjackTableService', () => {
     ]);
   });
 
-  it('waits for all occupied seats to bet before dealing', () => {
+  it('waits for the betting window before dealing all confirmed seats', () => {
     const service = createDeterministicService();
 
     service.takeSeat({
@@ -385,16 +457,22 @@ describe('BlackjackTableService', () => {
 
     expect(firstBet.event.type).toBe('BET_PLACED');
     expect(firstBet.state.round).toBeNull();
-    expect(secondBet.event.type).toBe('ROUND_STARTED');
-    expect(secondBet.state.round).toEqual({
+    expect(firstBet.state.timers.phaseEndsAt).not.toBeNull();
+    expect(secondBet.event.type).toBe('BET_PLACED');
+    expect(secondBet.state.round).toBeNull();
+
+    const roundStarted = expireBettingWindowOrFail(service);
+
+    expect(roundStarted.event.type).toBe('ROUND_STARTED');
+    expect(roundStarted.state.round).toEqual({
       roundId: 'round-1',
       currentTurnSeatNo: 1,
     });
-    expect(secondBet.state.dealer.cards).toEqual([
+    expect(roundStarted.state.dealer.cards).toEqual([
       { rank: '4', suit: 'clubs' },
       { rank: '7', suit: 'clubs', hidden: true },
     ]);
-    expect(secondBet.state.seats).toEqual([
+    expect(roundStarted.state.seats).toEqual([
       expect.objectContaining({
         seatNo: 1,
         betAmount: '500',
@@ -418,6 +496,154 @@ describe('BlackjackTableService', () => {
     ]);
   });
 
+  it('preserves confirmed bets when the same user retakes a seat during betting', () => {
+    const service = createDeterministicService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    const seatRetaken = service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice-2',
+      user: { ...alice, nickname: 'Alice Updated' },
+      seatNo: 1,
+    });
+
+    expect(seatRetaken.state.seats).toEqual([
+      expect.objectContaining({
+        seatNo: 1,
+        nickname: 'Alice Updated',
+        betAmount: '500',
+        handStatus: 'BET_PLACED',
+      }),
+    ]);
+  });
+
+  it('starts a round with confirmed bets when the betting window expires', () => {
+    const { service, setNow } = createTimedService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-bob',
+      user: bob,
+      seatNo: 2,
+    });
+
+    const firstBet = confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    expect(firstBet.event.type).toBe('BET_PLACED');
+    expect(firstBet.state.phase).toBe('WAITING_BETS');
+    expect(firstBet.state.timers.phaseEndsAt).toBe('2026-06-07T00:00:20.000Z');
+
+    setNow(new Date('2026-06-07T00:00:19.999Z'));
+    expect(service.expireBettingWindow({ tableId: 'main' })).toBeNull();
+
+    setNow(new Date('2026-06-07T00:00:20.000Z'));
+    const expired = service.expireBettingWindow({ tableId: 'main' });
+
+    expect(expired?.event.type).toBe('ROUND_STARTED');
+    expect(expired?.state.phase).toBe('PLAYER_TURNS');
+    expect(expired?.state.timers.phaseEndsAt).toBeNull();
+    expect(expired?.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: 1,
+    });
+    expect(expired?.state.dealer.cards).toEqual([
+      { rank: '3', suit: 'clubs' },
+      { rank: '5', suit: 'clubs', hidden: true },
+    ]);
+    expect(expired?.state.seats).toEqual([
+      expect.objectContaining({
+        seatNo: 1,
+        status: 'OCCUPIED',
+        betAmount: '500',
+        handStatus: 'PLAYING',
+        cards: [
+          { rank: '2', suit: 'clubs' },
+          { rank: '4', suit: 'clubs' },
+        ],
+        isCurrentTurn: true,
+      }),
+      expect.objectContaining({
+        seatNo: 2,
+        status: 'SITTING_OUT',
+        betAmount: null,
+        handStatus: 'WAITING_BET',
+        cards: [],
+        isCurrentTurn: false,
+      }),
+    ]);
+  });
+
+  it('rejects new bet reservations after the betting window expires', () => {
+    const { service, setNow } = createTimedService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-bob',
+      user: bob,
+      seatNo: 2,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    setNow(new Date('2026-06-07T00:00:20.000Z'));
+
+    expect(() =>
+      service.reserveBet({
+        tableId: 'main',
+        socketId: 'socket-bob',
+        user: bob,
+        seatNo: 2,
+        amount: 500n,
+        commandId: 'command-2',
+      }),
+    ).toThrow(BlackjackTableError);
+  });
+
   it('applies player stand and runs the dealer when no player turns remain', () => {
     const service = createDeterministicService();
 
@@ -437,6 +663,7 @@ describe('BlackjackTableService', () => {
       roundId: 'round-1',
       roundSeatId: 'round-seat-1',
     });
+    expireBettingWindowOrFail(service);
 
     const result = service.playerAction({
       tableId: 'main',
@@ -522,6 +749,7 @@ describe('BlackjackTableService', () => {
       roundId: 'round-1',
       roundSeatId: 'round-seat-1',
     });
+    expireBettingWindowOrFail(service);
     service.playerAction({
       tableId: 'main',
       socketId: 'socket-alice',

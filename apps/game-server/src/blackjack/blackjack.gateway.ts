@@ -41,6 +41,8 @@ export class BlackjackGateway {
   @WebSocketServer()
   server!: Server;
 
+  private readonly bettingWindowTimers = new Map<string, NodeJS.Timeout>();
+
   constructor(
     private readonly tableService: BlackjackTableService,
     private readonly gameTokenService: GameTokenService,
@@ -229,6 +231,7 @@ export class BlackjackGateway {
     this.server
       .to(room)
       .emit(BLACKJACK_SERVER_EVENTS.TABLE_EVENT, update.event);
+    this.scheduleBettingWindowIfNeeded(update);
   }
 
   private emitWalletUpdated(
@@ -276,6 +279,57 @@ export class BlackjackGateway {
     });
 
     this.emitTableUpdate(settledUpdate);
+  }
+
+  private scheduleBettingWindowIfNeeded(update: BlackjackTableMutationResult) {
+    const tableId = update.state.tableId;
+    const existingTimer = this.bettingWindowTimers.get(tableId);
+
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      this.bettingWindowTimers.delete(tableId);
+    }
+
+    if (
+      update.state.phase !== 'WAITING_BETS' ||
+      !update.state.timers.phaseEndsAt
+    ) {
+      return;
+    }
+
+    const delayMs = Math.max(
+      0,
+      new Date(update.state.timers.phaseEndsAt).getTime() - Date.now(),
+    );
+    const timer = setTimeout(() => {
+      this.bettingWindowTimers.delete(tableId);
+      void this.expireBettingWindow(tableId);
+    }, delayMs);
+
+    this.bettingWindowTimers.set(tableId, timer);
+  }
+
+  private async expireBettingWindow(tableId: string) {
+    try {
+      const update = this.tableService.expireBettingWindow({ tableId });
+
+      if (!update) {
+        return;
+      }
+
+      this.emitTableUpdate(update);
+      await this.settleRoundIfNeeded(update);
+    } catch (error) {
+      this.server.to(blackjackTableRoom(tableId)).emit(
+        BLACKJACK_SERVER_EVENTS.ERROR,
+        isSocketErrorLike(error)
+          ? { code: error.code, message: error.message }
+          : {
+              code: 'UNKNOWN_ERROR',
+              message: 'Unexpected blackjack betting timer error.',
+            },
+      );
+    }
   }
 
   private emitError(

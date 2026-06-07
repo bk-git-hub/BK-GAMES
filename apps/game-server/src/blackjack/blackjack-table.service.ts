@@ -30,6 +30,8 @@ export type BlackjackTableOptions = {
   deckCount?: number;
   dealerHitsSoft17?: boolean;
   randomSource?: RandomSource;
+  nowSource?: () => Date;
+  bettingWindowMs?: number;
 };
 
 @Injectable()
@@ -38,6 +40,8 @@ export class BlackjackTableService {
   private readonly deckCount: number;
   private readonly dealerHitsSoft17: boolean;
   private readonly randomSource: RandomSource;
+  private readonly nowSource: () => Date;
+  private readonly bettingWindowMs: number;
 
   constructor(
     @Optional()
@@ -47,6 +51,10 @@ export class BlackjackTableService {
     this.deckCount = normalizeDeckCount(options?.deckCount ?? 6);
     this.dealerHitsSoft17 = options?.dealerHitsSoft17 ?? false;
     this.randomSource = options?.randomSource ?? Math.random;
+    this.nowSource = options?.nowSource ?? (() => new Date());
+    this.bettingWindowMs = normalizeBettingWindowMs(
+      options?.bettingWindowMs ?? 20_000,
+    );
   }
 
   joinTable(input: BlackjackJoinTableInput): BlackjackTableMutationResult {
@@ -70,6 +78,13 @@ export class BlackjackTableService {
 
     table.connections.set(input.socketId, user);
 
+    if (table.phase !== 'WAITING' && table.phase !== 'WAITING_BETS') {
+      throw new BlackjackTableError(
+        'BETTING_CLOSED',
+        `Table ${table.tableId} is not accepting new seats.`,
+      );
+    }
+
     if (currentSeat && currentSeat.userId !== user.userId) {
       throw new BlackjackTableError(
         'SEAT_OCCUPIED',
@@ -90,12 +105,17 @@ export class BlackjackTableService {
       }
     }
 
-    table.seats.set(seatNo, {
-      seatNo,
-      userId: user.userId,
-      nickname: user.nickname,
-      status: 'OCCUPIED',
-    });
+    if (currentSeat) {
+      currentSeat.nickname = user.nickname;
+      currentSeat.status = 'OCCUPIED';
+    } else {
+      table.seats.set(seatNo, {
+        seatNo,
+        userId: user.userId,
+        nickname: user.nickname,
+        status: 'OCCUPIED',
+      });
+    }
     table.phase = 'WAITING_BETS';
     this.bump(table);
 
@@ -158,7 +178,10 @@ export class BlackjackTableService {
 
     table.connections.set(input.socketId, user);
 
-    if (table.phase !== 'WAITING_BETS') {
+    if (
+      table.phase !== 'WAITING_BETS' ||
+      isBettingWindowExpired(table, this.now())
+    ) {
       throw new BlackjackTableError(
         'BETTING_CLOSED',
         `Table ${table.tableId} is not accepting bets.`,
@@ -275,7 +298,10 @@ export class BlackjackTableService {
       roundSeatId: input.roundSeatId,
     };
     seat.pendingBet = undefined;
-    const roundStarted = this.maybeStartRound(table);
+    this.ensureBettingWindow(table);
+    const roundStarted = isBettingWindowExpired(table, this.now())
+      ? this.maybeStartRound(table)
+      : false;
     this.bump(table);
 
     return {
@@ -424,6 +450,35 @@ export class BlackjackTableService {
     };
   }
 
+  expireBettingWindow(
+    input: BlackjackExpireBettingWindowInput,
+  ): BlackjackTableMutationResult | null {
+    const table = this.getOrCreateTable(input.tableId);
+    const now = input.now ?? this.now();
+
+    if (
+      table.phase !== 'WAITING_BETS' ||
+      !table.bettingClosesAt ||
+      now < table.bettingClosesAt
+    ) {
+      return null;
+    }
+
+    const roundStarted = this.maybeStartRound(table);
+
+    if (!roundStarted) {
+      return null;
+    }
+
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(table, 'ROUND_STARTED', 'system'),
+      settlement: this.buildSettlementRequestIfReady(table),
+    };
+  }
+
   disconnectSocket(socketId: string): BlackjackTableMutationResult[] {
     const updates: BlackjackTableMutationResult[] = [];
 
@@ -457,7 +512,7 @@ export class BlackjackTableService {
       return existing;
     }
 
-    const now = new Date().toISOString();
+    const now = this.now().toISOString();
     const table: BlackjackTableRuntime = {
       tableId: normalizedTableId,
       status: 'OPEN',
@@ -471,6 +526,7 @@ export class BlackjackTableService {
       deckCount: this.deckCount,
       dealerHitsSoft17: this.dealerHitsSoft17,
       shoe: [],
+      bettingClosesAt: undefined,
       seats: new Map(),
       connections: new Map(),
       version: 0,
@@ -484,7 +540,7 @@ export class BlackjackTableService {
 
   private bump(table: BlackjackTableRuntime) {
     table.version += 1;
-    table.updatedAt = new Date().toISOString();
+    table.updatedAt = this.now().toISOString();
   }
 
   private toState(table: BlackjackTableRuntime): BlackjackTableState {
@@ -508,7 +564,13 @@ export class BlackjackTableService {
             currentTurnSeatNo: table.round.currentTurnSeatNo,
           }
         : null,
-      timers: { phaseEndsAt: null, turnEndsAt: null },
+      timers: {
+        phaseEndsAt:
+          table.phase === 'WAITING_BETS'
+            ? (table.bettingClosesAt?.toISOString() ?? null)
+            : null,
+        turnEndsAt: null,
+      },
       version: table.version,
       updatedAt: table.updatedAt,
     };
@@ -576,18 +638,29 @@ export class BlackjackTableService {
     return 'WAITING_BET';
   }
 
+  private ensureBettingWindow(table: BlackjackTableRuntime) {
+    if (table.bettingClosesAt) {
+      return;
+    }
+
+    table.bettingClosesAt = new Date(
+      this.now().getTime() + this.bettingWindowMs,
+    );
+  }
+
   private maybeStartRound(table: BlackjackTableRuntime) {
     if (table.phase !== 'WAITING_BETS' || table.round) {
       return false;
     }
 
     const seats = this.getSortedOccupiedSeats(table);
+    const betSeats = seats.filter(hasConfirmedBet);
 
-    if (seats.length === 0 || seats.some((seat) => !seat.bet)) {
+    if (betSeats.length === 0) {
       return false;
     }
 
-    const roundId = seats[0]?.bet?.roundId;
+    const roundId = betSeats[0]?.bet?.roundId;
 
     if (!roundId) {
       return false;
@@ -595,6 +668,7 @@ export class BlackjackTableService {
 
     table.phase = 'DEALING';
     table.shoe = this.createShuffledShoe(table);
+    table.bettingClosesAt = undefined;
     table.round = {
       roundId,
       currentTurnSeatNo: null,
@@ -602,18 +676,24 @@ export class BlackjackTableService {
     };
 
     for (const seat of seats) {
+      if (!seat.bet) {
+        seat.status = 'SITTING_OUT';
+      }
+    }
+
+    for (const seat of betSeats) {
       seat.hand = { cards: [drawCard(table)], status: 'PLAYING' };
     }
 
     table.round.dealerCards.push(drawCard(table));
 
-    for (const seat of seats) {
+    for (const seat of betSeats) {
       seat.hand?.cards.push(drawCard(table));
     }
 
     table.round.dealerCards.push(drawCard(table));
 
-    for (const seat of seats) {
+    for (const seat of betSeats) {
       if (!seat.hand) {
         continue;
       }
@@ -698,6 +778,10 @@ export class BlackjackTableService {
 
   private createShuffledShoe(table: BlackjackTableRuntime) {
     return shuffleDeck(createDeck(table.deckCount), this.randomSource);
+  }
+
+  private now() {
+    return this.nowSource();
   }
 
   private buildSettlementRequestIfReady(
@@ -809,6 +893,11 @@ export type BlackjackConfirmSettlementInput = {
   seats: BlackjackSettlementSeatResult[];
 };
 
+export type BlackjackExpireBettingWindowInput = {
+  tableId: string;
+  now?: Date;
+};
+
 export type BlackjackSettlementRequest = {
   tableId: string;
   roundId: string;
@@ -882,6 +971,7 @@ type BlackjackTableRuntime = {
   dealerHitsSoft17: boolean;
   shoe: BlackjackCard[];
   round?: BlackjackRoundRuntime;
+  bettingClosesAt?: Date;
   seats: Map<number, BlackjackSeatRuntime>;
   connections: Map<string, BlackjackSocketUser>;
   version: number;
@@ -933,6 +1023,17 @@ function normalizeDeckCount(deckCount: number) {
   }
 
   return deckCount;
+}
+
+function normalizeBettingWindowMs(bettingWindowMs: number) {
+  if (!Number.isInteger(bettingWindowMs) || bettingWindowMs <= 0) {
+    throw new BlackjackTableError(
+      'UNKNOWN_ERROR',
+      'Blackjack bettingWindowMs must be a positive integer.',
+    );
+  }
+
+  return bettingWindowMs;
 }
 
 function normalizeTableId(tableId: string) {
@@ -1058,6 +1159,16 @@ function betMatches(
     bet.amount === input.amount &&
     bet.commandId === input.commandId
   );
+}
+
+function hasConfirmedBet(
+  seat: BlackjackSeatRuntime,
+): seat is BlackjackSeatRuntime & { bet: BlackjackBetRuntime } {
+  return Boolean(seat.bet);
+}
+
+function isBettingWindowExpired(table: BlackjackTableRuntime, now: Date) {
+  return Boolean(table.bettingClosesAt && now >= table.bettingClosesAt);
 }
 
 function hasConnectedUser(table: BlackjackTableRuntime, userId: string) {

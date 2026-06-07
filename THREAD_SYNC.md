@@ -4,7 +4,7 @@ This file is the handoff document for multiple Codex chat threads working on the
 
 Every new thread should read this file first, then read `AGENTS.md`, then inspect the current git status before making changes.
 
-Last updated: 2026-06-06
+Last updated: 2026-06-07
 
 ## Current Repository State
 
@@ -398,13 +398,13 @@ Next task should build on the realtime blackjack table skeleton.
 
 Recommended order:
 
-- Add a betting window timer so a round starts after the first bet timeout instead of waiting forever for all occupied seats.
 - Add advanced player action commands for double, split, surrender, and insurance/even-money decisions.
 - Wire frontend Socket.IO client to request game tokens, join the table, take seats, place bets, send player actions, and render settlement results against the backend contract.
+- Replace the current in-memory betting timer with a DB-backed or worker-backed scheduler if multiple game-server instances are introduced.
 
 The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, game-server sockets can verify short-lived game tokens from `POST /api/game-token`, initial blackjack bets now debit wallets through an idempotent DB transaction, HIT/STAND rounds now settle through wallet-backed ledgers, and `packages/game-engine` now has pure blackjack card/hand/action helpers.
 
-The game-server now starts an in-memory blackjack round after all occupied seats have confirmed initial bets, deals public player cards plus hidden dealer hole card, supports realtime `player:action` for HIT/STAND, advances player turns, runs the dealer, calls DB settlement, emits private `wallet:updated` events for payout/refund ledgers, and broadcasts `ROUND_SETTLED`.
+The game-server now starts an in-memory blackjack round after the first confirmed bet opens a 20-second betting window and that window expires. Seats without confirmed bets sit out that round. It deals public player cards plus hidden dealer hole card, supports realtime `player:action` for HIT/STAND, advances player turns, runs the dealer, calls DB settlement, emits private `wallet:updated` events for payout/refund ledgers, and broadcasts `ROUND_SETTLED`.
 
 ## Suggested Next Scope Report
 
@@ -412,11 +412,11 @@ Use this before starting the next backend blackjack slice:
 
 ```text
 이번 작업 범위:
-- 목표: blackjack betting timer와 seated-but-not-bet 처리
-- 수정 예상: apps/game-server, packages/shared, THREAD_SYNC.md
+- 목표: blackjack advanced action foundation
+- 수정 예상: apps/game-server, packages/game-engine, packages/shared, packages/db, THREAD_SYNC.md
 - 실행 명령: pnpm --filter game-server test, pnpm typecheck, pnpm lint, pnpm test, pnpm build
-- 제외: frontend UI, admin UI, double/split/surrender/insurance 구현
-- 검증: timer/state transition unit test, game-server unit test, 전체 workspace 검증
+- 제외: frontend UI, admin UI
+- 검증: rule engine tests, game-server state transition tests, DB smoke if settlement schema changes, 전체 workspace 검증
 ```
 
 ## Update Rules For This File
@@ -481,3 +481,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - Wallet-backed HIT/STAND settlement was added. `packages/db/src/blackjack-settlement.ts` settles current round seats idempotently, calculates payout/refund from DB rule snapshots and stored wagers, updates round/hand/seat result rows, and writes `PAYOUT` or `PUSH_REFUND` ledgers in the same transaction.
 - `apps/game-server` now attaches settlement requests when dealer play reaches `SETTLING`; the gateway calls wallet settlement, emits private wallet updates, then broadcasts `ROUND_SETTLED`. Impact: frontend seat snapshots now include outcome, outcome reason, payout amount, and net amount.
 - `pnpm --filter @bk-games/db smoke:blackjack-settlement` verifies multi-seat same-user settlement idempotency with one standard win and one push refund.
+- Betting-window runtime was added for blackjack. The first confirmed bet opens a 20-second `phaseEndsAt` window; the gateway schedules an in-memory table timer; at expiry, the round starts with confirmed-bet seats only and non-bet seats move to `SITTING_OUT`. Impact: frontend should display `state.timers.phaseEndsAt` during `WAITING_BETS` and treat `SITTING_OUT` seats as skipped for the current round.

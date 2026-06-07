@@ -30,6 +30,8 @@ export const BLACKJACK_TABLE_OPTIONS = 'BLACKJACK_TABLE_OPTIONS';
 export type BlackjackTableOptions = {
   deckCount?: number;
   dealerHitsSoft17?: boolean;
+  insuranceAllowed?: boolean;
+  evenMoneyAllowed?: boolean;
   doubleAllowed?: boolean;
   splitAllowed?: boolean;
   doubleAfterSplitAllowed?: boolean;
@@ -48,6 +50,8 @@ export class BlackjackTableService {
   private readonly tables = new Map<string, BlackjackTableRuntime>();
   private readonly deckCount: number;
   private readonly dealerHitsSoft17: boolean;
+  private readonly insuranceAllowed: boolean;
+  private readonly evenMoneyAllowed: boolean;
   private readonly doubleAllowed: boolean;
   private readonly splitAllowed: boolean;
   private readonly doubleAfterSplitAllowed: boolean;
@@ -67,6 +71,8 @@ export class BlackjackTableService {
   ) {
     this.deckCount = normalizeDeckCount(options?.deckCount ?? 6);
     this.dealerHitsSoft17 = options?.dealerHitsSoft17 ?? false;
+    this.insuranceAllowed = options?.insuranceAllowed ?? false;
+    this.evenMoneyAllowed = options?.evenMoneyAllowed ?? false;
     this.doubleAllowed = options?.doubleAllowed ?? true;
     this.splitAllowed = options?.splitAllowed ?? true;
     this.doubleAfterSplitAllowed = options?.doubleAfterSplitAllowed ?? false;
@@ -751,6 +757,241 @@ export class BlackjackTableService {
     }
   }
 
+  reserveInsurance(
+    input: BlackjackReserveInsuranceInput,
+  ): BlackjackInsuranceReservation {
+    const table = this.getOrCreateTable(input.tableId);
+    const user = normalizeSocketUser(input.user);
+    const seatNo = normalizeSeatNo(input.seatNo, table.maxSeats);
+    const commandId = normalizeCommandId(input.commandId);
+    const seat = table.seats.get(seatNo);
+    const hand = seat ? findHandByNo(seat, 1) : undefined;
+
+    table.connections.set(input.socketId, user);
+
+    if (!table.round || table.phase !== 'INSURANCE_DECISION') {
+      throw new BlackjackTableError(
+        'ROUND_NOT_ACTIVE',
+        `Table ${table.tableId} is not in insurance decision phase.`,
+      );
+    }
+
+    if (!seat?.bet || !hand) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OCCUPIED',
+        `Seat ${seatNo} does not have an active hand.`,
+      );
+    }
+
+    if (seat.userId !== user.userId) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OWNED',
+        `User ${user.userId} does not own seat ${seatNo}.`,
+      );
+    }
+
+    if (hand.insuranceCommandId === commandId) {
+      return {
+        kind: 'already-confirmed',
+        tableId: table.tableId,
+        roundId: table.round.roundId,
+        roundSeatId: seat.bet.roundSeatId,
+        seatNo,
+        amount: hand.insuranceBetAmount ?? hand.betAmount / 2n,
+        commandId,
+      };
+    }
+
+    this.assertInsuranceDecisionAvailable(table, seat, hand, 'INSURANCE');
+
+    if (hand.pendingAction) {
+      if (
+        hand.pendingAction.action === 'INSURANCE' &&
+        hand.pendingAction.commandId === commandId
+      ) {
+        return {
+          kind: 'reserved',
+          tableId: table.tableId,
+          roundId: table.round.roundId,
+          roundSeatId: seat.bet.roundSeatId,
+          seatNo,
+          amount: hand.betAmount / 2n,
+          commandId,
+        };
+      }
+
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        `Seat ${seatNo} already has an action in progress.`,
+      );
+    }
+
+    hand.pendingAction = { action: 'INSURANCE', commandId };
+    this.bump(table);
+
+    return {
+      kind: 'reserved',
+      tableId: table.tableId,
+      roundId: table.round.roundId,
+      roundSeatId: seat.bet.roundSeatId,
+      seatNo,
+      amount: hand.betAmount / 2n,
+      commandId,
+    };
+  }
+
+  confirmInsurance(
+    input: BlackjackConfirmInsuranceInput,
+  ): BlackjackTableMutationResult {
+    const table = this.getOrCreateTable(input.tableId);
+    const user = normalizeSocketUser(input.user);
+    const seatNo = normalizeSeatNo(input.seatNo, table.maxSeats);
+    const amount = normalizePointAmount(input.amount);
+    const commandId = normalizeCommandId(input.commandId);
+    const seat = table.seats.get(seatNo);
+    const hand = seat ? findHandByNo(seat, 1) : undefined;
+
+    if (!table.round || table.round.roundId !== input.roundId) {
+      throw new BlackjackTableError(
+        'ROUND_NOT_ACTIVE',
+        `Round ${input.roundId} is not active on table ${table.tableId}.`,
+      );
+    }
+
+    if (
+      !seat ||
+      !hand ||
+      !seat.bet ||
+      seat.bet.roundSeatId !== input.roundSeatId
+    ) {
+      throw new BlackjackTableError(
+        'ROUND_SEAT_NOT_FOUND',
+        `Round seat ${input.roundSeatId} is not active on table ${table.tableId}.`,
+      );
+    }
+
+    if (seat.userId !== user.userId) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OWNED',
+        `User ${user.userId} does not own seat ${seatNo}.`,
+      );
+    }
+
+    if (hand.insuranceCommandId === commandId) {
+      return {
+        state: this.toState(table),
+        event: this.toEvent(table, 'PLAYER_ACTED', user.userId, seatNo),
+        settlement: this.buildSettlementRequestIfReady(table),
+      };
+    }
+
+    if (
+      !hand.pendingAction ||
+      hand.pendingAction.action !== 'INSURANCE' ||
+      hand.pendingAction.commandId !== commandId
+    ) {
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        `Seat ${seatNo} does not have a matching insurance reservation.`,
+      );
+    }
+
+    hand.insuranceDecision = 'ACCEPTED';
+    hand.insuranceCommandId = commandId;
+    hand.insuranceBetAmount = amount;
+    hand.pendingAction = undefined;
+
+    const completed = this.advanceInsuranceDecisionOrRound(table);
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(
+        table,
+        completed ? 'DEALER_PLAYED' : 'PLAYER_ACTED',
+        user.userId,
+        seatNo,
+      ),
+      settlement: this.buildSettlementRequestIfReady(table),
+    };
+  }
+
+  cancelInsuranceReservation(input: BlackjackCancelInsuranceInput) {
+    const table = this.getOrCreateTable(input.tableId);
+    const seatNo = normalizeSeatNo(input.seatNo, table.maxSeats);
+    const commandId = normalizeCommandId(input.commandId);
+    const seat = table.seats.get(seatNo);
+    const hand = seat ? findHandByNo(seat, 1) : undefined;
+
+    if (
+      hand?.pendingAction?.action === 'INSURANCE' &&
+      hand.pendingAction.commandId === commandId
+    ) {
+      hand.pendingAction = undefined;
+      this.bump(table);
+    }
+  }
+
+  declineInsurance(input: BlackjackInsuranceDecisionInput) {
+    const { table, user, seatNo, hand } = this.getInsuranceDecisionContext(
+      input,
+      'INSURANCE_DECLINE',
+    );
+
+    hand.insuranceDecision = 'DECLINED';
+    hand.pendingAction = undefined;
+
+    const completed = this.advanceInsuranceDecisionOrRound(table);
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(
+        table,
+        completed ? 'DEALER_PLAYED' : 'PLAYER_ACTED',
+        user.userId,
+        seatNo,
+      ),
+      settlement: this.buildSettlementRequestIfReady(table),
+    };
+  }
+
+  acceptEvenMoney(input: BlackjackInsuranceDecisionInput) {
+    const { table, user, seatNo, hand } = this.getInsuranceDecisionContext(
+      input,
+      'EVEN_MONEY',
+    );
+    const commandId = input.commandId
+      ? normalizeCommandId(input.commandId)
+      : undefined;
+
+    if (commandId && hand.evenMoneyCommandId === commandId) {
+      return {
+        state: this.toState(table),
+        event: this.toEvent(table, 'PLAYER_ACTED', user.userId, seatNo),
+        settlement: this.buildSettlementRequestIfReady(table),
+      };
+    }
+
+    hand.insuranceDecision = 'ACCEPTED';
+    hand.evenMoneyAccepted = true;
+    hand.evenMoneyCommandId = commandId;
+
+    const completed = this.advanceInsuranceDecisionOrRound(table);
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(
+        table,
+        completed ? 'DEALER_PLAYED' : 'PLAYER_ACTED',
+        user.userId,
+        seatNo,
+      ),
+      settlement: this.buildSettlementRequestIfReady(table),
+    };
+  }
+
   playerAction(
     input: BlackjackPlayerActionInput,
   ): BlackjackTableMutationResult {
@@ -964,6 +1205,8 @@ export class BlackjackTableService {
       maxTotalBetPerUser: 42_000n,
       deckCount: this.deckCount,
       dealerHitsSoft17: this.dealerHitsSoft17,
+      insuranceAllowed: this.insuranceAllowed,
+      evenMoneyAllowed: this.evenMoneyAllowed,
       doubleAllowed: this.doubleAllowed,
       splitAllowed: this.splitAllowed,
       doubleAfterSplitAllowed: this.doubleAfterSplitAllowed,
@@ -1202,6 +1445,10 @@ export class BlackjackTableService {
       }
     }
 
+    if (this.maybeStartInsuranceDecision(table)) {
+      return true;
+    }
+
     this.advanceTurnOrPlayDealer(table);
 
     return true;
@@ -1250,6 +1497,180 @@ export class BlackjackTableService {
     }
 
     table.phase = 'SETTLING';
+  }
+
+  private maybeStartInsuranceDecision(table: BlackjackTableRuntime) {
+    if (!table.round || !isDealerUpcardAce(table)) {
+      return false;
+    }
+
+    const firstDecision = this.getSortedOccupiedSeats(table)
+      .flatMap((seat) =>
+        getHands(seat).map((hand) => ({
+          seat,
+          hand,
+        })),
+      )
+      .find(({ hand }) => this.getInsuranceOfferActions(table, hand).length);
+
+    if (!firstDecision) {
+      return false;
+    }
+
+    for (const seat of this.getSortedOccupiedSeats(table)) {
+      for (const hand of getHands(seat)) {
+        if (this.getInsuranceOfferActions(table, hand).length) {
+          hand.insuranceDecision = 'PENDING';
+        }
+      }
+    }
+
+    table.phase = 'INSURANCE_DECISION';
+    table.round.currentTurnSeatNo = firstDecision.seat.seatNo;
+    table.round.currentTurnHandNo = firstDecision.hand.handNo;
+
+    return true;
+  }
+
+  private advanceInsuranceDecisionOrRound(table: BlackjackTableRuntime) {
+    if (!table.round) {
+      return false;
+    }
+
+    const nextDecision = this.getSortedOccupiedSeats(table)
+      .flatMap((seat) =>
+        getHands(seat).map((hand) => ({
+          seat,
+          hand,
+        })),
+      )
+      .find(
+        ({ hand }) =>
+          hand.insuranceDecision === 'PENDING' &&
+          this.getInsuranceDecisionActions(table, hand).length > 0,
+      );
+
+    if (nextDecision) {
+      table.phase = 'INSURANCE_DECISION';
+      table.round.currentTurnSeatNo = nextDecision.seat.seatNo;
+      table.round.currentTurnHandNo = nextDecision.hand.handNo;
+      return false;
+    }
+
+    table.round.currentTurnSeatNo = null;
+    table.round.currentTurnHandNo = null;
+
+    if (evaluateHand(table.round.dealerCards).isBlackjack) {
+      table.phase = 'SETTLING';
+      return true;
+    }
+
+    this.advanceTurnOrPlayDealer(table);
+
+    return false;
+  }
+
+  private getInsuranceDecisionContext(
+    input: BlackjackInsuranceDecisionInput,
+    action: BlackjackSocketPlayerAction,
+  ) {
+    const table = this.getOrCreateTable(input.tableId);
+    const user = normalizeSocketUser(input.user);
+    const seatNo = normalizeSeatNo(input.seatNo, table.maxSeats);
+    const seat = table.seats.get(seatNo);
+    const hand = seat ? findHandByNo(seat, 1) : undefined;
+
+    table.connections.set(input.socketId, user);
+
+    if (!table.round || table.phase !== 'INSURANCE_DECISION') {
+      throw new BlackjackTableError(
+        'ROUND_NOT_ACTIVE',
+        `Table ${table.tableId} is not in insurance decision phase.`,
+      );
+    }
+
+    if (!seat?.bet || !hand) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OCCUPIED',
+        `Seat ${seatNo} does not have an active hand.`,
+      );
+    }
+
+    if (seat.userId !== user.userId) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OWNED',
+        `User ${user.userId} does not own seat ${seatNo}.`,
+      );
+    }
+
+    this.assertInsuranceDecisionAvailable(table, seat, hand, action);
+
+    return { table, user, seatNo, seat, hand };
+  }
+
+  private assertInsuranceDecisionAvailable(
+    table: BlackjackTableRuntime,
+    seat: BlackjackSeatRuntime,
+    hand: BlackjackSeatHandRuntime,
+    action: BlackjackSocketPlayerAction,
+  ) {
+    if (
+      !table.round ||
+      table.phase !== 'INSURANCE_DECISION' ||
+      table.round.currentTurnSeatNo !== seat.seatNo ||
+      table.round.currentTurnHandNo !== hand.handNo
+    ) {
+      throw new BlackjackTableError(
+        'NOT_YOUR_TURN',
+        `Seat ${seat.seatNo} is not the current insurance decision.`,
+      );
+    }
+
+    if (hand.pendingAction) {
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        `Seat ${seat.seatNo} already has an action in progress.`,
+      );
+    }
+
+    if (!this.getInsuranceDecisionActions(table, hand).includes(action)) {
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        `${action} is not available for seat ${seat.seatNo}.`,
+      );
+    }
+  }
+
+  private getInsuranceDecisionActions(
+    table: BlackjackTableRuntime,
+    hand: BlackjackSeatHandRuntime,
+  ): BlackjackSocketPlayerAction[] {
+    if (
+      !table.round ||
+      table.phase !== 'INSURANCE_DECISION' ||
+      hand.insuranceDecision !== 'PENDING'
+    ) {
+      return [];
+    }
+
+    return this.getInsuranceOfferActions(table, hand);
+  }
+
+  private getInsuranceOfferActions(
+    table: BlackjackTableRuntime,
+    hand: BlackjackSeatHandRuntime,
+  ): BlackjackSocketPlayerAction[] {
+    const handValue = evaluateHand(hand.cards);
+
+    if (handValue.isBlackjack && table.evenMoneyAllowed) {
+      return ['EVEN_MONEY', 'INSURANCE_DECLINE'];
+    }
+
+    if (table.insuranceAllowed) {
+      return ['INSURANCE', 'INSURANCE_DECLINE'];
+    }
+
+    return [];
   }
 
   private assertPlayerCanAct(
@@ -1308,6 +1729,15 @@ export class BlackjackTableService {
     seat: BlackjackSeatRuntime,
     hand: BlackjackSeatHandRuntime,
   ): BlackjackSocketPlayerAction[] {
+    if (
+      table.round &&
+      table.phase === 'INSURANCE_DECISION' &&
+      table.round.currentTurnSeatNo === seat.seatNo &&
+      table.round.currentTurnHandNo === hand.handNo
+    ) {
+      return this.getInsuranceDecisionActions(table, hand);
+    }
+
     if (
       !table.round ||
       table.phase !== 'PLAYER_TURNS' ||
@@ -1398,6 +1828,7 @@ export class BlackjackTableService {
             hand,
             dealerHand,
             seatHand.isSplitHand,
+            seatHand.evenMoneyAccepted,
           );
 
           return {
@@ -1412,6 +1843,7 @@ export class BlackjackTableService {
             busted: hand.isBust,
             outcome: outcome.outcome,
             outcomeReason: outcome.outcomeReason,
+            evenMoneyAccepted: seatHand.evenMoneyAccepted,
           };
         });
       })
@@ -1528,6 +1960,28 @@ export type BlackjackCancelSplitInput = {
   commandId: string;
 };
 
+export type BlackjackReserveInsuranceInput = BlackjackJoinTableInput & {
+  seatNo: number;
+  commandId: string;
+};
+
+export type BlackjackConfirmInsuranceInput = BlackjackReserveInsuranceInput & {
+  roundId: string;
+  roundSeatId: string;
+  amount: bigint;
+};
+
+export type BlackjackCancelInsuranceInput = {
+  tableId: string;
+  seatNo: number;
+  commandId: string;
+};
+
+export type BlackjackInsuranceDecisionInput = BlackjackJoinTableInput & {
+  seatNo: number;
+  commandId?: string;
+};
+
 export type BlackjackConfirmSettlementInput = {
   tableId: string;
   roundId: string;
@@ -1563,6 +2017,7 @@ export type BlackjackSettlementSeatRequest = {
   busted: boolean;
   outcome: BlackjackHandOutcome;
   outcomeReason: BlackjackHandOutcomeReason;
+  evenMoneyAccepted?: boolean;
 };
 
 export type BlackjackSettlementSeatResult = {
@@ -1613,6 +2068,16 @@ export type BlackjackSplitReservation = {
   commandId: string;
 };
 
+export type BlackjackInsuranceReservation = {
+  kind: 'reserved' | 'already-confirmed';
+  tableId: string;
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  amount: bigint;
+  commandId: string;
+};
+
 export class BlackjackTableError extends Error {
   constructor(
     readonly code: BlackjackSocketErrorCode,
@@ -1635,6 +2100,8 @@ type BlackjackTableRuntime = {
   maxTotalBetPerUser: bigint;
   deckCount: number;
   dealerHitsSoft17: boolean;
+  insuranceAllowed: boolean;
+  evenMoneyAllowed: boolean;
   doubleAllowed: boolean;
   splitAllowed: boolean;
   doubleAfterSplitAllowed: boolean;
@@ -1684,6 +2151,11 @@ type BlackjackSeatHandRuntime = {
   doubleCommandId?: string;
   splitCommandId?: string;
   splitNewHandNo?: number;
+  insuranceDecision?: BlackjackInsuranceDecisionStatus;
+  insuranceCommandId?: string;
+  insuranceBetAmount?: bigint;
+  evenMoneyAccepted?: boolean;
+  evenMoneyCommandId?: string;
   outcome?: BlackjackHandOutcome;
   outcomeReason?: BlackjackHandOutcomeReason;
   payoutAmount?: bigint;
@@ -1691,10 +2163,12 @@ type BlackjackSeatHandRuntime = {
 };
 
 type BlackjackPendingActionRuntime = {
-  action: 'DOUBLE' | 'SPLIT';
+  action: 'DOUBLE' | 'SPLIT' | 'INSURANCE';
   commandId: string;
   newHandNo?: number;
 };
+
+type BlackjackInsuranceDecisionStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED';
 
 type BlackjackRoundRuntime = {
   roundId: string;
@@ -1810,7 +2284,10 @@ function normalizePlayerAction(action: unknown): BlackjackSocketPlayerAction {
     action !== 'STAND' &&
     action !== 'DOUBLE' &&
     action !== 'SPLIT' &&
-    action !== 'SURRENDER'
+    action !== 'SURRENDER' &&
+    action !== 'INSURANCE' &&
+    action !== 'INSURANCE_DECLINE' &&
+    action !== 'EVEN_MONEY'
   ) {
     throw new BlackjackTableError(
       'ACTION_NOT_ALLOWED',
@@ -1981,6 +2458,10 @@ function isAcePair(cards: readonly BlackjackCard[]) {
   return cards.length === 2 && cards[0]?.rank === 'A' && cards[1]?.rank === 'A';
 }
 
+function isDealerUpcardAce(table: BlackjackTableRuntime) {
+  return table.round?.dealerCards[0]?.rank === 'A';
+}
+
 function toCardSnapshot(
   card: BlackjackCard,
   hidden = false,
@@ -1990,7 +2471,7 @@ function toCardSnapshot(
 
 function isSocketPlayerAction(
   action: BlackjackEnginePlayerAction,
-): action is BlackjackSocketPlayerAction {
+): action is Extract<BlackjackSocketPlayerAction, BlackjackEnginePlayerAction> {
   return (
     action === 'HIT' ||
     action === 'STAND' ||
@@ -2011,6 +2492,7 @@ function calculateHandOutcome(
   player: ReturnType<typeof evaluateHand>,
   dealer: ReturnType<typeof evaluateHand>,
   isSplitHand = false,
+  evenMoneyAccepted = false,
 ): {
   outcome: BlackjackHandOutcome;
   outcomeReason: BlackjackHandOutcomeReason;
@@ -2024,6 +2506,10 @@ function calculateHandOutcome(
   }
 
   const isNaturalBlackjack = player.isBlackjack && !isSplitHand;
+
+  if (evenMoneyAccepted && isNaturalBlackjack) {
+    return { outcome: 'WIN', outcomeReason: 'STANDARD' };
+  }
 
   if (dealer.isBlackjack && !isNaturalBlackjack) {
     return { outcome: 'LOSE', outcomeReason: 'DEALER_BLACKJACK' };

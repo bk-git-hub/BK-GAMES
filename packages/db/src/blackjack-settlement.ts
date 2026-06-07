@@ -6,6 +6,7 @@ import {
   blackjackHands,
   blackjackRoundSeats,
   blackjackRounds,
+  blackjackSideBets,
   type BlackjackRuleSnapshot,
   type CardSnapshot,
   type JsonObject,
@@ -49,11 +50,13 @@ export type SettleBlackjackRoundSeatInput = {
   busted: boolean;
   outcome: BlackjackSettlementOutcome;
   outcomeReason: BlackjackSettlementOutcomeReason;
+  evenMoneyAccepted?: boolean;
 };
 
 export type SettleBlackjackRoundResult = {
   roundId: string;
   seats: SettleBlackjackRoundSeatResult[];
+  sideBets: SettleBlackjackRoundSideBetResult[];
 };
 
 export type SettleBlackjackRoundSeatResult = {
@@ -63,6 +66,18 @@ export type SettleBlackjackRoundSeatResult = {
   seatNo: number;
   outcome: BlackjackSettlementOutcome;
   outcomeReason: BlackjackSettlementOutcomeReason;
+  payoutAmount: bigint;
+  netAmount: bigint;
+  walletMutation: WalletMutationResult | null;
+};
+
+export type SettleBlackjackRoundSideBetResult = {
+  roundSeatId: string;
+  userId: string;
+  seatNo: number;
+  type: "INSURANCE";
+  outcome: "WIN" | "LOSE";
+  outcomeReason: "DEALER_BLACKJACK" | "DEALER_NO_BLACKJACK";
   payoutAmount: bigint;
   netAmount: bigint;
   walletMutation: WalletMutationResult | null;
@@ -128,6 +143,7 @@ export async function settleBlackjackRoundInTransaction(
 
   const settledAt = new Date();
   const seats: SettleBlackjackRoundSeatResult[] = [];
+  const sideBets: SettleBlackjackRoundSideBetResult[] = [];
   const roundSeatAggregates = new Map<string, RoundSeatAggregate>();
   const seenHands = new Set<string>();
 
@@ -154,6 +170,7 @@ export async function settleBlackjackRoundInTransaction(
       hand.finalBetAmount,
       seatInput.outcome,
       seatInput.outcomeReason,
+      seatInput.evenMoneyAccepted,
     );
     const netAmount = payoutAmount - hand.finalBetAmount;
     const walletMutation =
@@ -243,6 +260,17 @@ export async function settleBlackjackRoundInTransaction(
         updatedAt: settledAt,
       })
       .where(eq(blackjackRoundSeats.id, aggregate.roundSeat.id));
+
+    const sideBet = await settleInsuranceSideBetIfPresent(tx, {
+      roundId: input.roundId,
+      roundSeat: aggregate.roundSeat,
+      dealerHasBlackjack: input.dealer.hasBlackjack,
+      settledAt,
+    });
+
+    if (sideBet) {
+      sideBets.push(sideBet);
+    }
   }
 
   await tx
@@ -262,6 +290,7 @@ export async function settleBlackjackRoundInTransaction(
   return {
     roundId: input.roundId,
     seats,
+    sideBets,
   };
 }
 
@@ -358,6 +387,8 @@ async function readSettledRoundResult(
   input: SettleBlackjackRoundInput,
 ): Promise<SettleBlackjackRoundResult> {
   const seats: SettleBlackjackRoundSeatResult[] = [];
+  const sideBets: SettleBlackjackRoundSideBetResult[] = [];
+  const seenRoundSeatIds = new Set<string>();
 
   for (const seatInput of input.seats) {
     const roundSeat = await findRoundSeatForSettlement(tx, input, seatInput);
@@ -393,11 +424,26 @@ async function readSettledRoundResult(
         seatInput,
       ),
     });
+
+    if (!seenRoundSeatIds.has(roundSeat.id)) {
+      seenRoundSeatIds.add(roundSeat.id);
+
+      const sideBet = await readSettledInsuranceSideBetIfPresent(
+        tx,
+        input.roundId,
+        roundSeat,
+      );
+
+      if (sideBet) {
+        sideBets.push(sideBet);
+      }
+    }
   }
 
   return {
     roundId: input.roundId,
     seats,
+    sideBets,
   };
 }
 
@@ -431,12 +477,139 @@ async function findSettlementWalletMutation(
   );
 }
 
+async function settleInsuranceSideBetIfPresent(
+  tx: WalletMutationTransaction,
+  input: {
+    roundId: string;
+    roundSeat: typeof blackjackRoundSeats.$inferSelect;
+    dealerHasBlackjack: boolean;
+    settledAt: Date;
+  },
+): Promise<SettleBlackjackRoundSideBetResult | null> {
+  const sideBet = await findInsuranceSideBet(tx, input.roundSeat.id);
+
+  if (!sideBet) {
+    return null;
+  }
+
+  const payoutAmount = input.dealerHasBlackjack
+    ? sideBet.amount * BigInt(3)
+    : zero;
+  const netAmount = payoutAmount - sideBet.amount;
+  const outcome = input.dealerHasBlackjack ? "WIN" : "LOSE";
+  const outcomeReason = input.dealerHasBlackjack
+    ? "DEALER_BLACKJACK"
+    : "DEALER_NO_BLACKJACK";
+  const walletMutation =
+    payoutAmount > zero
+      ? await applyWalletMutationInTransaction(
+          tx,
+          buildInsuranceSettlementWalletMutationInput({
+            roundId: input.roundId,
+            roundSeat: input.roundSeat,
+            payoutAmount,
+          }),
+        )
+      : null;
+
+  await tx
+    .update(blackjackSideBets)
+    .set({
+      status: "SETTLED",
+      payoutAmount,
+      netAmount,
+      outcome,
+      outcomeReason,
+      settledAt: input.settledAt,
+    })
+    .where(eq(blackjackSideBets.id, sideBet.id));
+
+  return {
+    roundSeatId: input.roundSeat.id,
+    userId: input.roundSeat.userId,
+    seatNo: input.roundSeat.seatNo,
+    type: "INSURANCE",
+    outcome,
+    outcomeReason,
+    payoutAmount,
+    netAmount,
+    walletMutation,
+  };
+}
+
+async function readSettledInsuranceSideBetIfPresent(
+  tx: WalletMutationTransaction,
+  roundId: string,
+  roundSeat: typeof blackjackRoundSeats.$inferSelect,
+): Promise<SettleBlackjackRoundSideBetResult | null> {
+  const sideBet = await findInsuranceSideBet(tx, roundSeat.id);
+
+  if (!sideBet || sideBet.status !== "SETTLED") {
+    return null;
+  }
+
+  return {
+    roundSeatId: roundSeat.id,
+    userId: roundSeat.userId,
+    seatNo: roundSeat.seatNo,
+    type: "INSURANCE",
+    outcome: sideBet.outcome === "WIN" ? "WIN" : "LOSE",
+    outcomeReason:
+      sideBet.outcomeReason === "DEALER_BLACKJACK"
+        ? "DEALER_BLACKJACK"
+        : "DEALER_NO_BLACKJACK",
+    payoutAmount: sideBet.payoutAmount,
+    netAmount: sideBet.netAmount,
+    walletMutation:
+      sideBet.payoutAmount > zero
+        ? await applyWalletMutationInTransaction(
+            tx,
+            buildInsuranceSettlementWalletMutationInput({
+              roundId,
+              roundSeat,
+              payoutAmount: sideBet.payoutAmount,
+            }),
+          )
+        : null,
+  };
+}
+
+async function findInsuranceSideBet(
+  tx: WalletMutationTransaction,
+  roundSeatId: string,
+) {
+  const [sideBet] = await tx
+    .select()
+    .from(blackjackSideBets)
+    .where(
+      and(
+        eq(blackjackSideBets.roundSeatId, roundSeatId),
+        eq(blackjackSideBets.type, "INSURANCE"),
+      ),
+    )
+    .limit(1);
+
+  return sideBet ?? null;
+}
+
 function calculatePayoutAmount(
   ruleSnapshot: BlackjackRuleSnapshot,
   wagerAmount: bigint,
   outcome: BlackjackSettlementOutcome,
   outcomeReason: BlackjackSettlementOutcomeReason,
+  evenMoneyAccepted = false,
 ) {
+  if (evenMoneyAccepted) {
+    if (outcome !== "WIN") {
+      throw new BlackjackSettlementError(
+        "INVALID_SETTLEMENT",
+        "Even-money settlement must be a winning outcome.",
+      );
+    }
+
+    return wagerAmount * BigInt(2);
+  }
+
   if (outcomeReason === "SURRENDER") {
     if (outcome !== "LOSE") {
       throw new BlackjackSettlementError(
@@ -499,6 +672,30 @@ function buildSettlementWalletMutationInput(
       handNo: seatInput.handNo,
       outcome: seatInput.outcome,
       outcomeReason: seatInput.outcomeReason,
+    } satisfies JsonObject,
+  };
+}
+
+function buildInsuranceSettlementWalletMutationInput(input: {
+  roundId: string;
+  roundSeat: typeof blackjackRoundSeats.$inferSelect;
+  payoutAmount: bigint;
+}) {
+  return {
+    userId: input.roundSeat.userId,
+    category: "GAME" as const,
+    gameType: "BLACKJACK" as const,
+    type: "PAYOUT" as const,
+    delta: input.payoutAmount,
+    referenceType: "BLACKJACK_ROUND",
+    referenceId: input.roundId,
+    idempotencyKey: `blackjack:insurance:settlement:${input.roundId}:${input.roundSeat.id}`,
+    memo: `Blackjack insurance settlement for seat ${input.roundSeat.seatNo}`,
+    metadata: {
+      seatNo: input.roundSeat.seatNo,
+      roundSeatId: input.roundSeat.id,
+      sideBetType: "INSURANCE",
+      outcomeReason: "DEALER_BLACKJACK",
     } satisfies JsonObject,
   };
 }

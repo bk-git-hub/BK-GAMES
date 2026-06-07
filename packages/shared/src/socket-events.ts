@@ -27,6 +27,7 @@ export type BlackjackTablePhase =
   | "WAITING"
   | "WAITING_BETS"
   | "DEALING"
+  | "INSURANCE_DECISION"
   | "PLAYER_TURNS"
   | "DEALER_TURN"
   | "SETTLING"
@@ -81,7 +82,10 @@ export type BlackjackPlayerAction =
   | "STAND"
   | "DOUBLE"
   | "SPLIT"
-  | "SURRENDER";
+  | "SURRENDER"
+  | "INSURANCE"
+  | "INSURANCE_DECLINE"
+  | "EVEN_MONEY";
 
 export type BlackjackPlaceBetPayload = {
   commandId: string;
@@ -256,6 +260,7 @@ export type BlackjackWalletUpdatedPayload = {
     | "BET_PLACED"
     | "DOUBLE_BET"
     | "SPLIT_BET"
+    | "INSURANCE_BET"
     | "PAYOUT"
     | "PUSH_REFUND"
     | "SURRENDER_REFUND";

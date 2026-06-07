@@ -177,9 +177,13 @@ function createDeterministicService() {
   return new BlackjackTableService({ deckCount: 1, randomSource: () => 0 });
 }
 
-function createRiggedService(shoe: BlackjackCard[]) {
+function createRiggedService(
+  shoe: BlackjackCard[],
+  options: ConstructorParameters<typeof BlackjackTableService>[0] = {},
+) {
   return new BlackjackTableService({
     deckCount: 1,
+    ...options,
     shoeFactory: () => shoe,
   });
 }
@@ -841,6 +845,137 @@ describe('BlackjackTableService', () => {
         outcome: 'LOSE',
         outcomeReason: 'SURRENDER',
       },
+    ]);
+  });
+
+  it('opens insurance decisions when the dealer shows an ace', () => {
+    const service = createRiggedService(
+      [
+        card('8', 'clubs'),
+        card('A', 'clubs'),
+        card('7', 'diamonds'),
+        card('K', 'clubs'),
+      ],
+      { insuranceAllowed: true },
+    );
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    const started = expireBettingWindowOrFail(service);
+
+    expect(started.state.phase).toBe('INSURANCE_DECISION');
+    expect(started.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: 1,
+      currentTurnHandNo: 1,
+    });
+    expect(started.state.seats[0]).toEqual(
+      expect.objectContaining({
+        availableActions: ['INSURANCE', 'INSURANCE_DECLINE'],
+      }),
+    );
+
+    const reservation = service.reserveInsurance({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'insurance-command-1',
+    });
+    const insured = service.confirmInsurance({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: reservation.commandId,
+      roundId: reservation.roundId,
+      roundSeatId: reservation.roundSeatId,
+      amount: reservation.amount,
+    });
+
+    expect(reservation.amount).toBe(250n);
+    expect(insured.event.type).toBe('DEALER_PLAYED');
+    expect(insured.state.phase).toBe('SETTLING');
+    expect(insured.settlement?.dealer.hasBlackjack).toBe(true);
+    expect(insured.settlement?.seats).toEqual([
+      expect.objectContaining({
+        roundSeatId: 'round-seat-1',
+        handNo: 1,
+        outcome: 'LOSE',
+        outcomeReason: 'DEALER_BLACKJACK',
+      }),
+    ]);
+  });
+
+  it('settles accepted even money as a standard 1:1 blackjack win', () => {
+    const service = createRiggedService(
+      [
+        card('A', 'hearts'),
+        card('A', 'clubs'),
+        card('K', 'hearts'),
+        card('K', 'clubs'),
+      ],
+      { evenMoneyAllowed: true },
+    );
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    const started = expireBettingWindowOrFail(service);
+
+    expect(started.state.phase).toBe('INSURANCE_DECISION');
+    expect(started.state.seats[0]?.availableActions).toEqual([
+      'EVEN_MONEY',
+      'INSURANCE_DECLINE',
+    ]);
+
+    const evenMoney = service.acceptEvenMoney({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'even-money-command-1',
+    });
+
+    expect(evenMoney.event.type).toBe('DEALER_PLAYED');
+    expect(evenMoney.state.phase).toBe('SETTLING');
+    expect(evenMoney.settlement?.seats).toEqual([
+      expect.objectContaining({
+        roundSeatId: 'round-seat-1',
+        handNo: 1,
+        outcome: 'WIN',
+        outcomeReason: 'STANDARD',
+        evenMoneyAccepted: true,
+      }),
     ]);
   });
 

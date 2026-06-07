@@ -8,11 +8,13 @@ import {
   blackjackRoundSeats,
   blackjackRounds,
   blackjackShoes,
+  blackjackSideBets,
   blackjackTables,
   db,
   doubleBlackjackBet,
   ensureUserGameAccount,
   placeBlackjackInitialBet,
+  placeBlackjackInsuranceBet,
   pointLedgers,
   pool,
   settleBlackjackRound,
@@ -38,6 +40,9 @@ async function cleanup() {
     await db
       .delete(blackjackActions)
       .where(eq(blackjackActions.roundId, roundId));
+    await db
+      .delete(blackjackSideBets)
+      .where(eq(blackjackSideBets.roundId, roundId));
     await db.delete(blackjackHands).where(eq(blackjackHands.roundId, roundId));
     await db
       .delete(blackjackRoundSeats)
@@ -84,6 +89,7 @@ try {
     maxTotalBetPerUser: 42_000n,
     maxSeats: 7,
     maxSeatsPerUser: 7,
+    insuranceAllowed: true,
   });
   await applyWalletMutation({
     userId,
@@ -145,6 +151,20 @@ try {
     sourceHandNo: 1,
     userId,
     commandId: "split-command-1",
+  });
+  const insuranceBet = await placeBlackjackInsuranceBet({
+    roundId: firstBet.round.id,
+    roundSeatId: thirdBet.roundSeat.id,
+    seatNo: 3,
+    userId,
+    commandId: "insurance-command-1",
+  });
+  const insuranceBetRetry = await placeBlackjackInsuranceBet({
+    roundId: firstBet.round.id,
+    roundSeatId: thirdBet.roundSeat.id,
+    seatNo: 3,
+    userId,
+    commandId: "insurance-command-1",
   });
 
   const settlementInput = {
@@ -257,6 +277,10 @@ try {
     splitBetNewHandNo: splitBet.newHandNo,
     splitBetTotalWager: splitBet.totalWagerAmount.toString(),
     splitBetRetryIdempotent: splitBetRetry.walletMutation.idempotent,
+    insuranceBetAmount: insuranceBet.amount.toString(),
+    insuranceBetRetryIdempotent: insuranceBetRetry.walletMutation.idempotent,
+    insuranceSideBetOutcome: settlement.sideBets[0]?.outcome,
+    insuranceSideBetPayout: settlement.sideBets[0]?.payoutAmount.toString(),
     retryFirstIdempotent: retry.seats[0]?.walletMutation?.idempotent,
     retrySecondIdempotent: retry.seats[1]?.walletMutation?.idempotent,
     retrySplitWinIdempotent: retry.seats[2]?.walletMutation?.idempotent,
@@ -278,13 +302,17 @@ try {
     summary.splitBetNewHandNo !== 2 ||
     summary.splitBetTotalWager !== "1000" ||
     !summary.splitBetRetryIdempotent ||
+    summary.insuranceBetAmount !== "250" ||
+    !summary.insuranceBetRetryIdempotent ||
+    summary.insuranceSideBetOutcome !== "LOSE" ||
+    summary.insuranceSideBetPayout !== "0" ||
     !summary.retryFirstIdempotent ||
     !summary.retrySecondIdempotent ||
     !summary.retrySplitWinIdempotent ||
     !summary.retryThirdIdempotent ||
     summary.surrenderLedgerDelta !== "250" ||
-    summary.finalBalance !== "11250" ||
-    summary.ledgerCount !== 10
+    summary.finalBalance !== "11000" ||
+    summary.ledgerCount !== 11
   ) {
     throw new Error(
       `Unexpected blackjack settlement smoke result: ${JSON.stringify(

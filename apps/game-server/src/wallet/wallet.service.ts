@@ -36,6 +36,12 @@ export class WalletService {
 
     return db.splitBlackjackBet(input);
   }
+
+  async placeBlackjackInsuranceBet(input: PlaceBlackjackInsuranceBetInput) {
+    const db = (await import(dbPackageName)) as BlackjackDbModule;
+
+    return db.placeBlackjackInsuranceBet(input);
+  }
 }
 
 export type PlaceBlackjackInitialBetInput = {
@@ -63,6 +69,14 @@ export type SplitBlackjackBetInput = {
   commandId: string;
 };
 
+export type PlaceBlackjackInsuranceBetInput = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  commandId: string;
+};
+
 type BlackjackDbModule = {
   placeBlackjackInitialBet(
     input: DbPlaceBlackjackInitialBetInput,
@@ -73,6 +87,9 @@ type BlackjackDbModule = {
   splitBlackjackBet(
     input: SplitBlackjackBetInput,
   ): Promise<SplitBlackjackBetResult>;
+  placeBlackjackInsuranceBet(
+    input: PlaceBlackjackInsuranceBetInput,
+  ): Promise<PlaceBlackjackInsuranceBetResult>;
   settleBlackjackRound(
     input: DbSettleBlackjackRoundInput,
   ): Promise<BlackjackSettlementResult>;
@@ -136,9 +153,26 @@ export type SplitBlackjackBetResult = {
   };
 };
 
+export type PlaceBlackjackInsuranceBetResult = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  amount: bigint | string;
+  walletMutation: {
+    wallet: { balance: bigint | string };
+    ledger: {
+      id: string;
+      type: 'INSURANCE_BET';
+      delta: bigint | string;
+    };
+  };
+};
+
 export type BlackjackSettlementResult = {
   roundId: string;
   seats: BlackjackSettlementSeatResult[];
+  sideBets: BlackjackSettlementSideBetResult[];
 };
 
 export type BlackjackSettlementSeatResult = {
@@ -155,6 +189,25 @@ export type BlackjackSettlementSeatResult = {
     ledger: {
       id: string;
       type: 'PAYOUT' | 'PUSH_REFUND' | 'SURRENDER_REFUND';
+      delta: bigint | string;
+    };
+  } | null;
+};
+
+export type BlackjackSettlementSideBetResult = {
+  roundSeatId: string;
+  userId: string;
+  seatNo: number;
+  type: 'INSURANCE';
+  outcome: 'WIN' | 'LOSE';
+  outcomeReason: 'DEALER_BLACKJACK' | 'DEALER_NO_BLACKJACK';
+  payoutAmount: bigint | string;
+  netAmount: bigint | string;
+  walletMutation: {
+    wallet: { balance: bigint | string };
+    ledger: {
+      id: string;
+      type: 'PAYOUT';
       delta: bigint | string;
     };
   } | null;

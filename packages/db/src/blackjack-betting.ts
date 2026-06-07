@@ -7,6 +7,7 @@ import {
   blackjackHands,
   blackjackRoundSeats,
   blackjackRounds,
+  blackjackSideBets,
   blackjackShoes,
   blackjackTables,
   type BlackjackRuleSnapshot,
@@ -106,6 +107,23 @@ export type SplitBlackjackBetResult = {
   userId: string;
   amount: bigint;
   totalWagerAmount: bigint;
+  walletMutation: WalletMutationResult;
+};
+
+export type PlaceBlackjackInsuranceBetInput = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  commandId: string;
+};
+
+export type PlaceBlackjackInsuranceBetResult = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  amount: bigint;
   walletMutation: WalletMutationResult;
 };
 
@@ -217,6 +235,26 @@ type LockedSplitContextRow = Omit<
   totalWagerAmount: bigint | string;
   sourceHandInitialBetAmount: bigint | string;
   sourceHandFinalBetAmount: bigint | string;
+};
+
+type LockedInsuranceContext = {
+  roundId: string;
+  roundStatus: string;
+  ruleSnapshot: BlackjackRuleSnapshot;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  roundSeatStatus: string;
+  handId: string;
+  handStatus: string;
+  initialBetAmount: bigint;
+};
+
+type LockedInsuranceContextRow = Omit<
+  LockedInsuranceContext,
+  "initialBetAmount"
+> & {
+  initialBetAmount: bigint | string;
 };
 
 export async function ensureMainBlackjackTable() {
@@ -617,6 +655,99 @@ export async function splitBlackjackBetInTransaction(
     userId: input.userId,
     amount: splitAmount,
     totalWagerAmount,
+    walletMutation,
+  };
+}
+
+export async function placeBlackjackInsuranceBet(
+  input: PlaceBlackjackInsuranceBetInput,
+): Promise<PlaceBlackjackInsuranceBetResult> {
+  const normalizedInput = normalizeInsuranceBetInput(input);
+
+  return db.transaction((tx) =>
+    placeBlackjackInsuranceBetInTransaction(tx, normalizedInput),
+  );
+}
+
+export async function placeBlackjackInsuranceBetInTransaction(
+  tx: WalletMutationTransaction,
+  input: PlaceBlackjackInsuranceBetInput,
+): Promise<PlaceBlackjackInsuranceBetResult> {
+  const context = await lockInsuranceContext(tx, input);
+  const amount = context.initialBetAmount / BigInt(2);
+  const serverCommandId = buildServerCommandId(input);
+  const existingAction = await findBetActionByCommandId(
+    tx,
+    input.roundId,
+    serverCommandId,
+  );
+
+  if (existingAction) {
+    assertExistingInsuranceActionMatches(existingAction, context, input, amount);
+
+    return {
+      roundId: input.roundId,
+      roundSeatId: input.roundSeatId,
+      seatNo: input.seatNo,
+      userId: input.userId,
+      amount,
+      walletMutation: await applyWalletMutationInTransaction(
+        tx,
+        buildInsuranceWalletMutationInput(input, amount),
+      ),
+    };
+  }
+
+  assertInsuranceAllowed(context, amount);
+
+  const [sideBet] = await tx
+    .insert(blackjackSideBets)
+    .values({
+      roundId: input.roundId,
+      roundSeatId: input.roundSeatId,
+      type: "INSURANCE",
+      amount,
+      netAmount: -amount,
+    })
+    .onConflictDoNothing({
+      target: [blackjackSideBets.roundSeatId, blackjackSideBets.type],
+    })
+    .returning();
+
+  if (!sideBet) {
+    throw new BlackjackBettingError(
+      "ACTION_NOT_ALLOWED",
+      `Insurance was already placed for round seat ${input.roundSeatId}.`,
+    );
+  }
+
+  await tx.insert(blackjackActions).values({
+    roundId: input.roundId,
+    roundSeatId: input.roundSeatId,
+    handId: context.handId,
+    userId: input.userId,
+    actorType: "PLAYER",
+    actionType: "INSURANCE_ACCEPT",
+    actionSequence: await nextActionSequence(tx, input.roundId),
+    commandId: serverCommandId,
+    amount,
+    payload: {
+      seatNo: input.seatNo,
+      clientCommandId: input.commandId,
+    },
+  });
+
+  const walletMutation = await applyWalletMutationInTransaction(
+    tx,
+    buildInsuranceWalletMutationInput(input, amount),
+  );
+
+  return {
+    roundId: input.roundId,
+    roundSeatId: input.roundSeatId,
+    seatNo: input.seatNo,
+    userId: input.userId,
+    amount,
     walletMutation,
   };
 }
@@ -1141,6 +1272,85 @@ async function assertSplitBetAmountAllowed(
   }
 }
 
+async function lockInsuranceContext(
+  tx: WalletMutationTransaction,
+  input: PlaceBlackjackInsuranceBetInput,
+): Promise<LockedInsuranceContext> {
+  const result = await tx.execute(sql<LockedInsuranceContextRow>`
+    select
+      r.id as "roundId",
+      r.status as "roundStatus",
+      r.rule_snapshot as "ruleSnapshot",
+      rs.id as "roundSeatId",
+      rs.seat_no as "seatNo",
+      rs.user_id as "userId",
+      rs.status as "roundSeatStatus",
+      h.id as "handId",
+      h.status as "handStatus",
+      h.initial_bet_amount as "initialBetAmount"
+    from blackjack_rounds r
+    inner join blackjack_round_seats rs on rs.round_id = r.id
+    inner join blackjack_hands h on h.round_seat_id = rs.id
+    where r.id = ${input.roundId}
+      and rs.id = ${input.roundSeatId}
+      and h.hand_no = 1
+    for update of r, rs, h
+  `);
+  const [row] = getRows<LockedInsuranceContextRow>(result);
+
+  if (!row) {
+    throw new BlackjackBettingError(
+      "ROUND_SEAT_NOT_FOUND",
+      `Round seat ${input.roundSeatId} was not found for insurance.`,
+    );
+  }
+
+  if (row.userId !== input.userId || row.seatNo !== input.seatNo) {
+    throw new BlackjackBettingError(
+      "IDEMPOTENCY_CONFLICT",
+      `Round seat ${input.roundSeatId} does not match the insurance payload.`,
+    );
+  }
+
+  return {
+    ...row,
+    initialBetAmount: toBigInt(row.initialBetAmount),
+  };
+}
+
+function assertInsuranceAllowed(context: LockedInsuranceContext, amount: bigint) {
+  if (context.roundStatus === "SETTLED" || context.roundStatus === "CANCELLED") {
+    throw new BlackjackBettingError(
+      "ROUND_NOT_ACTIVE",
+      `Round ${context.roundId} is ${context.roundStatus}.`,
+    );
+  }
+
+  if (!context.ruleSnapshot.insuranceAllowed) {
+    throw new BlackjackBettingError(
+      "ACTION_NOT_ALLOWED",
+      `Insurance is not allowed for round ${context.roundId}.`,
+    );
+  }
+
+  if (
+    context.roundSeatStatus !== "ACTIVE" ||
+    (context.handStatus !== "ACTIVE" && context.handStatus !== "SETTLED")
+  ) {
+    throw new BlackjackBettingError(
+      "ACTION_NOT_ALLOWED",
+      `Round seat ${context.roundSeatId} cannot place insurance.`,
+    );
+  }
+
+  if (amount <= zero) {
+    throw new BlackjackBettingError(
+      "INVALID_BET_AMOUNT",
+      "Insurance amount must be positive.",
+    );
+  }
+}
+
 async function findBetActionByCommandId(
   tx: WalletMutationTransaction,
   roundId: string,
@@ -1303,6 +1513,28 @@ function buildSplitWalletMutationInput(
   };
 }
 
+function buildInsuranceWalletMutationInput(
+  input: PlaceBlackjackInsuranceBetInput,
+  amount: bigint,
+) {
+  return {
+    userId: input.userId,
+    category: "GAME" as const,
+    gameType: "BLACKJACK" as const,
+    type: "INSURANCE_BET" as const,
+    delta: -amount,
+    referenceType: "BLACKJACK_ROUND",
+    referenceId: input.roundId,
+    idempotencyKey: `blackjack:insurance:${input.roundId}:${input.roundSeatId}:${input.userId}:${input.commandId}`,
+    memo: `Blackjack insurance for seat ${input.seatNo}`,
+    metadata: {
+      seatNo: input.seatNo,
+      roundSeatId: input.roundSeatId,
+      commandId: input.commandId,
+    } satisfies JsonObject,
+  };
+}
+
 function assertExistingBetActionMatches(
   action: typeof blackjackActions.$inferSelect,
   roundSeat: typeof blackjackRoundSeats.$inferSelect,
@@ -1378,6 +1610,29 @@ function assertExistingSplitActionMatches(
   }
 
   return newHandNo;
+}
+
+function assertExistingInsuranceActionMatches(
+  action: typeof blackjackActions.$inferSelect,
+  context: LockedInsuranceContext,
+  input: PlaceBlackjackInsuranceBetInput,
+  amount: bigint,
+) {
+  const mismatched =
+    action.actionType !== "INSURANCE_ACCEPT" ||
+    action.userId !== input.userId ||
+    action.roundSeatId !== input.roundSeatId ||
+    action.handId !== context.handId ||
+    action.amount !== amount ||
+    context.userId !== input.userId ||
+    context.seatNo !== input.seatNo;
+
+  if (mismatched) {
+    throw new BlackjackBettingError(
+      "IDEMPOTENCY_CONFLICT",
+      `Command ${input.commandId} was reused with different insurance details.`,
+    );
+  }
 }
 
 function buildServerCommandId(input: { userId: string; commandId: string }) {
@@ -1546,6 +1801,58 @@ function normalizeSplitBetInput(
     roundSeatId,
     seatNo: input.seatNo,
     sourceHandNo: input.sourceHandNo,
+    userId,
+    commandId,
+  };
+}
+
+function normalizeInsuranceBetInput(
+  input: PlaceBlackjackInsuranceBetInput,
+): PlaceBlackjackInsuranceBetInput {
+  const roundId = input.roundId.trim();
+  const roundSeatId = input.roundSeatId.trim();
+  const userId = input.userId.trim();
+  const commandId = input.commandId.trim();
+
+  if (!roundId) {
+    throw new BlackjackBettingError(
+      "ROUND_NOT_ACTIVE",
+      "roundId is required for insurance.",
+    );
+  }
+
+  if (!roundSeatId) {
+    throw new BlackjackBettingError(
+      "ROUND_SEAT_NOT_FOUND",
+      "roundSeatId is required for insurance.",
+    );
+  }
+
+  if (!Number.isInteger(input.seatNo) || input.seatNo < 1 || input.seatNo > 7) {
+    throw new BlackjackBettingError(
+      "INVALID_SEAT_NO",
+      "seatNo must be an integer between 1 and 7.",
+    );
+  }
+
+  if (!userId) {
+    throw new BlackjackBettingError(
+      "IDEMPOTENCY_CONFLICT",
+      "userId is required for insurance.",
+    );
+  }
+
+  if (!commandId) {
+    throw new BlackjackBettingError(
+      "INVALID_COMMAND_ID",
+      "commandId is required for insurance.",
+    );
+  }
+
+  return {
+    roundId,
+    roundSeatId,
+    seatNo: input.seatNo,
     userId,
     commandId,
   };

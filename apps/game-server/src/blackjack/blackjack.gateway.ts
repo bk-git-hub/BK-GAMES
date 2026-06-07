@@ -193,6 +193,38 @@ export class BlackjackGateway {
       async () => {
         const user = this.resolveSocketUser(socket);
 
+        if (body.action === 'INSURANCE') {
+          await this.handleInsurance(socket, body, user);
+          return;
+        }
+
+        if (body.action === 'INSURANCE_DECLINE') {
+          const update = this.tableService.declineInsurance({
+            tableId: body.tableId,
+            seatNo: body.seatNo,
+            socketId: socket.id,
+            user,
+          });
+
+          this.emitTableUpdate(update);
+          await this.settleRoundIfNeeded(update);
+          return;
+        }
+
+        if (body.action === 'EVEN_MONEY') {
+          const update = this.tableService.acceptEvenMoney({
+            tableId: body.tableId,
+            seatNo: body.seatNo,
+            socketId: socket.id,
+            user,
+            commandId: body.commandId,
+          });
+
+          this.emitTableUpdate(update);
+          await this.settleRoundIfNeeded(update);
+          return;
+        }
+
         if (body.action === 'DOUBLE') {
           await this.handleDoubleDown(socket, body, user);
           return;
@@ -337,6 +369,63 @@ export class BlackjackGateway {
     }
   }
 
+  private async handleInsurance(
+    socket: Socket,
+    body: BlackjackPlayerActionPayload,
+    user: BlackjackSocketUser,
+  ) {
+    const commandId = readRequiredCommandId(body.commandId, 'insurance');
+    const reservation = this.tableService.reserveInsurance({
+      tableId: body.tableId,
+      seatNo: body.seatNo,
+      socketId: socket.id,
+      user,
+      commandId,
+    });
+
+    try {
+      const insuranceResult =
+        await this.walletService.placeBlackjackInsuranceBet({
+          roundId: reservation.roundId,
+          roundSeatId: reservation.roundSeatId,
+          seatNo: reservation.seatNo,
+          userId: user.userId,
+          commandId: reservation.commandId,
+        });
+      const update = this.tableService.confirmInsurance({
+        tableId: reservation.tableId,
+        seatNo: reservation.seatNo,
+        socketId: socket.id,
+        user,
+        commandId: reservation.commandId,
+        roundId: reservation.roundId,
+        roundSeatId: reservation.roundSeatId,
+        amount: toBigInt(insuranceResult.amount),
+      });
+
+      void socket.join(blackjackTableRoom(update.state.tableId));
+      void socket.join(blackjackUserRoom(user.userId));
+      this.emitTableUpdate(update);
+      this.emitWalletUpdated(user.userId, {
+        balance: insuranceResult.walletMutation.wallet.balance.toString(),
+        delta: insuranceResult.walletMutation.ledger.delta.toString(),
+        reason: 'INSURANCE_BET',
+        ledgerId: insuranceResult.walletMutation.ledger.id,
+      });
+      await this.settleRoundIfNeeded(update);
+    } catch (error) {
+      if (reservation.kind === 'reserved') {
+        this.tableService.cancelInsuranceReservation({
+          tableId: reservation.tableId,
+          seatNo: reservation.seatNo,
+          commandId: reservation.commandId,
+        });
+      }
+
+      throw error;
+    }
+  }
+
   private handleCommand(
     socket: Socket,
     event: BlackjackClientEvent,
@@ -391,6 +480,19 @@ export class BlackjackGateway {
         delta: seat.walletMutation.ledger.delta.toString(),
         reason: seat.walletMutation.ledger.type,
         ledgerId: seat.walletMutation.ledger.id,
+      });
+    }
+
+    for (const sideBet of settlement.sideBets) {
+      if (!sideBet.walletMutation) {
+        continue;
+      }
+
+      this.emitWalletUpdated(sideBet.userId, {
+        balance: sideBet.walletMutation.wallet.balance.toString(),
+        delta: sideBet.walletMutation.ledger.delta.toString(),
+        reason: sideBet.walletMutation.ledger.type,
+        ledgerId: sideBet.walletMutation.ledger.id,
       });
     }
 

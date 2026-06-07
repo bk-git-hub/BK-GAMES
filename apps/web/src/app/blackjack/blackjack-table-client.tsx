@@ -64,7 +64,12 @@ export function BlackjackTableClient({
     parsePositiveInteger(seatNoInput) ?? mySeats[0]?.seatNo ?? null;
   const selectedSeat = mySeats.find((seat) => seat.seatNo === selectedSeatNo);
   const activeSeat =
-    mySeats.find((seat) => seat.isCurrentTurn || seat.activeHandNo !== null) ??
+    mySeats.find(
+      (seat) =>
+        seat.isCurrentTurn ||
+        seat.activeHandNo !== null ||
+        seat.hands.some((hand) => hand.isCurrentTurn),
+    ) ??
     mySeats[0] ??
     null;
   const activeHand = activeSeat
@@ -447,17 +452,13 @@ function SeatSpot({
   seat: BlackjackSeatSnapshot;
 }) {
   const activeHand = findActiveHand(seat) ?? seat.hands[0] ?? null;
-  const cards = activeHand?.cards.length ? activeHand.cards : seat.cards;
-  const ownerKeys = [`seat:${seat.seatNo}`, "table"];
-
-  if (activeHand) {
-    ownerKeys.push(`seat:${seat.seatNo}:hand:${activeHand.handNo}`);
-  }
+  const hasSplitHands = seat.hands.length > 1;
 
   return (
     <article
       className={cn(
-        "absolute flex w-[210px] flex-col gap-2 rounded-2xl border bg-[#06150f]/85 p-3 text-white shadow-2xl backdrop-blur-md",
+        "absolute flex flex-col gap-2 rounded-2xl border bg-[#06150f]/85 p-3 text-white shadow-2xl backdrop-blur-md",
+        hasSplitHands ? "w-[260px]" : "w-[210px]",
         seatPositionClass(index),
         isMine ? "border-amber-300/80" : "border-white/15",
         seat.isCurrentTurn && "ring-2 ring-amber-200",
@@ -486,25 +487,120 @@ function SeatSpot({
       <div className="grid grid-cols-2 gap-2 text-xs">
         <MiniMetric label="Bet" value={formatNullablePoints(seat.betAmount)} />
         <MiniMetric
-          label="Score"
-          value={seat.score ? `${seat.score}${seat.isSoft ? " soft" : ""}` : "-"}
+          label={hasSplitHands ? "Active" : "Score"}
+          value={formatHandScore(activeHand)}
         />
       </div>
 
-      <CardFan
+      <SeatHands
         animationKeys={cardAnimationKeys}
-        cards={cards}
-        emptyLabel="No cards"
-        ownerKeys={ownerKeys}
-        size="sm"
+        fallbackCards={seat.cards}
+        seat={seat}
       />
 
       <div className="flex flex-wrap gap-1">
         <FeltBadge>{seat.handStatus}</FeltBadge>
+        {hasSplitHands ? <FeltBadge>{seat.hands.length} hands</FeltBadge> : null}
         {seat.activeHandNo ? <FeltBadge>Hand {seat.activeHandNo}</FeltBadge> : null}
         {seat.outcome ? <FeltBadge>{seat.outcome}</FeltBadge> : null}
       </div>
     </article>
+  );
+}
+
+function SeatHands({
+  animationKeys,
+  fallbackCards,
+  seat,
+}: {
+  animationKeys: ReadonlySet<string>;
+  fallbackCards: BlackjackCardSnapshot[];
+  seat: BlackjackSeatSnapshot;
+}) {
+  if (seat.hands.length > 1) {
+    return (
+      <div className="grid gap-2">
+        {seat.hands.map((hand) => (
+          <SeatHandPanel
+            animationKeys={animationKeys}
+            hand={hand}
+            isActive={isSeatHandActive(seat, hand)}
+            key={hand.handNo}
+            seatNo={seat.seatNo}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const hand = seat.hands[0] ?? null;
+  const cards = hand?.cards.length ? hand.cards : fallbackCards;
+  const ownerKeys = [`seat:${seat.seatNo}`, "table"];
+
+  if (hand) {
+    ownerKeys.push(`seat:${seat.seatNo}:hand:${hand.handNo}`);
+  }
+
+  return (
+    <CardFan
+      animationKeys={animationKeys}
+      cards={cards}
+      emptyLabel="No cards"
+      ownerKeys={ownerKeys}
+      size="sm"
+    />
+  );
+}
+
+function SeatHandPanel({
+  animationKeys,
+  hand,
+  isActive,
+  seatNo,
+}: {
+  animationKeys: ReadonlySet<string>;
+  hand: BlackjackHandSnapshot;
+  isActive: boolean;
+  seatNo: number;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border bg-black/20 p-2 transition",
+        isActive
+          ? "border-amber-300/80 bg-amber-300/10 ring-1 ring-amber-200/50"
+          : "border-white/10",
+      )}
+    >
+      <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
+        <span className="font-semibold text-white">Hand {hand.handNo}</span>
+        <span className={isActive ? "text-amber-100" : "text-white/55"}>
+          {isActive ? "Active" : formatEnumLabel(hand.handStatus)}
+        </span>
+      </div>
+      <div className="overflow-x-auto pb-1">
+        <CardFan
+          animationKeys={animationKeys}
+          cards={hand.cards}
+          emptyLabel="No cards"
+          ownerKeys={[
+            `seat:${seatNo}`,
+            `seat:${seatNo}:hand:${hand.handNo}`,
+            "table",
+          ]}
+          size="sm"
+        />
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-white/55">
+        <span>{formatHandScore(hand)}</span>
+        <span>{formatNullablePoints(hand.betAmount)}</span>
+      </div>
+      {hand.outcome ? (
+        <div className="mt-1 text-[11px] font-semibold text-amber-100">
+          {formatEnumLabel(hand.outcome)}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -677,6 +773,9 @@ function ActionRail({
                 : "No active seat"}
             </FeltBadge>
           </div>
+          {activeSeat && activeSeat.hands.length > 1 ? (
+            <ActionHandSummary activeSeat={activeSeat} />
+          ) : null}
           {actions.length ? (
             <div className="grid grid-cols-2 gap-2">
               {actions.map((action) => (
@@ -715,6 +814,44 @@ function ActionRail({
         </Button>
       </div>
     </section>
+  );
+}
+
+function ActionHandSummary({
+  activeSeat,
+}: {
+  activeSeat: BlackjackSeatSnapshot;
+}) {
+  return (
+    <div className="mb-3 grid gap-2">
+      {activeSeat.hands.map((hand) => {
+        const isActive = isSeatHandActive(activeSeat, hand);
+
+        return (
+          <div
+            className={cn(
+              "rounded-xl border px-3 py-2 text-xs",
+              isActive
+                ? "border-amber-300/70 bg-amber-300/10 text-amber-50"
+                : "border-white/10 bg-white/[0.04] text-white/60",
+            )}
+            key={hand.handNo}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold">Hand {hand.handNo}</span>
+              <span>
+                {isActive ? "Current turn" : formatEnumLabel(hand.handStatus)}
+              </span>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>{formatHandScore(hand)}</span>
+              <span>{formatNullablePoints(hand.betAmount)}</span>
+              {hand.outcome ? <span>{formatEnumLabel(hand.outcome)}</span> : null}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1164,6 +1301,13 @@ function findActiveHand(seat: BlackjackSeatSnapshot) {
   );
 }
 
+function isSeatHandActive(
+  seat: BlackjackSeatSnapshot,
+  hand: BlackjackHandSnapshot,
+) {
+  return hand.handNo === seat.activeHandNo || hand.isCurrentTurn;
+}
+
 function parsePositiveInteger(value: string) {
   if (!value.trim()) {
     return null;
@@ -1182,6 +1326,14 @@ function formatNullablePoints(value: string | null) {
   return value ? `${formatPoints(value)} pts` : "-";
 }
 
+function formatHandScore(hand: BlackjackHandSnapshot | null) {
+  if (!hand || hand.score === null) {
+    return "-";
+  }
+
+  return `${hand.score}${hand.isSoft ? " soft" : ""}`;
+}
+
 function formatSignedPoints(value: string) {
   const numericValue = Number(value);
   const sign = numericValue > 0 ? "+" : "";
@@ -1190,7 +1342,11 @@ function formatSignedPoints(value: string) {
 }
 
 function formatActionLabel(action: BlackjackPlayerAction) {
-  return action
+  return formatEnumLabel(action);
+}
+
+function formatEnumLabel(value: string) {
+  return value
     .toLowerCase()
     .split("_")
     .map((part) => part[0]?.toUpperCase() + part.slice(1))

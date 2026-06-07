@@ -24,6 +24,12 @@ export class WalletService {
       seats: input.seats,
     });
   }
+
+  async doubleBlackjackBet(input: DoubleBlackjackBetInput) {
+    const db = (await import(dbPackageName)) as BlackjackDbModule;
+
+    return db.doubleBlackjackBet(input);
+  }
 }
 
 export type PlaceBlackjackInitialBetInput = {
@@ -34,10 +40,21 @@ export type PlaceBlackjackInitialBetInput = {
   commandId: string;
 };
 
+export type DoubleBlackjackBetInput = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  commandId: string;
+};
+
 type BlackjackDbModule = {
   placeBlackjackInitialBet(
     input: DbPlaceBlackjackInitialBetInput,
   ): Promise<BlackjackInitialBetResult>;
+  doubleBlackjackBet(
+    input: DoubleBlackjackBetInput,
+  ): Promise<DoubleBlackjackBetResult>;
   settleBlackjackRound(
     input: DbSettleBlackjackRoundInput,
   ): Promise<BlackjackSettlementResult>;
@@ -60,6 +77,23 @@ export type BlackjackInitialBetResult = {
     wallet: { balance: bigint | string };
     ledger: {
       id: string;
+      delta: bigint | string;
+    };
+  };
+};
+
+export type DoubleBlackjackBetResult = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  amount: bigint | string;
+  totalWagerAmount: bigint | string;
+  walletMutation: {
+    wallet: { balance: bigint | string };
+    ledger: {
+      id: string;
+      type: 'DOUBLE_BET';
       delta: bigint | string;
     };
   };

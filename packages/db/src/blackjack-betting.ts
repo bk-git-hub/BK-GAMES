@@ -35,10 +35,13 @@ export type BlackjackBettingErrorCode =
   | "INVALID_SEAT_NO"
   | "INVALID_COMMAND_ID"
   | "INVALID_BET_AMOUNT"
+  | "ROUND_NOT_ACTIVE"
+  | "ROUND_SEAT_NOT_FOUND"
   | "BETTING_CLOSED"
   | "BET_ALREADY_PLACED"
   | "BET_TOO_LOW"
   | "BET_TOO_HIGH"
+  | "ACTION_NOT_ALLOWED"
   | "IDEMPOTENCY_CONFLICT";
 
 export class BlackjackBettingError extends Error {
@@ -65,6 +68,24 @@ export type PlaceBlackjackInitialBetResult = {
   roundSeat: typeof blackjackRoundSeats.$inferSelect;
   walletMutation: WalletMutationResult;
   maxInitialBet: bigint;
+};
+
+export type DoubleBlackjackBetInput = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  commandId: string;
+};
+
+export type DoubleBlackjackBetResult = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  amount: bigint;
+  totalWagerAmount: bigint;
+  walletMutation: WalletMutationResult;
 };
 
 export type BlackjackRuntimeTable = {
@@ -105,6 +126,39 @@ type LockedBlackjackTableRow = Omit<
   status: string;
   surrenderMode: string;
   cardCountingMode: string;
+};
+
+type LockedDoubleDownContext = {
+  roundId: string;
+  roundStatus: string;
+  ruleSnapshot: BlackjackRuleSnapshot;
+  tableMaxTotalBetPerSeat: bigint;
+  tableMaxTotalBetPerUser: bigint;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  roundSeatStatus: string;
+  totalWagerAmount: bigint;
+  handId: string;
+  handStatus: string;
+  initialBetAmount: bigint;
+  finalBetAmount: bigint;
+  isDoubled: boolean;
+};
+
+type LockedDoubleDownContextRow = Omit<
+  LockedDoubleDownContext,
+  | "tableMaxTotalBetPerSeat"
+  | "tableMaxTotalBetPerUser"
+  | "totalWagerAmount"
+  | "initialBetAmount"
+  | "finalBetAmount"
+> & {
+  tableMaxTotalBetPerSeat: bigint | string;
+  tableMaxTotalBetPerUser: bigint | string;
+  totalWagerAmount: bigint | string;
+  initialBetAmount: bigint | string;
+  finalBetAmount: bigint | string;
 };
 
 export async function ensureMainBlackjackTable() {
@@ -272,6 +326,109 @@ export async function placeBlackjackInitialBetInTransaction(
     roundSeat,
     walletMutation,
     maxInitialBet,
+  };
+}
+
+export async function doubleBlackjackBet(
+  input: DoubleBlackjackBetInput,
+): Promise<DoubleBlackjackBetResult> {
+  const normalizedInput = normalizeDoubleBetInput(input);
+
+  return db.transaction((tx) =>
+    doubleBlackjackBetInTransaction(tx, normalizedInput),
+  );
+}
+
+export async function doubleBlackjackBetInTransaction(
+  tx: WalletMutationTransaction,
+  input: DoubleBlackjackBetInput,
+): Promise<DoubleBlackjackBetResult> {
+  const context = await lockDoubleDownContext(tx, input);
+  const doubleAmount = context.initialBetAmount;
+  const serverCommandId = buildServerCommandId(input);
+  const existingAction = await findBetActionByCommandId(
+    tx,
+    input.roundId,
+    serverCommandId,
+  );
+
+  if (existingAction) {
+    assertExistingDoubleActionMatches(existingAction, context, input);
+
+    return {
+      roundId: input.roundId,
+      roundSeatId: input.roundSeatId,
+      seatNo: input.seatNo,
+      userId: input.userId,
+      amount: doubleAmount,
+      totalWagerAmount: context.totalWagerAmount,
+      walletMutation: await applyWalletMutationInTransaction(
+        tx,
+        buildDoubleWalletMutationInput(input, doubleAmount),
+      ),
+    };
+  }
+
+  assertDoubleDownAllowed(context);
+  await assertDoubleBetAmountAllowed(tx, {
+    context,
+    userId: input.userId,
+    amount: doubleAmount,
+  });
+
+  const now = new Date();
+  const totalWagerAmount = context.totalWagerAmount + doubleAmount;
+  const finalBetAmount = context.finalBetAmount + doubleAmount;
+
+  await tx
+    .update(blackjackRoundSeats)
+    .set({
+      totalWagerAmount,
+      netAmount: -totalWagerAmount,
+      updatedAt: now,
+    })
+    .where(eq(blackjackRoundSeats.id, input.roundSeatId));
+
+  await tx
+    .update(blackjackHands)
+    .set({
+      status: "DOUBLED",
+      finalBetAmount,
+      netAmount: -finalBetAmount,
+      isDoubled: true,
+      updatedAt: now,
+    })
+    .where(eq(blackjackHands.id, context.handId));
+
+  await tx.insert(blackjackActions).values({
+    roundId: input.roundId,
+    roundSeatId: input.roundSeatId,
+    handId: context.handId,
+    userId: input.userId,
+    actorType: "PLAYER",
+    actionType: "DOUBLE",
+    actionSequence: await nextActionSequence(tx, input.roundId),
+    commandId: serverCommandId,
+    amount: doubleAmount,
+    payload: {
+      seatNo: input.seatNo,
+      clientCommandId: input.commandId,
+    },
+  });
+
+  const walletMutation = await applyWalletMutationInTransaction(
+    tx,
+    buildDoubleWalletMutationInput(input, doubleAmount),
+  );
+
+  return {
+    roundId: input.roundId,
+    roundSeatId: input.roundSeatId,
+    seatNo: input.seatNo,
+    userId: input.userId,
+    amount: doubleAmount,
+    totalWagerAmount,
+    walletMutation,
   };
 }
 
@@ -535,6 +692,125 @@ async function getActiveRoundWagerForUser(
   return row ? toBigInt(row.totalWager) : zero;
 }
 
+async function lockDoubleDownContext(
+  tx: WalletMutationTransaction,
+  input: DoubleBlackjackBetInput,
+): Promise<LockedDoubleDownContext> {
+  const result = await tx.execute(sql<LockedDoubleDownContextRow>`
+    select
+      r.id as "roundId",
+      r.status as "roundStatus",
+      r.rule_snapshot as "ruleSnapshot",
+      t.max_total_bet_per_seat as "tableMaxTotalBetPerSeat",
+      t.max_total_bet_per_user as "tableMaxTotalBetPerUser",
+      rs.id as "roundSeatId",
+      rs.seat_no as "seatNo",
+      rs.user_id as "userId",
+      rs.status as "roundSeatStatus",
+      rs.total_wager_amount as "totalWagerAmount",
+      h.id as "handId",
+      h.status as "handStatus",
+      h.initial_bet_amount as "initialBetAmount",
+      h.final_bet_amount as "finalBetAmount",
+      h.is_doubled as "isDoubled"
+    from blackjack_rounds r
+    inner join blackjack_tables t on t.id = r.table_id
+    inner join blackjack_round_seats rs on rs.round_id = r.id
+    inner join blackjack_hands h on h.round_seat_id = rs.id
+    where r.id = ${input.roundId}
+      and rs.id = ${input.roundSeatId}
+      and h.hand_no = 1
+    for update of r, rs, h
+  `);
+  const [row] = getRows<LockedDoubleDownContextRow>(result);
+
+  if (!row) {
+    throw new BlackjackBettingError(
+      "ROUND_SEAT_NOT_FOUND",
+      `Round seat ${input.roundSeatId} was not found for double down.`,
+    );
+  }
+
+  if (row.userId !== input.userId || row.seatNo !== input.seatNo) {
+    throw new BlackjackBettingError(
+      "IDEMPOTENCY_CONFLICT",
+      `Round seat ${input.roundSeatId} does not match the double down payload.`,
+    );
+  }
+
+  return {
+    ...row,
+    tableMaxTotalBetPerSeat: toBigInt(row.tableMaxTotalBetPerSeat),
+    tableMaxTotalBetPerUser: toBigInt(row.tableMaxTotalBetPerUser),
+    totalWagerAmount: toBigInt(row.totalWagerAmount),
+    initialBetAmount: toBigInt(row.initialBetAmount),
+    finalBetAmount: toBigInt(row.finalBetAmount),
+  };
+}
+
+function assertDoubleDownAllowed(context: LockedDoubleDownContext) {
+  if (context.roundStatus === "SETTLED" || context.roundStatus === "CANCELLED") {
+    throw new BlackjackBettingError(
+      "ROUND_NOT_ACTIVE",
+      `Round ${context.roundId} is ${context.roundStatus}.`,
+    );
+  }
+
+  if (!context.ruleSnapshot.doubleAllowed) {
+    throw new BlackjackBettingError(
+      "ACTION_NOT_ALLOWED",
+      `Double down is not allowed for round ${context.roundId}.`,
+    );
+  }
+
+  if (
+    context.roundSeatStatus !== "ACTIVE" ||
+    context.handStatus !== "ACTIVE" ||
+    context.isDoubled ||
+    context.finalBetAmount !== context.initialBetAmount
+  ) {
+    throw new BlackjackBettingError(
+      "ACTION_NOT_ALLOWED",
+      `Round seat ${context.roundSeatId} cannot double down.`,
+    );
+  }
+}
+
+async function assertDoubleBetAmountAllowed(
+  tx: WalletMutationTransaction,
+  input: {
+    context: LockedDoubleDownContext;
+    userId: string;
+    amount: bigint;
+  },
+) {
+  if (
+    input.context.totalWagerAmount + input.amount >
+    input.context.tableMaxTotalBetPerSeat
+  ) {
+    throw new BlackjackBettingError(
+      "BET_TOO_HIGH",
+      `Total seat wager must not exceed ${input.context.tableMaxTotalBetPerSeat}.`,
+    );
+  }
+
+  const totalWagerForUser = await getActiveRoundWagerForUser(
+    tx,
+    input.context.roundId,
+    input.userId,
+  );
+
+  if (
+    totalWagerForUser + input.amount >
+    input.context.tableMaxTotalBetPerUser
+  ) {
+    throw new BlackjackBettingError(
+      "BET_TOO_HIGH",
+      `Total user wager must not exceed ${input.context.tableMaxTotalBetPerUser}.`,
+    );
+  }
+}
+
 async function findBetActionByCommandId(
   tx: WalletMutationTransaction,
   roundId: string,
@@ -652,6 +928,28 @@ function buildBetWalletMutationInput(
   };
 }
 
+function buildDoubleWalletMutationInput(
+  input: DoubleBlackjackBetInput,
+  amount: bigint,
+) {
+  return {
+    userId: input.userId,
+    category: "GAME" as const,
+    gameType: "BLACKJACK" as const,
+    type: "DOUBLE_BET" as const,
+    delta: -amount,
+    referenceType: "BLACKJACK_ROUND",
+    referenceId: input.roundId,
+    idempotencyKey: `blackjack:double:${input.roundId}:${input.roundSeatId}:${input.userId}:${input.commandId}`,
+    memo: `Blackjack double down for seat ${input.seatNo}`,
+    metadata: {
+      seatNo: input.seatNo,
+      roundSeatId: input.roundSeatId,
+      commandId: input.commandId,
+    } satisfies JsonObject,
+  };
+}
+
 function assertExistingBetActionMatches(
   action: typeof blackjackActions.$inferSelect,
   roundSeat: typeof blackjackRoundSeats.$inferSelect,
@@ -674,7 +972,31 @@ function assertExistingBetActionMatches(
   }
 }
 
-function buildServerCommandId(input: PlaceBlackjackInitialBetInput) {
+function assertExistingDoubleActionMatches(
+  action: typeof blackjackActions.$inferSelect,
+  context: LockedDoubleDownContext,
+  input: DoubleBlackjackBetInput,
+) {
+  const mismatched =
+    action.actionType !== "DOUBLE" ||
+    action.userId !== input.userId ||
+    action.roundSeatId !== input.roundSeatId ||
+    action.handId !== context.handId ||
+    action.amount !== context.initialBetAmount ||
+    context.userId !== input.userId ||
+    context.seatNo !== input.seatNo ||
+    !context.isDoubled ||
+    context.finalBetAmount !== context.initialBetAmount * BigInt(2);
+
+  if (mismatched) {
+    throw new BlackjackBettingError(
+      "IDEMPOTENCY_CONFLICT",
+      `Command ${input.commandId} was reused with different double down details.`,
+    );
+  }
+}
+
+function buildServerCommandId(input: { userId: string; commandId: string }) {
   return `${input.userId}:${input.commandId}`;
 }
 
@@ -725,6 +1047,58 @@ function normalizeInitialBetInput(
     seatNo: input.seatNo,
     userId,
     amount: input.amount,
+    commandId,
+  };
+}
+
+function normalizeDoubleBetInput(
+  input: DoubleBlackjackBetInput,
+): DoubleBlackjackBetInput {
+  const roundId = input.roundId.trim();
+  const roundSeatId = input.roundSeatId.trim();
+  const userId = input.userId.trim();
+  const commandId = input.commandId.trim();
+
+  if (!roundId) {
+    throw new BlackjackBettingError(
+      "ROUND_NOT_ACTIVE",
+      "roundId is required for double down.",
+    );
+  }
+
+  if (!roundSeatId) {
+    throw new BlackjackBettingError(
+      "ROUND_SEAT_NOT_FOUND",
+      "roundSeatId is required for double down.",
+    );
+  }
+
+  if (!Number.isInteger(input.seatNo) || input.seatNo < 1 || input.seatNo > 7) {
+    throw new BlackjackBettingError(
+      "INVALID_SEAT_NO",
+      "seatNo must be an integer between 1 and 7.",
+    );
+  }
+
+  if (!userId) {
+    throw new BlackjackBettingError(
+      "IDEMPOTENCY_CONFLICT",
+      "userId is required for double down.",
+    );
+  }
+
+  if (!commandId) {
+    throw new BlackjackBettingError(
+      "INVALID_COMMAND_ID",
+      "commandId is required for double down.",
+    );
+  }
+
+  return {
+    roundId,
+    roundSeatId,
+    seatNo: input.seatNo,
+    userId,
     commandId,
   };
 }

@@ -29,6 +29,7 @@ export const BLACKJACK_TABLE_OPTIONS = 'BLACKJACK_TABLE_OPTIONS';
 export type BlackjackTableOptions = {
   deckCount?: number;
   dealerHitsSoft17?: boolean;
+  doubleAllowed?: boolean;
   surrenderMode?: BlackjackSurrenderMode;
   randomSource?: RandomSource;
   nowSource?: () => Date;
@@ -40,6 +41,7 @@ export class BlackjackTableService {
   private readonly tables = new Map<string, BlackjackTableRuntime>();
   private readonly deckCount: number;
   private readonly dealerHitsSoft17: boolean;
+  private readonly doubleAllowed: boolean;
   private readonly surrenderMode: BlackjackSurrenderMode;
   private readonly randomSource: RandomSource;
   private readonly nowSource: () => Date;
@@ -52,6 +54,7 @@ export class BlackjackTableService {
   ) {
     this.deckCount = normalizeDeckCount(options?.deckCount ?? 6);
     this.dealerHitsSoft17 = options?.dealerHitsSoft17 ?? false;
+    this.doubleAllowed = options?.doubleAllowed ?? true;
     this.surrenderMode = normalizeSurrenderMode(
       options?.surrenderMode ?? 'LATE',
     );
@@ -337,6 +340,172 @@ export class BlackjackTableService {
     }
   }
 
+  reserveDoubleDown(
+    input: BlackjackReserveDoubleDownInput,
+  ): BlackjackDoubleDownReservation {
+    const table = this.getOrCreateTable(input.tableId);
+    const user = normalizeSocketUser(input.user);
+    const seatNo = normalizeSeatNo(input.seatNo, table.maxSeats);
+    const commandId = normalizeCommandId(input.commandId);
+    const seat = table.seats.get(seatNo);
+
+    table.connections.set(input.socketId, user);
+
+    if (!table.round || table.phase !== 'PLAYER_TURNS') {
+      throw new BlackjackTableError(
+        'ROUND_NOT_ACTIVE',
+        `Table ${table.tableId} does not have an active player turn.`,
+      );
+    }
+
+    if (!seat?.hand || !seat.bet) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OCCUPIED',
+        `Seat ${seatNo} does not have an active hand.`,
+      );
+    }
+
+    if (seat.hand.doubleCommandId === commandId) {
+      return {
+        kind: 'already-confirmed',
+        tableId: table.tableId,
+        roundId: table.round.roundId,
+        roundSeatId: seat.bet.roundSeatId,
+        seatNo,
+        amount: seat.bet.amount,
+        commandId,
+      };
+    }
+
+    if (seat.hand.pendingAction) {
+      if (
+        seat.hand.pendingAction.action === 'DOUBLE' &&
+        seat.hand.pendingAction.commandId === commandId
+      ) {
+        return {
+          kind: 'reserved',
+          tableId: table.tableId,
+          roundId: table.round.roundId,
+          roundSeatId: seat.bet.roundSeatId,
+          seatNo,
+          amount: seat.bet.amount,
+          commandId,
+        };
+      }
+
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        `Seat ${seatNo} already has an action in progress.`,
+      );
+    }
+
+    this.assertPlayerCanAct(table, seat, user, seatNo, 'DOUBLE');
+    seat.hand.pendingAction = { action: 'DOUBLE', commandId };
+    this.bump(table);
+
+    return {
+      kind: 'reserved',
+      tableId: table.tableId,
+      roundId: table.round.roundId,
+      roundSeatId: seat.bet.roundSeatId,
+      seatNo,
+      amount: seat.bet.amount,
+      commandId,
+    };
+  }
+
+  confirmDoubleDown(
+    input: BlackjackConfirmDoubleDownInput,
+  ): BlackjackTableMutationResult {
+    const table = this.getOrCreateTable(input.tableId);
+    const user = normalizeSocketUser(input.user);
+    const seatNo = normalizeSeatNo(input.seatNo, table.maxSeats);
+    const amount = normalizePointAmount(input.amount);
+    const commandId = normalizeCommandId(input.commandId);
+    const seat = table.seats.get(seatNo);
+
+    if (!table.round || table.round.roundId !== input.roundId) {
+      throw new BlackjackTableError(
+        'ROUND_NOT_ACTIVE',
+        `Round ${input.roundId} is not active on table ${table.tableId}.`,
+      );
+    }
+
+    if (
+      !seat?.hand ||
+      !seat.bet ||
+      seat.bet.roundSeatId !== input.roundSeatId
+    ) {
+      throw new BlackjackTableError(
+        'ROUND_SEAT_NOT_FOUND',
+        `Round seat ${input.roundSeatId} is not active on table ${table.tableId}.`,
+      );
+    }
+
+    if (seat.userId !== user.userId) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OWNED',
+        `User ${user.userId} does not own seat ${seatNo}.`,
+      );
+    }
+
+    if (seat.hand.doubleCommandId === commandId) {
+      return {
+        state: this.toState(table),
+        event: this.toEvent(table, 'PLAYER_ACTED', user.userId, seatNo),
+        settlement: this.buildSettlementRequestIfReady(table),
+      };
+    }
+
+    if (
+      !seat.hand.pendingAction ||
+      seat.hand.pendingAction.action !== 'DOUBLE' ||
+      seat.hand.pendingAction.commandId !== commandId
+    ) {
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        `Seat ${seatNo} does not have a matching double down reservation.`,
+      );
+    }
+
+    seat.bet.amount += amount;
+    seat.hand.cards.push(drawCard(table));
+    const hand = evaluateHand(seat.hand.cards);
+
+    seat.hand.status = hand.isBust ? 'BUSTED' : 'DOUBLED';
+    seat.hand.doubleCommandId = commandId;
+    seat.hand.pendingAction = undefined;
+
+    const dealerPlayed = this.advanceTurnOrPlayDealer(table);
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(
+        table,
+        dealerPlayed ? 'DEALER_PLAYED' : 'PLAYER_ACTED',
+        user.userId,
+        seatNo,
+      ),
+      settlement: this.buildSettlementRequestIfReady(table),
+    };
+  }
+
+  cancelDoubleDownReservation(input: BlackjackCancelDoubleDownInput) {
+    const table = this.getOrCreateTable(input.tableId);
+    const seatNo = normalizeSeatNo(input.seatNo, table.maxSeats);
+    const commandId = normalizeCommandId(input.commandId);
+    const seat = table.seats.get(seatNo);
+
+    if (
+      seat?.hand?.pendingAction?.action === 'DOUBLE' &&
+      seat.hand.pendingAction.commandId === commandId
+    ) {
+      seat.hand.pendingAction = undefined;
+      this.bump(table);
+    }
+  }
+
   playerAction(
     input: BlackjackPlayerActionInput,
   ): BlackjackTableMutationResult {
@@ -376,12 +545,26 @@ export class BlackjackTableService {
       );
     }
 
+    if (seat.hand.pendingAction) {
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        `Seat ${seatNo} already has an action in progress.`,
+      );
+    }
+
     const availableActions = this.getAvailableSeatActions(table, seat);
 
     if (!availableActions.includes(action)) {
       throw new BlackjackTableError(
         'ACTION_NOT_ALLOWED',
         `${action} is not available for seat ${seatNo}.`,
+      );
+    }
+
+    if (action === 'DOUBLE') {
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        'DOUBLE must be confirmed through the double down flow.',
       );
     }
 
@@ -532,6 +715,7 @@ export class BlackjackTableService {
       maxTotalBetPerUser: 42_000n,
       deckCount: this.deckCount,
       dealerHitsSoft17: this.dealerHitsSoft17,
+      doubleAllowed: this.doubleAllowed,
       surrenderMode: this.surrenderMode,
       shoe: [],
       bettingClosesAt: undefined,
@@ -754,6 +938,56 @@ export class BlackjackTableService {
     table.phase = 'SETTLING';
   }
 
+  private assertPlayerCanAct(
+    table: BlackjackTableRuntime,
+    seat: BlackjackSeatRuntime,
+    user: BlackjackSocketUser,
+    seatNo: number,
+    action: BlackjackSocketPlayerAction,
+  ) {
+    if (!table.round || table.phase !== 'PLAYER_TURNS') {
+      throw new BlackjackTableError(
+        'ROUND_NOT_ACTIVE',
+        `Table ${table.tableId} does not have an active player turn.`,
+      );
+    }
+
+    if (!seat.hand) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OCCUPIED',
+        `Seat ${seatNo} does not have an active hand.`,
+      );
+    }
+
+    if (seat.userId !== user.userId) {
+      throw new BlackjackTableError(
+        'SEAT_NOT_OWNED',
+        `User ${user.userId} does not own seat ${seatNo}.`,
+      );
+    }
+
+    if (table.round.currentTurnSeatNo !== seatNo) {
+      throw new BlackjackTableError(
+        'NOT_YOUR_TURN',
+        `Seat ${seatNo} is not the current turn.`,
+      );
+    }
+
+    if (seat.hand.pendingAction) {
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        `Seat ${seatNo} already has an action in progress.`,
+      );
+    }
+
+    if (!this.getAvailableSeatActions(table, seat).includes(action)) {
+      throw new BlackjackTableError(
+        'ACTION_NOT_ALLOWED',
+        `${action} is not available for seat ${seatNo}.`,
+      );
+    }
+  }
+
   private getAvailableSeatActions(
     table: BlackjackTableRuntime,
     seat: BlackjackSeatRuntime,
@@ -763,6 +997,7 @@ export class BlackjackTableService {
       table.phase !== 'PLAYER_TURNS' ||
       table.round.currentTurnSeatNo !== seat.seatNo ||
       !seat.hand ||
+      seat.hand.pendingAction ||
       seat.hand.status !== 'PLAYING'
     ) {
       return [];
@@ -771,7 +1006,7 @@ export class BlackjackTableService {
     return getAvailablePlayerActions(
       { cards: seat.hand.cards },
       {
-        doubleAllowed: false,
+        doubleAllowed: table.doubleAllowed,
         splitAllowed: false,
         surrenderAllowed: table.surrenderMode !== 'NONE',
       },
@@ -899,6 +1134,24 @@ export type BlackjackPlayerActionInput = BlackjackJoinTableInput & {
   action: BlackjackSocketPlayerAction;
 };
 
+export type BlackjackReserveDoubleDownInput = BlackjackJoinTableInput & {
+  seatNo: number;
+  commandId: string;
+};
+
+export type BlackjackConfirmDoubleDownInput =
+  BlackjackReserveDoubleDownInput & {
+    roundId: string;
+    roundSeatId: string;
+    amount: bigint;
+  };
+
+export type BlackjackCancelDoubleDownInput = {
+  tableId: string;
+  seatNo: number;
+  commandId: string;
+};
+
 export type BlackjackConfirmSettlementInput = {
   tableId: string;
   roundId: string;
@@ -959,6 +1212,16 @@ export type BlackjackBetReservation = {
   commandId: string;
 };
 
+export type BlackjackDoubleDownReservation = {
+  kind: 'reserved' | 'already-confirmed';
+  tableId: string;
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  amount: bigint;
+  commandId: string;
+};
+
 export class BlackjackTableError extends Error {
   constructor(
     readonly code: BlackjackSocketErrorCode,
@@ -981,6 +1244,7 @@ type BlackjackTableRuntime = {
   maxTotalBetPerUser: bigint;
   deckCount: number;
   dealerHitsSoft17: boolean;
+  doubleAllowed: boolean;
   surrenderMode: BlackjackSurrenderMode;
   shoe: BlackjackCard[];
   round?: BlackjackRoundRuntime;
@@ -1015,10 +1279,17 @@ type BlackjackBetRuntime = BlackjackPendingBetRuntime & {
 type BlackjackSeatHandRuntime = {
   cards: BlackjackCard[];
   status: BlackjackHandStatus;
+  pendingAction?: BlackjackPendingActionRuntime;
+  doubleCommandId?: string;
   outcome?: BlackjackHandOutcome;
   outcomeReason?: BlackjackHandOutcomeReason;
   payoutAmount?: bigint;
   netAmount?: bigint;
+};
+
+type BlackjackPendingActionRuntime = {
+  action: 'DOUBLE';
+  commandId: string;
 };
 
 type BlackjackRoundRuntime = {
@@ -1114,7 +1385,12 @@ function normalizeCommandId(commandId: string) {
 }
 
 function normalizePlayerAction(action: unknown): BlackjackSocketPlayerAction {
-  if (action !== 'HIT' && action !== 'STAND' && action !== 'SURRENDER') {
+  if (
+    action !== 'HIT' &&
+    action !== 'STAND' &&
+    action !== 'DOUBLE' &&
+    action !== 'SURRENDER'
+  ) {
     throw new BlackjackTableError(
       'ACTION_NOT_ALLOWED',
       `${String(action)} is not supported yet.`,
@@ -1232,7 +1508,12 @@ function toCardSnapshot(
 function isSocketPlayerAction(
   action: BlackjackEnginePlayerAction,
 ): action is BlackjackSocketPlayerAction {
-  return action === 'HIT' || action === 'STAND' || action === 'SURRENDER';
+  return (
+    action === 'HIT' ||
+    action === 'STAND' ||
+    action === 'DOUBLE' ||
+    action === 'SURRENDER'
+  );
 }
 
 function isSettlementSeatRequest(

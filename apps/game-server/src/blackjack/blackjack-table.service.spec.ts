@@ -115,7 +115,7 @@ jest.mock('./blackjack-engine.port', () => {
     },
     getAvailablePlayerActions: (
       context: { cards: readonly MockCard[] },
-      rules: { surrenderAllowed?: boolean } = {},
+      rules: { doubleAllowed?: boolean; surrenderAllowed?: boolean } = {},
     ) => {
       const hand = evaluateHand(context.cards);
 
@@ -124,6 +124,10 @@ jest.mock('./blackjack-engine.port', () => {
       }
 
       const actions = ['HIT', 'STAND'];
+
+      if (context.cards.length === 2 && rules.doubleAllowed) {
+        actions.push('DOUBLE');
+      }
 
       if (context.cards.length === 2 && rules.surrenderAllowed) {
         actions.push('SURRENDER');
@@ -426,7 +430,7 @@ describe('BlackjackTableService', () => {
         ],
         score: 6,
         isCurrentTurn: true,
-        availableActions: ['HIT', 'STAND', 'SURRENDER'],
+        availableActions: ['HIT', 'STAND', 'DOUBLE', 'SURRENDER'],
       }),
     ]);
   });
@@ -797,6 +801,82 @@ describe('BlackjackTableService', () => {
         outcome: 'LOSE',
         outcomeReason: 'SURRENDER',
       },
+    ]);
+  });
+
+  it('confirms double down by adding one card and ending the hand', () => {
+    const service = createDeterministicService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+    expireBettingWindowOrFail(service);
+
+    const reservation = service.reserveDoubleDown({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'double-command-1',
+    });
+    const result = service.confirmDoubleDown({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: reservation.commandId,
+      roundId: reservation.roundId,
+      roundSeatId: reservation.roundSeatId,
+      amount: reservation.amount,
+    });
+
+    expect(reservation).toEqual({
+      kind: 'reserved',
+      tableId: 'main',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+      seatNo: 1,
+      amount: 500n,
+      commandId: 'double-command-1',
+    });
+    expect(result.event.type).toBe('DEALER_PLAYED');
+    expect(result.state.phase).toBe('SETTLING');
+    expect(result.state.seats[0]).toEqual(
+      expect.objectContaining({
+        betAmount: '1000',
+        handStatus: 'DOUBLED',
+        cards: [
+          { rank: '2', suit: 'clubs' },
+          { rank: '4', suit: 'clubs' },
+          { rank: '6', suit: 'clubs' },
+        ],
+        score: 12,
+        isCurrentTurn: false,
+        availableActions: [],
+      }),
+    );
+    expect(result.settlement?.seats).toEqual([
+      expect.objectContaining({
+        roundSeatId: 'round-seat-1',
+        userId: 'user-alice',
+        seatNo: 1,
+        finalValue: 12,
+        outcome: 'WIN',
+        outcomeReason: 'DEALER_BUST',
+      }),
     ]);
   });
 

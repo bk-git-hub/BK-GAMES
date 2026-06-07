@@ -76,7 +76,7 @@ export type BlackjackLeaveSeatPayload = {
   seatNo: number;
 };
 
-export type BlackjackPlayerAction = "HIT" | "STAND" | "SURRENDER";
+export type BlackjackPlayerAction = "HIT" | "STAND" | "DOUBLE" | "SURRENDER";
 
 export type BlackjackPlaceBetPayload = {
   commandId: string;
@@ -89,6 +89,7 @@ export type BlackjackPlayerActionPayload = {
   tableId: string;
   seatNo: number;
   action: BlackjackPlayerAction;
+  commandId?: string;
 };
 
 export type BlackjackHandStatus =
@@ -96,6 +97,7 @@ export type BlackjackHandStatus =
   | "BET_PLACED"
   | "PLAYING"
   | "STOOD"
+  | "DOUBLED"
   | "SURRENDERED"
   | "BUSTED"
   | "BLACKJACK";
@@ -226,7 +228,12 @@ export type BlackjackSocketErrorPayload = {
 export type BlackjackWalletUpdatedPayload = {
   balance: string;
   delta: string;
-  reason: "BET_PLACED" | "PAYOUT" | "PUSH_REFUND" | "SURRENDER_REFUND";
+  reason:
+    | "BET_PLACED"
+    | "DOUBLE_BET"
+    | "PAYOUT"
+    | "PUSH_REFUND"
+    | "SURRENDER_REFUND";
   ledgerId: string;
 };
 

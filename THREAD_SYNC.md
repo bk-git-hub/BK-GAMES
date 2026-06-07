@@ -398,14 +398,13 @@ Next task should build on the realtime blackjack table skeleton.
 
 Recommended order:
 
-- Add the double-down point mutation and runtime action flow.
 - Add split, insurance, and even-money decisions.
 - Wire frontend Socket.IO client to request game tokens, join the table, take seats, place bets, send player actions, and render settlement results against the backend contract.
 - Replace the current in-memory betting timer with a DB-backed or worker-backed scheduler if multiple game-server instances are introduced.
 
-The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, game-server sockets can verify short-lived game tokens from `POST /api/game-token`, initial blackjack bets now debit wallets through an idempotent DB transaction, HIT/STAND/SURRENDER rounds now settle through wallet-backed ledgers, and `packages/game-engine` now has pure blackjack card/hand/action helpers.
+The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, game-server sockets can verify short-lived game tokens from `POST /api/game-token`, initial blackjack bets and double-down bets now debit wallets through idempotent DB transactions, HIT/STAND/DOUBLE/SURRENDER rounds now settle through wallet-backed ledgers, and `packages/game-engine` now has pure blackjack card/hand/action helpers.
 
-The game-server now starts an in-memory blackjack round after the first confirmed bet opens a 20-second betting window and that window expires. Seats without confirmed bets sit out that round. It deals public player cards plus hidden dealer hole card, supports realtime `player:action` for HIT/STAND/SURRENDER, advances player turns, runs the dealer, calls DB settlement, emits private `wallet:updated` events for payout/refund ledgers, and broadcasts `ROUND_SETTLED`. Surrender is exposed only on opening two-card player decisions; settlement records `outcomeReason: "SURRENDER"` and credits half the wager through a `SURRENDER_REFUND` ledger.
+The game-server now starts an in-memory blackjack round after the first confirmed bet opens a 20-second betting window and that window expires. Seats without confirmed bets sit out that round. It deals public player cards plus hidden dealer hole card, supports realtime `player:action` for HIT/STAND/DOUBLE/SURRENDER, advances player turns, runs the dealer, calls DB settlement, emits private `wallet:updated` events for bet, double-bet, payout, and refund ledgers, and broadcasts `ROUND_SETTLED`. Double is exposed only on opening two-card player decisions; the gateway reserves the runtime action, debits a `DOUBLE_BET` ledger in the DB, then confirms the runtime hand with exactly one extra card and `DOUBLED` or `BUSTED` status. Surrender is exposed only on opening two-card player decisions; settlement records `outcomeReason: "SURRENDER"` and credits half the wager through a `SURRENDER_REFUND` ledger.
 
 ## Suggested Next Scope Report
 
@@ -413,11 +412,11 @@ Use this before starting the next backend blackjack slice:
 
 ```text
 이번 작업 범위:
-- 목표: blackjack double-down point mutation and runtime action
+- 목표: blackjack split action foundation
 - 수정 예상: apps/game-server, packages/shared, packages/db, THREAD_SYNC.md
 - 실행 명령: pnpm --filter game-server test, pnpm typecheck, pnpm lint, pnpm test, pnpm build
-- 제외: frontend UI, admin UI, split/insurance/even-money
-- 검증: game-server state transition tests, DB smoke for double bet idempotency, 전체 workspace 검증
+- 제외: frontend UI, admin UI, insurance/even-money
+- 검증: game-server split state transition tests, DB smoke for split bet idempotency if wallet mutation is added, 전체 workspace 검증
 ```
 
 ## Update Rules For This File
@@ -484,3 +483,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - `pnpm --filter @bk-games/db smoke:blackjack-settlement` verifies multi-seat same-user settlement idempotency with one standard win and one push refund.
 - Betting-window runtime was added for blackjack. The first confirmed bet opens a 20-second `phaseEndsAt` window; the gateway schedules an in-memory table timer; at expiry, the round starts with confirmed-bet seats only and non-bet seats move to `SITTING_OUT`. Impact: frontend should display `state.timers.phaseEndsAt` during `WAITING_BETS` and treat `SITTING_OUT` seats as skipped for the current round.
 - Surrender runtime and settlement were added. `player:action` now accepts `SURRENDER`, current-turn opening two-card hands expose it through `availableActions`, surrendered hands settle as `LOSE` with `outcomeReason: "SURRENDER"`, and DB settlement credits half the wager with a `SURRENDER_REFUND` ledger. Impact: frontend should render `SURRENDERED` hand status and handle private wallet updates with reason `SURRENDER_REFUND`.
+- Double-down runtime and wallet-backed mutation were added. `player:action` now accepts `DOUBLE` with a required `commandId`; current-turn opening two-card hands expose it through `availableActions`; the gateway reserves the runtime action, calls `doubleBlackjackBet`, emits private `wallet:updated` with reason `DOUBLE_BET`, then confirms one-card double-down as `DOUBLED` or `BUSTED`. DB smoke now verifies `DOUBLE_BET` idempotency, doubled total wager settlement, surrender refund, and final balance together. Impact: frontend must send `commandId` for `DOUBLE`, update displayed bet totals from `seat.betAmount`, render `DOUBLED`, and handle wallet updates with reason `DOUBLE_BET`.

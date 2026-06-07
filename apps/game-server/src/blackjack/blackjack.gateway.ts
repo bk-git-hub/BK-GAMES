@@ -192,6 +192,12 @@ export class BlackjackGateway {
       BLACKJACK_CLIENT_EVENTS.PLAYER_ACTION,
       async () => {
         const user = this.resolveSocketUser(socket);
+
+        if (body.action === 'DOUBLE') {
+          await this.handleDoubleDown(socket, body, user);
+          return;
+        }
+
         const update = this.tableService.playerAction({
           tableId: body.tableId,
           seatNo: body.seatNo,
@@ -206,6 +212,62 @@ export class BlackjackGateway {
         await this.settleRoundIfNeeded(update);
       },
     );
+  }
+
+  private async handleDoubleDown(
+    socket: Socket,
+    body: BlackjackPlayerActionPayload,
+    user: BlackjackSocketUser,
+  ) {
+    const commandId = readRequiredCommandId(body.commandId);
+    const reservation = this.tableService.reserveDoubleDown({
+      tableId: body.tableId,
+      seatNo: body.seatNo,
+      socketId: socket.id,
+      user,
+      commandId,
+    });
+
+    try {
+      const doubleResult = await this.walletService.doubleBlackjackBet({
+        roundId: reservation.roundId,
+        roundSeatId: reservation.roundSeatId,
+        seatNo: reservation.seatNo,
+        userId: user.userId,
+        commandId: reservation.commandId,
+      });
+      const update = this.tableService.confirmDoubleDown({
+        tableId: reservation.tableId,
+        seatNo: reservation.seatNo,
+        socketId: socket.id,
+        user,
+        commandId: reservation.commandId,
+        roundId: reservation.roundId,
+        roundSeatId: reservation.roundSeatId,
+        amount: toBigInt(doubleResult.amount),
+      });
+
+      void socket.join(blackjackTableRoom(update.state.tableId));
+      void socket.join(blackjackUserRoom(user.userId));
+      this.emitTableUpdate(update);
+      this.emitWalletUpdated(user.userId, {
+        balance: doubleResult.walletMutation.wallet.balance.toString(),
+        delta: doubleResult.walletMutation.ledger.delta.toString(),
+        reason: 'DOUBLE_BET',
+        ledgerId: doubleResult.walletMutation.ledger.id,
+      });
+      await this.settleRoundIfNeeded(update);
+    } catch (error) {
+      if (reservation.kind === 'reserved') {
+        this.tableService.cancelDoubleDownReservation({
+          tableId: reservation.tableId,
+          seatNo: reservation.seatNo,
+          commandId: reservation.commandId,
+        });
+      }
+
+      throw error;
+    }
   }
 
   private handleCommand(
@@ -452,6 +514,21 @@ function parsePointAmount(amount: unknown) {
   }
 
   return BigInt(amount.trim());
+}
+
+function readRequiredCommandId(commandId: unknown) {
+  if (typeof commandId !== 'string' || !commandId.trim()) {
+    throw new BlackjackGatewayError(
+      'INVALID_COMMAND_ID',
+      'commandId is required for double down.',
+    );
+  }
+
+  return commandId.trim();
+}
+
+function toBigInt(value: bigint | string) {
+  return typeof value === 'bigint' ? value : BigInt(value);
 }
 
 function isSocketErrorLike(

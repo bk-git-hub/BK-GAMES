@@ -10,6 +10,7 @@ import {
   blackjackShoes,
   blackjackTables,
   db,
+  doubleBlackjackBet,
   ensureUserGameAccount,
   placeBlackjackInitialBet,
   pointLedgers,
@@ -114,6 +115,20 @@ try {
     amount: 500n,
     commandId: "command-3",
   });
+  const doubleBet = await doubleBlackjackBet({
+    roundId: firstBet.round.id,
+    roundSeatId: firstBet.roundSeat.id,
+    seatNo: 1,
+    userId,
+    commandId: "double-command-1",
+  });
+  const doubleBetRetry = await doubleBlackjackBet({
+    roundId: firstBet.round.id,
+    roundSeatId: firstBet.roundSeat.id,
+    seatNo: 1,
+    userId,
+    commandId: "double-command-1",
+  });
 
   const settlementInput = {
     roundId: firstBet.round.id,
@@ -197,6 +212,9 @@ try {
     firstSeatPayout: settlement.seats[0]?.payoutAmount.toString(),
     secondSeatPayout: settlement.seats[1]?.payoutAmount.toString(),
     thirdSeatPayout: settlement.seats[2]?.payoutAmount.toString(),
+    doubleBetAmount: doubleBet.amount.toString(),
+    doubleBetTotalWager: doubleBet.totalWagerAmount.toString(),
+    doubleBetRetryIdempotent: doubleBetRetry.walletMutation.idempotent,
     retryFirstIdempotent: retry.seats[0]?.walletMutation?.idempotent,
     retrySecondIdempotent: retry.seats[1]?.walletMutation?.idempotent,
     retryThirdIdempotent: retry.seats[2]?.walletMutation?.idempotent,
@@ -206,15 +224,18 @@ try {
   };
 
   if (
-    summary.firstSeatPayout !== "1000" ||
+    summary.firstSeatPayout !== "2000" ||
     summary.secondSeatPayout !== "500" ||
     summary.thirdSeatPayout !== "250" ||
+    summary.doubleBetAmount !== "500" ||
+    summary.doubleBetTotalWager !== "1000" ||
+    !summary.doubleBetRetryIdempotent ||
     !summary.retryFirstIdempotent ||
     !summary.retrySecondIdempotent ||
     !summary.retryThirdIdempotent ||
     summary.surrenderLedgerDelta !== "250" ||
-    summary.finalBalance !== "10250" ||
-    summary.ledgerCount !== 7
+    summary.finalBalance !== "10750" ||
+    summary.ledgerCount !== 8
   ) {
     throw new Error(
       `Unexpected blackjack settlement smoke result: ${JSON.stringify(

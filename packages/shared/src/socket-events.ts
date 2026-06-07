@@ -76,7 +76,12 @@ export type BlackjackLeaveSeatPayload = {
   seatNo: number;
 };
 
-export type BlackjackPlayerAction = "HIT" | "STAND" | "DOUBLE" | "SURRENDER";
+export type BlackjackPlayerAction =
+  | "HIT"
+  | "STAND"
+  | "DOUBLE"
+  | "SPLIT"
+  | "SURRENDER";
 
 export type BlackjackPlaceBetPayload = {
   commandId: string;
@@ -89,6 +94,7 @@ export type BlackjackPlayerActionPayload = {
   tableId: string;
   seatNo: number;
   action: BlackjackPlayerAction;
+  handNo?: number;
   commandId?: string;
 };
 
@@ -112,6 +118,21 @@ export type BlackjackHandOutcomeReason =
   | "SURRENDER"
   | "DEALER_BLACKJACK";
 
+export type BlackjackHandSnapshot = {
+  handNo: number;
+  betAmount: string;
+  handStatus: BlackjackHandStatus;
+  cards: BlackjackCardSnapshot[];
+  score: number | null;
+  isSoft: boolean;
+  isCurrentTurn: boolean;
+  availableActions: BlackjackPlayerAction[];
+  outcome: BlackjackHandOutcome | null;
+  outcomeReason: BlackjackHandOutcomeReason | null;
+  payoutAmount: string | null;
+  netAmount: string | null;
+};
+
 export type BlackjackSeatSnapshot = {
   seatNo: number;
   userId: string;
@@ -125,6 +146,8 @@ export type BlackjackSeatSnapshot = {
   isSoft: boolean;
   isCurrentTurn: boolean;
   availableActions: BlackjackPlayerAction[];
+  activeHandNo: number | null;
+  hands: BlackjackHandSnapshot[];
   outcome: BlackjackHandOutcome | null;
   outcomeReason: BlackjackHandOutcomeReason | null;
   payoutAmount: string | null;
@@ -165,6 +188,7 @@ export type BlackjackTableState = {
 export type BlackjackRoundSnapshot = {
   roundId: string;
   currentTurnSeatNo: number | null;
+  currentTurnHandNo: number | null;
 };
 
 export type BlackjackTableEventType =
@@ -231,6 +255,7 @@ export type BlackjackWalletUpdatedPayload = {
   reason:
     | "BET_PLACED"
     | "DOUBLE_BET"
+    | "SPLIT_BET"
     | "PAYOUT"
     | "PUSH_REFUND"
     | "SURRENDER_REFUND";

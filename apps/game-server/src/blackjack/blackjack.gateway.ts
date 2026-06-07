@@ -198,6 +198,11 @@ export class BlackjackGateway {
           return;
         }
 
+        if (body.action === 'SPLIT') {
+          await this.handleSplit(socket, body, user);
+          return;
+        }
+
         const update = this.tableService.playerAction({
           tableId: body.tableId,
           seatNo: body.seatNo,
@@ -219,7 +224,7 @@ export class BlackjackGateway {
     body: BlackjackPlayerActionPayload,
     user: BlackjackSocketUser,
   ) {
-    const commandId = readRequiredCommandId(body.commandId);
+    const commandId = readRequiredCommandId(body.commandId, 'double down');
     const reservation = this.tableService.reserveDoubleDown({
       tableId: body.tableId,
       seatNo: body.seatNo,
@@ -239,6 +244,7 @@ export class BlackjackGateway {
       const update = this.tableService.confirmDoubleDown({
         tableId: reservation.tableId,
         seatNo: reservation.seatNo,
+        handNo: reservation.handNo,
         socketId: socket.id,
         user,
         commandId: reservation.commandId,
@@ -262,6 +268,67 @@ export class BlackjackGateway {
         this.tableService.cancelDoubleDownReservation({
           tableId: reservation.tableId,
           seatNo: reservation.seatNo,
+          handNo: reservation.handNo,
+          commandId: reservation.commandId,
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  private async handleSplit(
+    socket: Socket,
+    body: BlackjackPlayerActionPayload,
+    user: BlackjackSocketUser,
+  ) {
+    const commandId = readRequiredCommandId(body.commandId, 'split');
+    const reservation = this.tableService.reserveSplit({
+      tableId: body.tableId,
+      seatNo: body.seatNo,
+      socketId: socket.id,
+      user,
+      commandId,
+    });
+
+    try {
+      const splitResult = await this.walletService.splitBlackjackBet({
+        roundId: reservation.roundId,
+        roundSeatId: reservation.roundSeatId,
+        seatNo: reservation.seatNo,
+        sourceHandNo: reservation.sourceHandNo,
+        userId: user.userId,
+        commandId: reservation.commandId,
+      });
+      const update = this.tableService.confirmSplit({
+        tableId: reservation.tableId,
+        seatNo: reservation.seatNo,
+        socketId: socket.id,
+        user,
+        commandId: reservation.commandId,
+        roundId: reservation.roundId,
+        roundSeatId: reservation.roundSeatId,
+        sourceHandNo: splitResult.sourceHandNo,
+        newHandNo: splitResult.newHandNo,
+        amount: toBigInt(splitResult.amount),
+      });
+
+      void socket.join(blackjackTableRoom(update.state.tableId));
+      void socket.join(blackjackUserRoom(user.userId));
+      this.emitTableUpdate(update);
+      this.emitWalletUpdated(user.userId, {
+        balance: splitResult.walletMutation.wallet.balance.toString(),
+        delta: splitResult.walletMutation.ledger.delta.toString(),
+        reason: 'SPLIT_BET',
+        ledgerId: splitResult.walletMutation.ledger.id,
+      });
+      await this.settleRoundIfNeeded(update);
+    } catch (error) {
+      if (reservation.kind === 'reserved') {
+        this.tableService.cancelSplitReservation({
+          tableId: reservation.tableId,
+          seatNo: reservation.seatNo,
+          sourceHandNo: reservation.sourceHandNo,
           commandId: reservation.commandId,
         });
       }
@@ -332,6 +399,7 @@ export class BlackjackGateway {
       roundId: settlement.roundId,
       seats: settlement.seats.map((seat) => ({
         roundSeatId: seat.roundSeatId,
+        handNo: seat.handNo,
         seatNo: seat.seatNo,
         outcome: seat.outcome,
         outcomeReason: seat.outcomeReason,
@@ -516,11 +584,11 @@ function parsePointAmount(amount: unknown) {
   return BigInt(amount.trim());
 }
 
-function readRequiredCommandId(commandId: unknown) {
+function readRequiredCommandId(commandId: unknown, actionName: string) {
   if (typeof commandId !== 'string' || !commandId.trim()) {
     throw new BlackjackGatewayError(
       'INVALID_COMMAND_ID',
-      'commandId is required for double down.',
+      `commandId is required for ${actionName}.`,
     );
   }
 

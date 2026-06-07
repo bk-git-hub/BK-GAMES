@@ -30,6 +30,12 @@ export class WalletService {
 
     return db.doubleBlackjackBet(input);
   }
+
+  async splitBlackjackBet(input: SplitBlackjackBetInput) {
+    const db = (await import(dbPackageName)) as BlackjackDbModule;
+
+    return db.splitBlackjackBet(input);
+  }
 }
 
 export type PlaceBlackjackInitialBetInput = {
@@ -48,6 +54,15 @@ export type DoubleBlackjackBetInput = {
   commandId: string;
 };
 
+export type SplitBlackjackBetInput = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  sourceHandNo: number;
+  userId: string;
+  commandId: string;
+};
+
 type BlackjackDbModule = {
   placeBlackjackInitialBet(
     input: DbPlaceBlackjackInitialBetInput,
@@ -55,6 +70,9 @@ type BlackjackDbModule = {
   doubleBlackjackBet(
     input: DoubleBlackjackBetInput,
   ): Promise<DoubleBlackjackBetResult>;
+  splitBlackjackBet(
+    input: SplitBlackjackBetInput,
+  ): Promise<SplitBlackjackBetResult>;
   settleBlackjackRound(
     input: DbSettleBlackjackRoundInput,
   ): Promise<BlackjackSettlementResult>;
@@ -99,6 +117,25 @@ export type DoubleBlackjackBetResult = {
   };
 };
 
+export type SplitBlackjackBetResult = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  sourceHandNo: number;
+  newHandNo: number;
+  userId: string;
+  amount: bigint | string;
+  totalWagerAmount: bigint | string;
+  walletMutation: {
+    wallet: { balance: bigint | string };
+    ledger: {
+      id: string;
+      type: 'SPLIT_BET';
+      delta: bigint | string;
+    };
+  };
+};
+
 export type BlackjackSettlementResult = {
   roundId: string;
   seats: BlackjackSettlementSeatResult[];
@@ -106,6 +143,7 @@ export type BlackjackSettlementResult = {
 
 export type BlackjackSettlementSeatResult = {
   roundSeatId: string;
+  handNo: number;
   userId: string;
   seatNo: number;
   outcome: BlackjackSettlementRequest['seats'][number]['outcome'];

@@ -39,6 +39,7 @@ export type SettleBlackjackRoundInput = {
 
 export type SettleBlackjackRoundSeatInput = {
   roundSeatId: string;
+  handNo: number;
   userId: string;
   seatNo: number;
   cards: CardSnapshot[];
@@ -57,6 +58,7 @@ export type SettleBlackjackRoundResult = {
 
 export type SettleBlackjackRoundSeatResult = {
   roundSeatId: string;
+  handNo: number;
   userId: string;
   seatNo: number;
   outcome: BlackjackSettlementOutcome;
@@ -87,6 +89,12 @@ type LockedBlackjackRoundRow = {
   status: string;
   startedAt: Date | null;
   ruleSnapshot: BlackjackRuleSnapshot;
+};
+
+type RoundSeatAggregate = {
+  roundSeat: typeof blackjackRoundSeats.$inferSelect;
+  wagerAmount: bigint;
+  payoutAmount: bigint;
 };
 
 const zero = BigInt(0);
@@ -120,17 +128,34 @@ export async function settleBlackjackRoundInTransaction(
 
   const settledAt = new Date();
   const seats: SettleBlackjackRoundSeatResult[] = [];
+  const roundSeatAggregates = new Map<string, RoundSeatAggregate>();
+  const seenHands = new Set<string>();
 
   for (const seatInput of input.seats) {
+    const handKey = `${seatInput.roundSeatId}:${seatInput.handNo}`;
+
+    if (seenHands.has(handKey)) {
+      throw new BlackjackSettlementError(
+        "SETTLEMENT_CONFLICT",
+        `Hand ${handKey} was included more than once in settlement.`,
+      );
+    }
+
+    seenHands.add(handKey);
+
     const roundSeat = await findRoundSeatForSettlement(tx, input, seatInput);
-    const hand = await findPrimaryHand(tx, seatInput.roundSeatId);
+    const hand = await findHandForSettlement(
+      tx,
+      seatInput.roundSeatId,
+      seatInput.handNo,
+    );
     const payoutAmount = calculatePayoutAmount(
       round.ruleSnapshot,
-      roundSeat.totalWagerAmount,
+      hand.finalBetAmount,
       seatInput.outcome,
       seatInput.outcomeReason,
     );
-    const netAmount = payoutAmount - roundSeat.totalWagerAmount;
+    const netAmount = payoutAmount - hand.finalBetAmount;
     const walletMutation =
       payoutAmount > zero
         ? await applyWalletMutationInTransaction(
@@ -160,25 +185,25 @@ export async function settleBlackjackRoundInTransaction(
       })
       .where(eq(blackjackHands.id, hand.id));
 
-    await tx
-      .update(blackjackRoundSeats)
-      .set({
-        status: "SETTLED",
-        totalPayoutAmount: payoutAmount,
-        netAmount,
-        settledAt,
-        updatedAt: settledAt,
-      })
-      .where(eq(blackjackRoundSeats.id, roundSeat.id));
+    const existingAggregate = roundSeatAggregates.get(roundSeat.id);
+
+    roundSeatAggregates.set(roundSeat.id, {
+      roundSeat,
+      wagerAmount:
+        (existingAggregate?.wagerAmount ?? zero) + hand.finalBetAmount,
+      payoutAmount: (existingAggregate?.payoutAmount ?? zero) + payoutAmount,
+    });
 
     await insertSettleActionIfMissing(tx, {
       roundId: input.roundId,
       roundSeatId: seatInput.roundSeatId,
+      handNo: seatInput.handNo,
       handId: hand.id,
       userId: seatInput.userId,
       payoutAmount,
       payload: {
         seatNo: seatInput.seatNo,
+        handNo: seatInput.handNo,
         outcome: seatInput.outcome,
         outcomeReason: seatInput.outcomeReason,
       },
@@ -186,6 +211,7 @@ export async function settleBlackjackRoundInTransaction(
 
     seats.push({
       roundSeatId: seatInput.roundSeatId,
+      handNo: seatInput.handNo,
       userId: seatInput.userId,
       seatNo: seatInput.seatNo,
       outcome: seatInput.outcome,
@@ -194,6 +220,29 @@ export async function settleBlackjackRoundInTransaction(
       netAmount,
       walletMutation,
     });
+  }
+
+  for (const aggregate of roundSeatAggregates.values()) {
+    if (aggregate.wagerAmount !== aggregate.roundSeat.totalWagerAmount) {
+      throw new BlackjackSettlementError(
+        "INVALID_SETTLEMENT",
+        `Round seat ${aggregate.roundSeat.id} settlement does not include all active hand wagers.`,
+      );
+    }
+
+    const netAmount =
+      aggregate.payoutAmount - aggregate.roundSeat.totalWagerAmount;
+
+    await tx
+      .update(blackjackRoundSeats)
+      .set({
+        status: "SETTLED",
+        totalPayoutAmount: aggregate.payoutAmount,
+        netAmount,
+        settledAt,
+        updatedAt: settledAt,
+      })
+      .where(eq(blackjackRoundSeats.id, aggregate.roundSeat.id));
   }
 
   await tx
@@ -278,9 +327,10 @@ async function findRoundSeatForSettlement(
   return roundSeat;
 }
 
-async function findPrimaryHand(
+async function findHandForSettlement(
   tx: WalletMutationTransaction,
   roundSeatId: string,
+  handNo: number,
 ) {
   const [hand] = await tx
     .select()
@@ -288,7 +338,7 @@ async function findPrimaryHand(
     .where(
       and(
         eq(blackjackHands.roundSeatId, roundSeatId),
-        eq(blackjackHands.handNo, 1),
+        eq(blackjackHands.handNo, handNo),
       ),
     )
     .limit(1);
@@ -296,7 +346,7 @@ async function findPrimaryHand(
   if (!hand) {
     throw new BlackjackSettlementError(
       "INVALID_SETTLEMENT",
-      `Primary hand for round seat ${roundSeatId} was not found.`,
+      `Hand ${handNo} for round seat ${roundSeatId} was not found.`,
     );
   }
 
@@ -311,7 +361,11 @@ async function readSettledRoundResult(
 
   for (const seatInput of input.seats) {
     const roundSeat = await findRoundSeatForSettlement(tx, input, seatInput);
-    const hand = await findPrimaryHand(tx, seatInput.roundSeatId);
+    const hand = await findHandForSettlement(
+      tx,
+      seatInput.roundSeatId,
+      seatInput.handNo,
+    );
 
     if (
       roundSeat.status !== "SETTLED" ||
@@ -326,12 +380,13 @@ async function readSettledRoundResult(
 
     seats.push({
       roundSeatId: seatInput.roundSeatId,
+      handNo: seatInput.handNo,
       userId: seatInput.userId,
       seatNo: seatInput.seatNo,
       outcome: seatInput.outcome,
       outcomeReason: seatInput.outcomeReason,
-      payoutAmount: roundSeat.totalPayoutAmount,
-      netAmount: roundSeat.netAmount,
+      payoutAmount: hand.payoutAmount,
+      netAmount: hand.netAmount,
       walletMutation: await findSettlementWalletMutation(
         tx,
         input.roundId,
@@ -353,15 +408,16 @@ async function findSettlementWalletMutation(
 ): Promise<WalletMutationResult | null> {
   const [ledger] = await tx
     .select()
-    .from(blackjackRoundSeats)
-    .innerJoin(
-      blackjackHands,
-      eq(blackjackHands.roundSeatId, blackjackRoundSeats.id),
+    .from(blackjackHands)
+    .where(
+      and(
+        eq(blackjackHands.roundSeatId, seatInput.roundSeatId),
+        eq(blackjackHands.handNo, seatInput.handNo),
+      ),
     )
-    .where(eq(blackjackRoundSeats.id, seatInput.roundSeatId))
     .limit(1);
 
-  if (!ledger || ledger.blackjack_round_seats.totalPayoutAmount === zero) {
+  if (!ledger || ledger.payoutAmount === zero) {
     return null;
   }
 
@@ -370,7 +426,7 @@ async function findSettlementWalletMutation(
     buildSettlementWalletMutationInput(
       roundId,
       seatInput,
-      ledger.blackjack_round_seats.totalPayoutAmount,
+      ledger.payoutAmount,
     ),
   );
 }
@@ -435,11 +491,12 @@ function buildSettlementWalletMutationInput(
     delta: payoutAmount,
     referenceType: "BLACKJACK_ROUND",
     referenceId: roundId,
-    idempotencyKey: `blackjack:settlement:${roundId}:${seatInput.roundSeatId}`,
-    memo: `Blackjack settlement for seat ${seatInput.seatNo}`,
+    idempotencyKey: `blackjack:settlement:${roundId}:${seatInput.roundSeatId}:${seatInput.handNo}`,
+    memo: `Blackjack settlement for seat ${seatInput.seatNo} hand ${seatInput.handNo}`,
     metadata: {
       seatNo: seatInput.seatNo,
       roundSeatId: seatInput.roundSeatId,
+      handNo: seatInput.handNo,
       outcome: seatInput.outcome,
       outcomeReason: seatInput.outcomeReason,
     } satisfies JsonObject,
@@ -451,13 +508,14 @@ async function insertSettleActionIfMissing(
   input: {
     roundId: string;
     roundSeatId: string;
+    handNo: number;
     handId: string;
     userId: string;
     payoutAmount: bigint;
     payload: JsonObject;
   },
 ) {
-  const commandId = `settle:${input.roundSeatId}`;
+  const commandId = `settle:${input.roundSeatId}:${input.handNo}`;
   const [existingAction] = await tx
     .select()
     .from(blackjackActions)
@@ -526,12 +584,24 @@ function normalizeSettlementInput(
       ...input.dealer,
       cards: input.dealer.cards.map(showCard),
     },
-    seats: input.seats.map((seat) => ({
-      ...seat,
-      roundSeatId: seat.roundSeatId.trim(),
-      userId: seat.userId.trim(),
-      cards: seat.cards.map(showCard),
-    })),
+    seats: input.seats.map((seat) => {
+      const handNo = seat.handNo ?? 1;
+
+      if (!Number.isInteger(handNo) || handNo < 1 || handNo > 4) {
+        throw new BlackjackSettlementError(
+          "INVALID_SETTLEMENT",
+          "handNo must be an integer between 1 and 4.",
+        );
+      }
+
+      return {
+        ...seat,
+        handNo,
+        roundSeatId: seat.roundSeatId.trim(),
+        userId: seat.userId.trim(),
+        cards: seat.cards.map(showCard),
+      };
+    }),
   };
 }
 

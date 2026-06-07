@@ -114,8 +114,16 @@ jest.mock('./blackjack-engine.port', () => {
       );
     },
     getAvailablePlayerActions: (
-      context: { cards: readonly MockCard[] },
-      rules: { doubleAllowed?: boolean; surrenderAllowed?: boolean } = {},
+      context: {
+        cards: readonly MockCard[];
+        currentHandCount?: number;
+      },
+      rules: {
+        doubleAllowed?: boolean;
+        splitAllowed?: boolean;
+        surrenderAllowed?: boolean;
+        maxSplitHands?: number;
+      } = {},
     ) => {
       const hand = evaluateHand(context.cards);
 
@@ -127,6 +135,15 @@ jest.mock('./blackjack-engine.port', () => {
 
       if (context.cards.length === 2 && rules.doubleAllowed) {
         actions.push('DOUBLE');
+      }
+
+      if (
+        context.cards.length === 2 &&
+        rules.splitAllowed &&
+        context.cards[0]?.rank === context.cards[1]?.rank &&
+        (context.currentHandCount ?? 1) < (rules.maxSplitHands ?? 4)
+      ) {
+        actions.push('SPLIT');
       }
 
       if (context.cards.length === 2 && rules.surrenderAllowed) {
@@ -142,6 +159,7 @@ import {
   BlackjackTableError,
   BlackjackTableService,
 } from './blackjack-table.service';
+import type { BlackjackCard } from './blackjack-engine.port';
 
 const alice = {
   userId: 'user-alice',
@@ -157,6 +175,20 @@ const bob = {
 
 function createDeterministicService() {
   return new BlackjackTableService({ deckCount: 1, randomSource: () => 0 });
+}
+
+function createRiggedService(shoe: BlackjackCard[]) {
+  return new BlackjackTableService({
+    deckCount: 1,
+    shoeFactory: () => shoe,
+  });
+}
+
+function card(
+  rank: BlackjackCard['rank'],
+  suit: BlackjackCard['suit'] = 'clubs',
+): BlackjackCard {
+  return { rank, suit };
 }
 
 function createTimedService(start = new Date('2026-06-07T00:00:00.000Z')) {
@@ -194,6 +226,8 @@ function expectWaitingSeat(
     isSoft: false,
     isCurrentTurn: false,
     availableActions: [],
+    activeHandNo: null,
+    hands: [],
     outcome: null,
     outcomeReason: null,
     payoutAmount: null,
@@ -410,6 +444,7 @@ describe('BlackjackTableService', () => {
     expect(roundStarted.state.round).toEqual({
       roundId: 'round-1',
       currentTurnSeatNo: 1,
+      currentTurnHandNo: 1,
     });
     expect(roundStarted.state.dealer).toEqual({
       cards: [
@@ -484,6 +519,7 @@ describe('BlackjackTableService', () => {
     expect(roundStarted.state.round).toEqual({
       roundId: 'round-1',
       currentTurnSeatNo: 1,
+      currentTurnHandNo: 1,
     });
     expect(roundStarted.state.dealer.cards).toEqual([
       { rank: '4', suit: 'clubs' },
@@ -593,6 +629,7 @@ describe('BlackjackTableService', () => {
     expect(expired?.state.round).toEqual({
       roundId: 'round-1',
       currentTurnSeatNo: 1,
+      currentTurnHandNo: 1,
     });
     expect(expired?.state.dealer.cards).toEqual([
       { rank: '3', suit: 'clubs' },
@@ -695,6 +732,7 @@ describe('BlackjackTableService', () => {
     expect(result.state.round).toEqual({
       roundId: 'round-1',
       currentTurnSeatNo: null,
+      currentTurnHandNo: null,
     });
     expect(result.state.seats[0]).toEqual(
       expect.objectContaining({
@@ -730,6 +768,7 @@ describe('BlackjackTableService', () => {
       seats: [
         {
           roundSeatId: 'round-seat-1',
+          handNo: 1,
           userId: 'user-alice',
           seatNo: 1,
           cards: [
@@ -788,6 +827,7 @@ describe('BlackjackTableService', () => {
     expect(result.settlement?.seats).toEqual([
       {
         roundSeatId: 'round-seat-1',
+        handNo: 1,
         userId: 'user-alice',
         seatNo: 1,
         cards: [
@@ -840,6 +880,7 @@ describe('BlackjackTableService', () => {
       commandId: reservation.commandId,
       roundId: reservation.roundId,
       roundSeatId: reservation.roundSeatId,
+      handNo: reservation.handNo,
       amount: reservation.amount,
     });
 
@@ -849,6 +890,7 @@ describe('BlackjackTableService', () => {
       roundId: 'round-1',
       roundSeatId: 'round-seat-1',
       seatNo: 1,
+      handNo: 1,
       amount: 500n,
       commandId: 'double-command-1',
     });
@@ -871,9 +913,153 @@ describe('BlackjackTableService', () => {
     expect(result.settlement?.seats).toEqual([
       expect.objectContaining({
         roundSeatId: 'round-seat-1',
+        handNo: 1,
         userId: 'user-alice',
         seatNo: 1,
         finalValue: 12,
+        outcome: 'WIN',
+        outcomeReason: 'DEALER_BUST',
+      }),
+    ]);
+  });
+
+  it('confirms split by creating two playable hands on the same seat', () => {
+    const service = createRiggedService([
+      card('8', 'clubs'),
+      card('5', 'clubs'),
+      card('8', 'diamonds'),
+      card('9', 'clubs'),
+      card('2', 'clubs'),
+      card('3', 'clubs'),
+      card('10', 'clubs'),
+    ]);
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+    expireBettingWindowOrFail(service);
+
+    const reservation = service.reserveSplit({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'split-command-1',
+    });
+    const split = service.confirmSplit({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: reservation.commandId,
+      roundId: reservation.roundId,
+      roundSeatId: reservation.roundSeatId,
+      sourceHandNo: reservation.sourceHandNo,
+      newHandNo: reservation.newHandNo,
+      amount: reservation.amount,
+    });
+
+    expect(reservation).toEqual({
+      kind: 'reserved',
+      tableId: 'main',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+      seatNo: 1,
+      sourceHandNo: 1,
+      newHandNo: 2,
+      amount: 500n,
+      commandId: 'split-command-1',
+    });
+    expect(split.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: 1,
+      currentTurnHandNo: 1,
+    });
+    expect(split.state.seats[0]).toEqual(
+      expect.objectContaining({
+        betAmount: '1000',
+        activeHandNo: 1,
+        cards: [
+          { rank: '8', suit: 'clubs' },
+          { rank: '3', suit: 'clubs' },
+        ],
+        availableActions: ['HIT', 'STAND'],
+      }),
+    );
+    expect(split.state.seats[0]?.hands).toEqual([
+      expect.objectContaining({
+        handNo: 1,
+        betAmount: '500',
+        cards: [
+          { rank: '8', suit: 'clubs' },
+          { rank: '3', suit: 'clubs' },
+        ],
+        isCurrentTurn: true,
+        availableActions: ['HIT', 'STAND'],
+      }),
+      expect.objectContaining({
+        handNo: 2,
+        betAmount: '500',
+        cards: [
+          { rank: '8', suit: 'diamonds' },
+          { rank: '2', suit: 'clubs' },
+        ],
+        isCurrentTurn: false,
+        availableActions: [],
+      }),
+    ]);
+
+    const firstStand = service.playerAction({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      action: 'STAND',
+    });
+
+    expect(firstStand.state.round).toEqual({
+      roundId: 'round-1',
+      currentTurnSeatNo: 1,
+      currentTurnHandNo: 2,
+    });
+
+    const secondStand = service.playerAction({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      action: 'STAND',
+    });
+
+    expect(secondStand.event.type).toBe('DEALER_PLAYED');
+    expect(secondStand.state.phase).toBe('SETTLING');
+    expect(secondStand.settlement?.seats).toEqual([
+      expect.objectContaining({
+        roundSeatId: 'round-seat-1',
+        handNo: 1,
+        seatNo: 1,
+        finalValue: 11,
+        outcome: 'WIN',
+        outcomeReason: 'DEALER_BUST',
+      }),
+      expect.objectContaining({
+        roundSeatId: 'round-seat-1',
+        handNo: 2,
+        seatNo: 1,
+        finalValue: 10,
         outcome: 'WIN',
         outcomeReason: 'DEALER_BUST',
       }),
@@ -914,6 +1100,7 @@ describe('BlackjackTableService', () => {
       seats: [
         {
           roundSeatId: 'round-seat-1',
+          handNo: 1,
           seatNo: 1,
           outcome: 'LOSE',
           outcomeReason: 'STANDARD',

@@ -88,6 +88,27 @@ export type DoubleBlackjackBetResult = {
   walletMutation: WalletMutationResult;
 };
 
+export type SplitBlackjackBetInput = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  sourceHandNo: number;
+  userId: string;
+  commandId: string;
+};
+
+export type SplitBlackjackBetResult = {
+  roundId: string;
+  roundSeatId: string;
+  seatNo: number;
+  sourceHandNo: number;
+  newHandNo: number;
+  userId: string;
+  amount: bigint;
+  totalWagerAmount: bigint;
+  walletMutation: WalletMutationResult;
+};
+
 export type BlackjackRuntimeTable = {
   id: string;
   code: string;
@@ -159,6 +180,43 @@ type LockedDoubleDownContextRow = Omit<
   totalWagerAmount: bigint | string;
   initialBetAmount: bigint | string;
   finalBetAmount: bigint | string;
+};
+
+type LockedSplitContext = {
+  roundId: string;
+  roundStatus: string;
+  ruleSnapshot: BlackjackRuleSnapshot;
+  tableMaxTotalBetPerSeat: bigint;
+  tableMaxTotalBetPerUser: bigint;
+  roundSeatId: string;
+  seatNo: number;
+  userId: string;
+  roundSeatStatus: string;
+  totalWagerAmount: bigint;
+  sourceHandId: string;
+  sourceHandNo: number;
+  sourceHandStatus: string;
+  sourceHandInitialBetAmount: bigint;
+  sourceHandFinalBetAmount: bigint;
+  sourceHandIsDoubled: boolean;
+  sourceHandIsSplitHand: boolean;
+  handCount: number;
+  newHandNo: number;
+};
+
+type LockedSplitContextRow = Omit<
+  LockedSplitContext,
+  | "tableMaxTotalBetPerSeat"
+  | "tableMaxTotalBetPerUser"
+  | "totalWagerAmount"
+  | "sourceHandInitialBetAmount"
+  | "sourceHandFinalBetAmount"
+> & {
+  tableMaxTotalBetPerSeat: bigint | string;
+  tableMaxTotalBetPerUser: bigint | string;
+  totalWagerAmount: bigint | string;
+  sourceHandInitialBetAmount: bigint | string;
+  sourceHandFinalBetAmount: bigint | string;
 };
 
 export async function ensureMainBlackjackTable() {
@@ -427,6 +485,137 @@ export async function doubleBlackjackBetInTransaction(
     seatNo: input.seatNo,
     userId: input.userId,
     amount: doubleAmount,
+    totalWagerAmount,
+    walletMutation,
+  };
+}
+
+export async function splitBlackjackBet(
+  input: SplitBlackjackBetInput,
+): Promise<SplitBlackjackBetResult> {
+  const normalizedInput = normalizeSplitBetInput(input);
+
+  return db.transaction((tx) =>
+    splitBlackjackBetInTransaction(tx, normalizedInput),
+  );
+}
+
+export async function splitBlackjackBetInTransaction(
+  tx: WalletMutationTransaction,
+  input: SplitBlackjackBetInput,
+): Promise<SplitBlackjackBetResult> {
+  const context = await lockSplitContext(tx, input);
+  const splitAmount = context.sourceHandInitialBetAmount;
+  const serverCommandId = buildServerCommandId(input);
+  const existingAction = await findBetActionByCommandId(
+    tx,
+    input.roundId,
+    serverCommandId,
+  );
+
+  if (existingAction) {
+    const newHandNo = assertExistingSplitActionMatches(
+      existingAction,
+      context,
+      input,
+    );
+
+    return {
+      roundId: input.roundId,
+      roundSeatId: input.roundSeatId,
+      seatNo: input.seatNo,
+      sourceHandNo: input.sourceHandNo,
+      newHandNo,
+      userId: input.userId,
+      amount: splitAmount,
+      totalWagerAmount: context.totalWagerAmount,
+      walletMutation: await applyWalletMutationInTransaction(
+        tx,
+        buildSplitWalletMutationInput(input, splitAmount),
+      ),
+    };
+  }
+
+  assertSplitAllowed(context);
+  await assertSplitBetAmountAllowed(tx, {
+    context,
+    userId: input.userId,
+    amount: splitAmount,
+  });
+
+  const now = new Date();
+  const totalWagerAmount = context.totalWagerAmount + splitAmount;
+
+  await tx
+    .update(blackjackRoundSeats)
+    .set({
+      totalWagerAmount,
+      netAmount: -totalWagerAmount,
+      updatedAt: now,
+    })
+    .where(eq(blackjackRoundSeats.id, input.roundSeatId));
+
+  await tx
+    .update(blackjackHands)
+    .set({
+      isSplitHand: true,
+      updatedAt: now,
+    })
+    .where(eq(blackjackHands.id, context.sourceHandId));
+
+  const [newHand] = await tx
+    .insert(blackjackHands)
+    .values({
+      roundId: input.roundId,
+      roundSeatId: input.roundSeatId,
+      handNo: context.newHandNo,
+      sourceHandId: context.sourceHandId,
+      initialBetAmount: splitAmount,
+      finalBetAmount: splitAmount,
+      netAmount: -splitAmount,
+      isSplitHand: true,
+    })
+    .returning();
+
+  if (!newHand) {
+    throw new BlackjackBettingError(
+      "ACTION_NOT_ALLOWED",
+      `Failed to create split hand for round seat ${input.roundSeatId}.`,
+    );
+  }
+
+  await tx.insert(blackjackActions).values({
+    roundId: input.roundId,
+    roundSeatId: input.roundSeatId,
+    handId: context.sourceHandId,
+    userId: input.userId,
+    actorType: "PLAYER",
+    actionType: "SPLIT",
+    actionSequence: await nextActionSequence(tx, input.roundId),
+    commandId: serverCommandId,
+    amount: splitAmount,
+    payload: {
+      seatNo: input.seatNo,
+      sourceHandNo: input.sourceHandNo,
+      newHandNo: context.newHandNo,
+      newHandId: newHand.id,
+      clientCommandId: input.commandId,
+    },
+  });
+
+  const walletMutation = await applyWalletMutationInTransaction(
+    tx,
+    buildSplitWalletMutationInput(input, splitAmount),
+  );
+
+  return {
+    roundId: input.roundId,
+    roundSeatId: input.roundSeatId,
+    seatNo: input.seatNo,
+    sourceHandNo: input.sourceHandNo,
+    newHandNo: context.newHandNo,
+    userId: input.userId,
+    amount: splitAmount,
     totalWagerAmount,
     walletMutation,
   };
@@ -811,6 +1000,147 @@ async function assertDoubleBetAmountAllowed(
   }
 }
 
+async function lockSplitContext(
+  tx: WalletMutationTransaction,
+  input: SplitBlackjackBetInput,
+): Promise<LockedSplitContext> {
+  const result = await tx.execute(sql<LockedSplitContextRow>`
+    select
+      r.id as "roundId",
+      r.status as "roundStatus",
+      r.rule_snapshot as "ruleSnapshot",
+      t.max_total_bet_per_seat as "tableMaxTotalBetPerSeat",
+      t.max_total_bet_per_user as "tableMaxTotalBetPerUser",
+      rs.id as "roundSeatId",
+      rs.seat_no as "seatNo",
+      rs.user_id as "userId",
+      rs.status as "roundSeatStatus",
+      rs.total_wager_amount as "totalWagerAmount",
+      h.id as "sourceHandId",
+      h.hand_no as "sourceHandNo",
+      h.status as "sourceHandStatus",
+      h.initial_bet_amount as "sourceHandInitialBetAmount",
+      h.final_bet_amount as "sourceHandFinalBetAmount",
+      h.is_doubled as "sourceHandIsDoubled",
+      h.is_split_hand as "sourceHandIsSplitHand",
+      (
+        select count(*)::int
+        from blackjack_hands all_hands
+        where all_hands.round_seat_id = rs.id
+      ) as "handCount",
+      (
+        select coalesce(max(all_hands.hand_no), 0)::int + 1
+        from blackjack_hands all_hands
+        where all_hands.round_seat_id = rs.id
+      ) as "newHandNo"
+    from blackjack_rounds r
+    inner join blackjack_tables t on t.id = r.table_id
+    inner join blackjack_round_seats rs on rs.round_id = r.id
+    inner join blackjack_hands h on h.round_seat_id = rs.id
+    where r.id = ${input.roundId}
+      and rs.id = ${input.roundSeatId}
+      and h.hand_no = ${input.sourceHandNo}
+    for update of r, rs, h
+  `);
+  const [row] = getRows<LockedSplitContextRow>(result);
+
+  if (!row) {
+    throw new BlackjackBettingError(
+      "ROUND_SEAT_NOT_FOUND",
+      `Round seat ${input.roundSeatId} was not found for split.`,
+    );
+  }
+
+  if (row.userId !== input.userId || row.seatNo !== input.seatNo) {
+    throw new BlackjackBettingError(
+      "IDEMPOTENCY_CONFLICT",
+      `Round seat ${input.roundSeatId} does not match the split payload.`,
+    );
+  }
+
+  return {
+    ...row,
+    tableMaxTotalBetPerSeat: toBigInt(row.tableMaxTotalBetPerSeat),
+    tableMaxTotalBetPerUser: toBigInt(row.tableMaxTotalBetPerUser),
+    totalWagerAmount: toBigInt(row.totalWagerAmount),
+    sourceHandInitialBetAmount: toBigInt(row.sourceHandInitialBetAmount),
+    sourceHandFinalBetAmount: toBigInt(row.sourceHandFinalBetAmount),
+  };
+}
+
+function assertSplitAllowed(context: LockedSplitContext) {
+  if (context.roundStatus === "SETTLED" || context.roundStatus === "CANCELLED") {
+    throw new BlackjackBettingError(
+      "ROUND_NOT_ACTIVE",
+      `Round ${context.roundId} is ${context.roundStatus}.`,
+    );
+  }
+
+  if (!context.ruleSnapshot.splitAllowed) {
+    throw new BlackjackBettingError(
+      "ACTION_NOT_ALLOWED",
+      `Split is not allowed for round ${context.roundId}.`,
+    );
+  }
+
+  if (
+    context.roundSeatStatus !== "ACTIVE" ||
+    context.sourceHandStatus !== "ACTIVE" ||
+    context.sourceHandIsDoubled ||
+    context.sourceHandFinalBetAmount !== context.sourceHandInitialBetAmount
+  ) {
+    throw new BlackjackBettingError(
+      "ACTION_NOT_ALLOWED",
+      `Hand ${context.sourceHandNo} cannot be split.`,
+    );
+  }
+
+  if (
+    context.handCount >= context.ruleSnapshot.maxSplitHands ||
+    context.newHandNo > context.ruleSnapshot.maxSplitHands
+  ) {
+    throw new BlackjackBettingError(
+      "ACTION_NOT_ALLOWED",
+      `Round seat ${context.roundSeatId} has reached the split hand limit.`,
+    );
+  }
+}
+
+async function assertSplitBetAmountAllowed(
+  tx: WalletMutationTransaction,
+  input: {
+    context: LockedSplitContext;
+    userId: string;
+    amount: bigint;
+  },
+) {
+  if (
+    input.context.totalWagerAmount + input.amount >
+    input.context.tableMaxTotalBetPerSeat
+  ) {
+    throw new BlackjackBettingError(
+      "BET_TOO_HIGH",
+      `Total seat wager must not exceed ${input.context.tableMaxTotalBetPerSeat}.`,
+    );
+  }
+
+  const totalWagerForUser = await getActiveRoundWagerForUser(
+    tx,
+    input.context.roundId,
+    input.userId,
+  );
+
+  if (
+    totalWagerForUser + input.amount >
+    input.context.tableMaxTotalBetPerUser
+  ) {
+    throw new BlackjackBettingError(
+      "BET_TOO_HIGH",
+      `Total user wager must not exceed ${input.context.tableMaxTotalBetPerUser}.`,
+    );
+  }
+}
+
 async function findBetActionByCommandId(
   tx: WalletMutationTransaction,
   roundId: string,
@@ -950,6 +1280,29 @@ function buildDoubleWalletMutationInput(
   };
 }
 
+function buildSplitWalletMutationInput(
+  input: SplitBlackjackBetInput,
+  amount: bigint,
+) {
+  return {
+    userId: input.userId,
+    category: "GAME" as const,
+    gameType: "BLACKJACK" as const,
+    type: "SPLIT_BET" as const,
+    delta: -amount,
+    referenceType: "BLACKJACK_ROUND",
+    referenceId: input.roundId,
+    idempotencyKey: `blackjack:split:${input.roundId}:${input.roundSeatId}:${input.sourceHandNo}:${input.userId}:${input.commandId}`,
+    memo: `Blackjack split for seat ${input.seatNo} hand ${input.sourceHandNo}`,
+    metadata: {
+      seatNo: input.seatNo,
+      roundSeatId: input.roundSeatId,
+      sourceHandNo: input.sourceHandNo,
+      commandId: input.commandId,
+    } satisfies JsonObject,
+  };
+}
+
 function assertExistingBetActionMatches(
   action: typeof blackjackActions.$inferSelect,
   roundSeat: typeof blackjackRoundSeats.$inferSelect,
@@ -994,6 +1347,37 @@ function assertExistingDoubleActionMatches(
       `Command ${input.commandId} was reused with different double down details.`,
     );
   }
+}
+
+function assertExistingSplitActionMatches(
+  action: typeof blackjackActions.$inferSelect,
+  context: LockedSplitContext,
+  input: SplitBlackjackBetInput,
+) {
+  const newHandNo = readNumberPayloadValue(action.payload, "newHandNo");
+  const sourceHandNo = readNumberPayloadValue(action.payload, "sourceHandNo");
+  const mismatched =
+    action.actionType !== "SPLIT" ||
+    action.userId !== input.userId ||
+    action.roundSeatId !== input.roundSeatId ||
+    action.handId !== context.sourceHandId ||
+    action.amount !== context.sourceHandInitialBetAmount ||
+    context.userId !== input.userId ||
+    context.seatNo !== input.seatNo ||
+    !context.sourceHandIsSplitHand ||
+    sourceHandNo !== input.sourceHandNo ||
+    newHandNo === null ||
+    newHandNo < 1 ||
+    newHandNo > context.ruleSnapshot.maxSplitHands;
+
+  if (mismatched) {
+    throw new BlackjackBettingError(
+      "IDEMPOTENCY_CONFLICT",
+      `Command ${input.commandId} was reused with different split details.`,
+    );
+  }
+
+  return newHandNo;
 }
 
 function buildServerCommandId(input: { userId: string; commandId: string }) {
@@ -1098,6 +1482,70 @@ function normalizeDoubleBetInput(
     roundId,
     roundSeatId,
     seatNo: input.seatNo,
+    userId,
+    commandId,
+  };
+}
+
+function normalizeSplitBetInput(
+  input: SplitBlackjackBetInput,
+): SplitBlackjackBetInput {
+  const roundId = input.roundId.trim();
+  const roundSeatId = input.roundSeatId.trim();
+  const userId = input.userId.trim();
+  const commandId = input.commandId.trim();
+
+  if (!roundId) {
+    throw new BlackjackBettingError(
+      "ROUND_NOT_ACTIVE",
+      "roundId is required for split.",
+    );
+  }
+
+  if (!roundSeatId) {
+    throw new BlackjackBettingError(
+      "ROUND_SEAT_NOT_FOUND",
+      "roundSeatId is required for split.",
+    );
+  }
+
+  if (!Number.isInteger(input.seatNo) || input.seatNo < 1 || input.seatNo > 7) {
+    throw new BlackjackBettingError(
+      "INVALID_SEAT_NO",
+      "seatNo must be an integer between 1 and 7.",
+    );
+  }
+
+  if (
+    !Number.isInteger(input.sourceHandNo) ||
+    input.sourceHandNo < 1 ||
+    input.sourceHandNo > 4
+  ) {
+    throw new BlackjackBettingError(
+      "ACTION_NOT_ALLOWED",
+      "sourceHandNo must be an integer between 1 and 4.",
+    );
+  }
+
+  if (!userId) {
+    throw new BlackjackBettingError(
+      "IDEMPOTENCY_CONFLICT",
+      "userId is required for split.",
+    );
+  }
+
+  if (!commandId) {
+    throw new BlackjackBettingError(
+      "INVALID_COMMAND_ID",
+      "commandId is required for split.",
+    );
+  }
+
+  return {
+    roundId,
+    roundSeatId,
+    seatNo: input.seatNo,
+    sourceHandNo: input.sourceHandNo,
     userId,
     commandId,
   };
@@ -1211,4 +1659,14 @@ function getRows<T>(result: unknown): T[] {
 
 function toBigInt(value: bigint | string) {
   return typeof value === "bigint" ? value : BigInt(value);
+}
+
+function readNumberPayloadValue(payload: unknown, key: string) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const value = (payload as Record<string, unknown>)[key];
+
+  return typeof value === "number" && Number.isInteger(value) ? value : null;
 }

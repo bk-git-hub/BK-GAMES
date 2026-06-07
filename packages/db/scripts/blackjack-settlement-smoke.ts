@@ -16,6 +16,7 @@ import {
   pointLedgers,
   pool,
   settleBlackjackRound,
+  splitBlackjackBet,
   type SettleBlackjackRoundInput,
   userProfiles,
   wallets,
@@ -129,6 +130,22 @@ try {
     userId,
     commandId: "double-command-1",
   });
+  const splitBet = await splitBlackjackBet({
+    roundId: firstBet.round.id,
+    roundSeatId: secondBet.roundSeat.id,
+    seatNo: 2,
+    sourceHandNo: 1,
+    userId,
+    commandId: "split-command-1",
+  });
+  const splitBetRetry = await splitBlackjackBet({
+    roundId: firstBet.round.id,
+    roundSeatId: secondBet.roundSeat.id,
+    seatNo: 2,
+    sourceHandNo: 1,
+    userId,
+    commandId: "split-command-1",
+  });
 
   const settlementInput = {
     roundId: firstBet.round.id,
@@ -144,6 +161,7 @@ try {
     seats: [
       {
         roundSeatId: firstBet.roundSeat.id,
+        handNo: 1,
         userId,
         seatNo: 1,
         cards: [
@@ -160,6 +178,7 @@ try {
       },
       {
         roundSeatId: secondBet.roundSeat.id,
+        handNo: 1,
         userId,
         seatNo: 2,
         cards: [
@@ -174,7 +193,25 @@ try {
         outcomeReason: "STANDARD",
       },
       {
+        roundSeatId: secondBet.roundSeat.id,
+        handNo: 2,
+        userId,
+        seatNo: 2,
+        cards: [
+          { rank: "9", suit: "diamonds" },
+          { rank: "8", suit: "hearts" },
+          { rank: "3", suit: "clubs" },
+        ],
+        finalValue: 20,
+        isSoft: false,
+        isNaturalBlackjack: false,
+        busted: false,
+        outcome: "WIN",
+        outcomeReason: "STANDARD",
+      },
+      {
         roundSeatId: thirdBet.roundSeat.id,
+        handNo: 1,
         userId,
         seatNo: 3,
         cards: [
@@ -211,13 +248,19 @@ try {
     tableCode,
     firstSeatPayout: settlement.seats[0]?.payoutAmount.toString(),
     secondSeatPayout: settlement.seats[1]?.payoutAmount.toString(),
-    thirdSeatPayout: settlement.seats[2]?.payoutAmount.toString(),
+    secondSplitWinPayout: settlement.seats[2]?.payoutAmount.toString(),
+    thirdSeatPayout: settlement.seats[3]?.payoutAmount.toString(),
     doubleBetAmount: doubleBet.amount.toString(),
     doubleBetTotalWager: doubleBet.totalWagerAmount.toString(),
     doubleBetRetryIdempotent: doubleBetRetry.walletMutation.idempotent,
+    splitBetAmount: splitBet.amount.toString(),
+    splitBetNewHandNo: splitBet.newHandNo,
+    splitBetTotalWager: splitBet.totalWagerAmount.toString(),
+    splitBetRetryIdempotent: splitBetRetry.walletMutation.idempotent,
     retryFirstIdempotent: retry.seats[0]?.walletMutation?.idempotent,
     retrySecondIdempotent: retry.seats[1]?.walletMutation?.idempotent,
-    retryThirdIdempotent: retry.seats[2]?.walletMutation?.idempotent,
+    retrySplitWinIdempotent: retry.seats[2]?.walletMutation?.idempotent,
+    retryThirdIdempotent: retry.seats[3]?.walletMutation?.idempotent,
     surrenderLedgerDelta: surrenderLedger?.delta.toString(),
     finalBalance: wallet?.balance.toString(),
     ledgerCount: ledgers.length,
@@ -226,16 +269,22 @@ try {
   if (
     summary.firstSeatPayout !== "2000" ||
     summary.secondSeatPayout !== "500" ||
+    summary.secondSplitWinPayout !== "1000" ||
     summary.thirdSeatPayout !== "250" ||
     summary.doubleBetAmount !== "500" ||
     summary.doubleBetTotalWager !== "1000" ||
     !summary.doubleBetRetryIdempotent ||
+    summary.splitBetAmount !== "500" ||
+    summary.splitBetNewHandNo !== 2 ||
+    summary.splitBetTotalWager !== "1000" ||
+    !summary.splitBetRetryIdempotent ||
     !summary.retryFirstIdempotent ||
     !summary.retrySecondIdempotent ||
+    !summary.retrySplitWinIdempotent ||
     !summary.retryThirdIdempotent ||
     summary.surrenderLedgerDelta !== "250" ||
-    summary.finalBalance !== "10750" ||
-    summary.ledgerCount !== 8
+    summary.finalBalance !== "11250" ||
+    summary.ledgerCount !== 10
   ) {
     throw new Error(
       `Unexpected blackjack settlement smoke result: ${JSON.stringify(

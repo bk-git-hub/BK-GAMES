@@ -303,6 +303,25 @@ export async function ensureMainBlackjackTable() {
   });
 }
 
+export async function getBlackjackTableByCode(tableCode: string) {
+  const normalizedTableCode = tableCode.trim();
+
+  if (!normalizedTableCode) {
+    throw new BlackjackBettingError(
+      "TABLE_NOT_FOUND",
+      "tableCode is required.",
+    );
+  }
+
+  const [table] = await db
+    .select()
+    .from(blackjackTables)
+    .where(eq(blackjackTables.code, normalizedTableCode))
+    .limit(1);
+
+  return table ? toRuntimeTable(table) : null;
+}
+
 export async function placeBlackjackInitialBet(
   input: PlaceBlackjackInitialBetInput,
 ): Promise<PlaceBlackjackInitialBetResult> {

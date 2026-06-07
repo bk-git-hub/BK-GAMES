@@ -45,6 +45,33 @@ export type BlackjackTableOptions = {
   bettingWindowMs?: number;
 };
 
+export type BlackjackTableConfig = {
+  status: BlackjackTableStatus;
+  maxSeats: number;
+  maxSeatsPerUser: number;
+  minInitialBet: bigint;
+  maxInitialBet: bigint;
+  maxTotalBetPerSeat: bigint;
+  maxTotalBetPerUser: bigint;
+  deckCount: number;
+  dealerHitsSoft17: boolean;
+  insuranceAllowed: boolean;
+  evenMoneyAllowed: boolean;
+  doubleAllowed: boolean;
+  splitAllowed: boolean;
+  doubleAfterSplitAllowed: boolean;
+  maxSplitHands: number;
+  resplitAcesAllowed: boolean;
+  hitSplitAcesAllowed: boolean;
+  surrenderMode: BlackjackSurrenderMode;
+  bettingWindowMs: number;
+};
+
+export type BlackjackConfigureTableInput = {
+  tableId: string;
+  config: BlackjackTableConfig;
+};
+
 @Injectable()
 export class BlackjackTableService {
   private readonly tables = new Map<string, BlackjackTableRuntime>();
@@ -103,6 +130,23 @@ export class BlackjackTableService {
     };
   }
 
+  configureTable(input: BlackjackConfigureTableInput) {
+    const tableId = normalizeTableId(input.tableId);
+    const config = normalizeTableConfig(input.config);
+    const existing = this.tables.get(tableId);
+
+    if (!existing) {
+      this.tables.set(tableId, this.createRuntimeTable(tableId, config));
+      return;
+    }
+
+    if (existing.round || hasAnyConfirmedBet(existing)) {
+      return;
+    }
+
+    this.applyTableConfig(existing, config);
+  }
+
   takeSeat(input: BlackjackTakeSeatInput): BlackjackTableMutationResult {
     const table = this.getOrCreateTable(input.tableId);
     const user = normalizeSocketUser(input.user, input.nickname);
@@ -110,6 +154,7 @@ export class BlackjackTableService {
     const currentSeat = table.seats.get(seatNo);
 
     table.connections.set(input.socketId, user);
+    assertTableOpen(table);
 
     if (table.phase !== 'WAITING' && table.phase !== 'WAITING_BETS') {
       throw new BlackjackTableError(
@@ -210,6 +255,7 @@ export class BlackjackTableService {
     const seat = table.seats.get(seatNo);
 
     table.connections.set(input.socketId, user);
+    assertTableOpen(table);
 
     if (
       table.phase !== 'WAITING_BETS' ||
@@ -1228,11 +1274,40 @@ export class BlackjackTableService {
       return existing;
     }
 
+    const table = this.createRuntimeTable(
+      normalizedTableId,
+      this.buildDefaultTableConfig(),
+    );
+
+    this.tables.set(normalizedTableId, table);
+
+    return table;
+  }
+
+  private createRuntimeTable(
+    tableId: string,
+    config: BlackjackTableConfig,
+  ): BlackjackTableRuntime {
+    const normalizedConfig = normalizeTableConfig(config);
     const now = this.now().toISOString();
     const table: BlackjackTableRuntime = {
-      tableId: normalizedTableId,
-      status: 'OPEN',
+      tableId,
+      ...normalizedConfig,
       phase: 'WAITING',
+      shoe: [],
+      bettingClosesAt: undefined,
+      seats: new Map(),
+      connections: new Map(),
+      version: 0,
+      updatedAt: now,
+    };
+
+    return table;
+  }
+
+  private buildDefaultTableConfig(): BlackjackTableConfig {
+    return {
+      status: 'OPEN',
       maxSeats: 7,
       maxSeatsPerUser: 7,
       minInitialBet: 100n,
@@ -1250,17 +1325,33 @@ export class BlackjackTableService {
       resplitAcesAllowed: this.resplitAcesAllowed,
       hitSplitAcesAllowed: this.hitSplitAcesAllowed,
       surrenderMode: this.surrenderMode,
-      shoe: [],
-      bettingClosesAt: undefined,
-      seats: new Map(),
-      connections: new Map(),
-      version: 0,
-      updatedAt: now,
+      bettingWindowMs: this.bettingWindowMs,
     };
+  }
 
-    this.tables.set(normalizedTableId, table);
-
-    return table;
+  private applyTableConfig(
+    table: BlackjackTableRuntime,
+    config: BlackjackTableConfig,
+  ) {
+    table.status = config.status;
+    table.maxSeats = config.maxSeats;
+    table.maxSeatsPerUser = config.maxSeatsPerUser;
+    table.minInitialBet = config.minInitialBet;
+    table.maxInitialBet = config.maxInitialBet;
+    table.maxTotalBetPerSeat = config.maxTotalBetPerSeat;
+    table.maxTotalBetPerUser = config.maxTotalBetPerUser;
+    table.deckCount = config.deckCount;
+    table.dealerHitsSoft17 = config.dealerHitsSoft17;
+    table.insuranceAllowed = config.insuranceAllowed;
+    table.evenMoneyAllowed = config.evenMoneyAllowed;
+    table.doubleAllowed = config.doubleAllowed;
+    table.splitAllowed = config.splitAllowed;
+    table.doubleAfterSplitAllowed = config.doubleAfterSplitAllowed;
+    table.maxSplitHands = config.maxSplitHands;
+    table.resplitAcesAllowed = config.resplitAcesAllowed;
+    table.hitSplitAcesAllowed = config.hitSplitAcesAllowed;
+    table.surrenderMode = config.surrenderMode;
+    table.bettingWindowMs = config.bettingWindowMs;
   }
 
   private bump(table: BlackjackTableRuntime) {
@@ -1410,7 +1501,7 @@ export class BlackjackTableService {
     }
 
     table.bettingClosesAt = new Date(
-      this.now().getTime() + this.bettingWindowMs,
+      this.now().getTime() + table.bettingWindowMs,
     );
   }
 
@@ -2170,6 +2261,7 @@ type BlackjackTableRuntime = {
   resplitAcesAllowed: boolean;
   hitSplitAcesAllowed: boolean;
   surrenderMode: BlackjackSurrenderMode;
+  bettingWindowMs: number;
   shoe: BlackjackCard[];
   round?: BlackjackRoundRuntime;
   bettingClosesAt?: Date;
@@ -2294,6 +2386,95 @@ function normalizeSurrenderMode(
   return surrenderMode;
 }
 
+function normalizeTableConfig(
+  config: BlackjackTableConfig,
+): BlackjackTableConfig {
+  const maxSeats = normalizeMaxSeats(config.maxSeats);
+  const maxSeatsPerUser = normalizeMaxSeatsPerUser(
+    config.maxSeatsPerUser,
+    maxSeats,
+  );
+  const minInitialBet = normalizePointAmount(config.minInitialBet);
+  const maxInitialBet = normalizePointAmount(config.maxInitialBet);
+  const maxTotalBetPerSeat = normalizePointAmount(config.maxTotalBetPerSeat);
+  const maxTotalBetPerUser = normalizePointAmount(config.maxTotalBetPerUser);
+
+  if (maxInitialBet < minInitialBet) {
+    throw new BlackjackTableError(
+      'UNKNOWN_ERROR',
+      'Blackjack maxInitialBet must be greater than or equal to minInitialBet.',
+    );
+  }
+
+  if (maxTotalBetPerSeat < maxInitialBet) {
+    throw new BlackjackTableError(
+      'UNKNOWN_ERROR',
+      'Blackjack maxTotalBetPerSeat must be greater than or equal to maxInitialBet.',
+    );
+  }
+
+  if (maxTotalBetPerUser < maxTotalBetPerSeat) {
+    throw new BlackjackTableError(
+      'UNKNOWN_ERROR',
+      'Blackjack maxTotalBetPerUser must be greater than or equal to maxTotalBetPerSeat.',
+    );
+  }
+
+  return {
+    ...config,
+    status: normalizeTableStatus(config.status),
+    maxSeats,
+    maxSeatsPerUser,
+    minInitialBet,
+    maxInitialBet,
+    maxTotalBetPerSeat,
+    maxTotalBetPerUser,
+    deckCount: normalizeDeckCount(config.deckCount),
+    maxSplitHands: normalizeMaxSplitHands(config.maxSplitHands),
+    surrenderMode: normalizeSurrenderMode(config.surrenderMode),
+    bettingWindowMs: normalizeBettingWindowMs(config.bettingWindowMs),
+  };
+}
+
+function normalizeTableStatus(
+  status: BlackjackTableStatus,
+): BlackjackTableStatus {
+  if (status === 'OPEN' || status === 'MAINTENANCE' || status === 'CLOSED') {
+    return status;
+  }
+
+  throw new BlackjackTableError(
+    'UNKNOWN_ERROR',
+    `Unsupported blackjack table status ${String(status)}.`,
+  );
+}
+
+function normalizeMaxSeats(maxSeats: number) {
+  if (!Number.isInteger(maxSeats) || maxSeats < 1 || maxSeats > 7) {
+    throw new BlackjackTableError(
+      'UNKNOWN_ERROR',
+      'Blackjack maxSeats must be an integer between 1 and 7.',
+    );
+  }
+
+  return maxSeats;
+}
+
+function normalizeMaxSeatsPerUser(maxSeatsPerUser: number, maxSeats: number) {
+  if (
+    !Number.isInteger(maxSeatsPerUser) ||
+    maxSeatsPerUser < 1 ||
+    maxSeatsPerUser > maxSeats
+  ) {
+    throw new BlackjackTableError(
+      'UNKNOWN_ERROR',
+      'Blackjack maxSeatsPerUser must be an integer between 1 and maxSeats.',
+    );
+  }
+
+  return maxSeatsPerUser;
+}
+
 function normalizeTableId(tableId: string) {
   const normalizedTableId = tableId.trim();
 
@@ -2324,6 +2505,15 @@ function normalizePointAmount(amount: bigint) {
   }
 
   return amount;
+}
+
+function assertTableOpen(table: BlackjackTableRuntime) {
+  if (table.status !== 'OPEN') {
+    throw new BlackjackTableError(
+      'TABLE_NOT_OPEN',
+      `Blackjack table ${table.tableId} is ${table.status}.`,
+    );
+  }
 }
 
 function normalizeCommandId(commandId: string) {
@@ -2432,6 +2622,10 @@ function hasConfirmedBet(
   seat: BlackjackSeatRuntime,
 ): seat is BlackjackSeatRuntime & { bet: BlackjackBetRuntime } {
   return Boolean(seat.bet);
+}
+
+function hasAnyConfirmedBet(table: BlackjackTableRuntime) {
+  return Array.from(table.seats.values()).some((seat) => Boolean(seat.bet));
 }
 
 function isBettingWindowExpired(table: BlackjackTableRuntime, now: Date) {

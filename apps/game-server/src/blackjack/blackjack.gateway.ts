@@ -29,6 +29,7 @@ import {
   BlackjackTableService,
   type BlackjackTableMutationResult,
 } from './blackjack-table.service';
+import { BlackjackTableConfigService } from './blackjack-table-config.service';
 
 @WebSocketGateway({
   namespace: BLACKJACK_NAMESPACE,
@@ -45,6 +46,7 @@ export class BlackjackGateway {
 
   constructor(
     private readonly tableService: BlackjackTableService,
+    private readonly tableConfigService: BlackjackTableConfigService,
     private readonly gameTokenService: GameTokenService,
     private readonly walletService: WalletService,
   ) {}
@@ -62,7 +64,8 @@ export class BlackjackGateway {
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: BlackjackJoinTablePayload,
   ) {
-    this.handleCommand(socket, BLACKJACK_CLIENT_EVENTS.TABLE_JOIN, () => {
+    this.handleCommand(socket, BLACKJACK_CLIENT_EVENTS.TABLE_JOIN, async () => {
+      await this.configureRuntimeTable(body.tableId);
       const user = this.resolveSocketUser(socket, body.nickname);
       const update = this.tableService.joinTable({
         tableId: body.tableId,
@@ -81,7 +84,8 @@ export class BlackjackGateway {
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: BlackjackTakeSeatPayload,
   ) {
-    this.handleCommand(socket, BLACKJACK_CLIENT_EVENTS.SEAT_TAKE, () => {
+    this.handleCommand(socket, BLACKJACK_CLIENT_EVENTS.SEAT_TAKE, async () => {
+      await this.configureRuntimeTable(body.tableId);
       const user = this.resolveSocketUser(socket, body.nickname);
       const update = this.tableService.takeSeat({
         tableId: body.tableId,
@@ -102,7 +106,8 @@ export class BlackjackGateway {
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: BlackjackLeaveSeatPayload,
   ) {
-    this.handleCommand(socket, BLACKJACK_CLIENT_EVENTS.SEAT_LEAVE, () => {
+    this.handleCommand(socket, BLACKJACK_CLIENT_EVENTS.SEAT_LEAVE, async () => {
+      await this.configureRuntimeTable(body.tableId);
       const user = this.resolveSocketUser(socket);
       const update = this.tableService.leaveSeat({
         tableId: body.tableId,
@@ -126,6 +131,7 @@ export class BlackjackGateway {
       socket,
       BLACKJACK_CLIENT_EVENTS.BET_PLACE,
       async () => {
+        await this.configureRuntimeTable(body.tableId);
         const user = this.resolveSocketUser(socket);
         const amount = parsePointAmount(body.amount);
         const reservation = this.tableService.reserveBet({
@@ -191,6 +197,7 @@ export class BlackjackGateway {
       socket,
       BLACKJACK_CLIENT_EVENTS.PLAYER_ACTION,
       async () => {
+        await this.configureRuntimeTable(body.tableId);
         const user = this.resolveSocketUser(socket);
 
         if (body.action === 'INSURANCE') {
@@ -438,6 +445,12 @@ export class BlackjackGateway {
     } catch (error) {
       this.emitError(socket, event, error);
     }
+  }
+
+  private async configureRuntimeTable(tableId: string) {
+    const config = await this.tableConfigService.getTableConfig(tableId);
+
+    this.tableService.configureTable({ tableId, config });
   }
 
   private emitTableUpdate(update: BlackjackTableMutationResult) {

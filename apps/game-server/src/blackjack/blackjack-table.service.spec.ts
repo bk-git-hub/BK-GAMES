@@ -170,6 +170,7 @@ jest.mock('./blackjack-engine.port', () => {
 import {
   BlackjackTableError,
   BlackjackTableService,
+  type BlackjackTableConfig,
 } from './blackjack-table.service';
 import type { BlackjackCard } from './blackjack-engine.port';
 
@@ -221,6 +222,33 @@ function createTimedService(start = new Date('2026-06-07T00:00:00.000Z')) {
     setNow: (value: Date) => {
       now = value;
     },
+  };
+}
+
+function configuredTable(
+  overrides: Partial<BlackjackTableConfig> = {},
+): BlackjackTableConfig {
+  return {
+    status: 'OPEN',
+    maxSeats: 7,
+    maxSeatsPerUser: 7,
+    minInitialBet: 100n,
+    maxInitialBet: 6_000n,
+    maxTotalBetPerSeat: 24_000n,
+    maxTotalBetPerUser: 42_000n,
+    deckCount: 1,
+    dealerHitsSoft17: false,
+    insuranceAllowed: false,
+    evenMoneyAllowed: false,
+    doubleAllowed: true,
+    splitAllowed: true,
+    doubleAfterSplitAllowed: false,
+    maxSplitHands: 4,
+    resplitAcesAllowed: false,
+    hitSplitAcesAllowed: false,
+    surrenderMode: 'LATE',
+    bettingWindowMs: 20_000,
+    ...overrides,
   };
 }
 
@@ -514,6 +542,90 @@ describe('BlackjackTableService', () => {
         availableActions: ['HIT', 'STAND', 'DOUBLE', 'SURRENDER'],
       }),
     ]);
+  });
+
+  it('uses configured table rules for limits, betting timer, and actions', () => {
+    const service = new BlackjackTableService({
+      deckCount: 1,
+      nowSource: () => new Date('2026-06-07T00:00:00.000Z'),
+      shoeFactory: () => [
+        card('8', 'clubs'),
+        card('5', 'clubs'),
+        card('7', 'diamonds'),
+        card('9', 'clubs'),
+      ],
+    });
+
+    service.configureTable({
+      tableId: 'main',
+      config: configuredTable({
+        maxSeats: 3,
+        maxSeatsPerUser: 1,
+        minInitialBet: 250n,
+        maxInitialBet: 250n,
+        maxTotalBetPerSeat: 250n,
+        maxTotalBetPerUser: 250n,
+        doubleAllowed: false,
+        splitAllowed: false,
+        surrenderMode: 'NONE',
+        bettingWindowMs: 45_000,
+      }),
+    });
+
+    expect(() =>
+      service.takeSeat({
+        tableId: 'main',
+        socketId: 'socket-alice',
+        user: alice,
+        seatNo: 4,
+      }),
+    ).toThrow(BlackjackTableError);
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    expect(() =>
+      service.reserveBet({
+        tableId: 'main',
+        socketId: 'socket-alice',
+        user: alice,
+        seatNo: 1,
+        amount: 100n,
+        commandId: 'too-low-command',
+      }),
+    ).toThrow(BlackjackTableError);
+
+    const bet = confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      amount: 250n,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    expect(bet.state.timers.phaseEndsAt).toBe('2026-06-07T00:00:45.000Z');
+
+    const roundStarted = expireBettingWindowOrFail(service);
+
+    expect(roundStarted.state.phase).toBe('PLAYER_TURNS');
+    expect(roundStarted.state.bettingLimits).toEqual({
+      minInitialBet: '250',
+      maxInitialBet: '250',
+      maxTotalBetPerSeat: '250',
+      maxTotalBetPerUser: '250',
+    });
+    expect(roundStarted.state.seats[0]).toEqual(
+      expect.objectContaining({
+        availableActions: ['HIT', 'STAND'],
+      }),
+    );
   });
 
   it('peeks under a ten-value upcard and settles dealer blackjack immediately', () => {

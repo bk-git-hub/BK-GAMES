@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
-import { db } from "./client";
-import { userProfiles, wallets } from "./schema";
+import { db } from "./client.js";
+import { userProfiles, wallets } from "./schema.js";
 
 export type EnsureUserGameAccountInput = {
   userId: string;

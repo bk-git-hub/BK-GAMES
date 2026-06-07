@@ -73,8 +73,7 @@ export class BlackjackGateway {
         user,
       });
 
-      void socket.join(blackjackTableRoom(update.state.tableId));
-      void socket.join(blackjackUserRoom(user.userId));
+      await this.joinBlackjackRooms(socket, update.state.tableId, user.userId);
       this.emitTableUpdate(update);
     });
   }
@@ -95,8 +94,7 @@ export class BlackjackGateway {
         nickname: body.nickname,
       });
 
-      void socket.join(blackjackTableRoom(update.state.tableId));
-      void socket.join(blackjackUserRoom(user.userId));
+      await this.joinBlackjackRooms(socket, update.state.tableId, user.userId);
       this.emitTableUpdate(update);
     });
   }
@@ -116,8 +114,7 @@ export class BlackjackGateway {
         user,
       });
 
-      void socket.join(blackjackTableRoom(update.state.tableId));
-      void socket.join(blackjackUserRoom(user.userId));
+      await this.joinBlackjackRooms(socket, update.state.tableId, user.userId);
       this.emitTableUpdate(update);
     });
   }
@@ -162,8 +159,11 @@ export class BlackjackGateway {
             roundSeatId: betResult.roundSeat.id,
           });
 
-          void socket.join(blackjackTableRoom(update.state.tableId));
-          void socket.join(blackjackUserRoom(user.userId));
+          await this.joinBlackjackRooms(
+            socket,
+            update.state.tableId,
+            user.userId,
+          );
           this.emitTableUpdate(update);
           this.emitWalletUpdated(user.userId, {
             balance: betResult.walletMutation.wallet.balance.toString(),
@@ -250,8 +250,11 @@ export class BlackjackGateway {
           user,
         });
 
-        void socket.join(blackjackTableRoom(update.state.tableId));
-        void socket.join(blackjackUserRoom(user.userId));
+        await this.joinBlackjackRooms(
+          socket,
+          update.state.tableId,
+          user.userId,
+        );
         this.emitTableUpdate(update);
         await this.settleRoundIfNeeded(update);
       },
@@ -292,8 +295,7 @@ export class BlackjackGateway {
         amount: toBigInt(doubleResult.amount),
       });
 
-      void socket.join(blackjackTableRoom(update.state.tableId));
-      void socket.join(blackjackUserRoom(user.userId));
+      await this.joinBlackjackRooms(socket, update.state.tableId, user.userId);
       this.emitTableUpdate(update);
       this.emitWalletUpdated(user.userId, {
         balance: doubleResult.walletMutation.wallet.balance.toString(),
@@ -352,8 +354,7 @@ export class BlackjackGateway {
         amount: toBigInt(splitResult.amount),
       });
 
-      void socket.join(blackjackTableRoom(update.state.tableId));
-      void socket.join(blackjackUserRoom(user.userId));
+      await this.joinBlackjackRooms(socket, update.state.tableId, user.userId);
       this.emitTableUpdate(update);
       this.emitWalletUpdated(user.userId, {
         balance: splitResult.walletMutation.wallet.balance.toString(),
@@ -410,8 +411,7 @@ export class BlackjackGateway {
         amount: toBigInt(insuranceResult.amount),
       });
 
-      void socket.join(blackjackTableRoom(update.state.tableId));
-      void socket.join(blackjackUserRoom(user.userId));
+      await this.joinBlackjackRooms(socket, update.state.tableId, user.userId);
       this.emitTableUpdate(update);
       this.emitWalletUpdated(user.userId, {
         balance: insuranceResult.walletMutation.wallet.balance.toString(),
@@ -451,6 +451,17 @@ export class BlackjackGateway {
     const config = await this.tableConfigService.getTableConfig(tableId);
 
     this.tableService.configureTable({ tableId, config });
+  }
+
+  private async joinBlackjackRooms(
+    socket: Socket,
+    tableId: string,
+    userId: string,
+  ) {
+    await Promise.all([
+      socket.join(blackjackTableRoom(tableId)),
+      socket.join(blackjackUserRoom(userId)),
+    ]);
   }
 
   private emitTableUpdate(update: BlackjackTableMutationResult) {

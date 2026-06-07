@@ -1,12 +1,12 @@
 import { and, eq } from "drizzle-orm";
 
-import { db } from "./client";
-import { dailyRewardClaims, type JsonObject } from "./schema";
+import { db } from "./client.js";
+import { dailyRewardClaims, type JsonObject } from "./schema.js";
 import {
   applyWalletMutationInTransaction,
   type WalletMutationResult,
   type WalletMutationTransaction,
-} from "./wallet-transactions";
+} from "./wallet-transactions.js";
 
 export const DEFAULT_DAILY_REWARD_AMOUNT = BigInt(100);
 export const DEFAULT_DAILY_REWARD_TIME_ZONE = "Asia/Seoul";
@@ -32,11 +32,11 @@ export type DailyRewardClaimErrorCode =
   | "DAILY_REWARD_CONFLICT";
 
 export class DailyRewardClaimError extends Error {
-  constructor(
-    readonly code: DailyRewardClaimErrorCode,
-    message: string,
-  ) {
+  readonly code: DailyRewardClaimErrorCode;
+
+  constructor(code: DailyRewardClaimErrorCode, message: string) {
     super(message);
+    this.code = code;
     this.name = "DailyRewardClaimError";
   }
 }

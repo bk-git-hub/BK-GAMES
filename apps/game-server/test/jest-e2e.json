@@ -1,9 +1,32 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": ".",
+  "rootDir": "..",
   "testEnvironment": "node",
-  "testRegex": ".e2e-spec.ts$",
+  "testRegex": "test/.*\\.e2e-spec\\.ts$",
+  "moduleNameMapper": {
+    "^\\./socket-events\\.js$": "<rootDir>/../../packages/shared/src/socket-events.ts",
+    "^\\./types\\.js$": "<rootDir>/../../packages/shared/src/types.ts",
+    "^\\./blackjack/index\\.js$": "<rootDir>/../../packages/game-engine/src/blackjack/index.ts",
+    "^\\./actions\\.js$": "<rootDir>/../../packages/game-engine/src/blackjack/actions.ts",
+    "^\\./cards\\.js$": "<rootDir>/../../packages/game-engine/src/blackjack/cards.ts",
+    "^\\./hand\\.js$": "<rootDir>/../../packages/game-engine/src/blackjack/hand.ts",
+    "^\\./schema\\.js$": "<rootDir>/../../packages/db/src/schema.ts",
+    "^\\./client\\.js$": "<rootDir>/../../packages/db/src/client.ts",
+    "^\\./user-bootstrap\\.js$": "<rootDir>/../../packages/db/src/user-bootstrap.ts",
+    "^\\./wallet-transactions\\.js$": "<rootDir>/../../packages/db/src/wallet-transactions.ts",
+    "^\\./daily-rewards\\.js$": "<rootDir>/../../packages/db/src/daily-rewards.ts",
+    "^\\./blackjack-betting\\.js$": "<rootDir>/../../packages/db/src/blackjack-betting.ts",
+    "^\\./blackjack-settlement\\.js$": "<rootDir>/../../packages/db/src/blackjack-settlement.ts",
+    "^@bk-games/shared$": "<rootDir>/../../packages/shared/src/index.ts",
+    "^@bk-games/game-engine$": "<rootDir>/../../packages/game-engine/src/index.ts",
+    "^@bk-games/db$": "<rootDir>/../../packages/db/src/index.ts"
+  },
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "tsconfig": "<rootDir>/test/tsconfig.e2e.json"
+      }
+    ]
   }
 }

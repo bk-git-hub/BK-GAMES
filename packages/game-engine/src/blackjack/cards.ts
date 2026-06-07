@@ -83,11 +83,11 @@ export type BlackjackEngineErrorCode =
   | "EMPTY_HAND";
 
 export class BlackjackEngineError extends Error {
-  constructor(
-    readonly code: BlackjackEngineErrorCode,
-    message: string,
-  ) {
+  readonly code: BlackjackEngineErrorCode;
+
+  constructor(code: BlackjackEngineErrorCode, message: string) {
     super(message);
+    this.code = code;
     this.name = "BlackjackEngineError";
   }
 }

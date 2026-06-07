@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 
-import { db } from "./client";
-import { pointLedgers, wallets, type JsonObject } from "./schema";
+import { db } from "./client.js";
+import { pointLedgers, wallets, type JsonObject } from "./schema.js";
 
 export type WalletMutationCategory = "GAME" | "REWARD" | "ADMIN" | "SYSTEM";
 export type WalletMutationGameType = "BLACKJACK" | "BACCARAT";
@@ -25,11 +25,11 @@ export type WalletMutationErrorCode =
   | "IDEMPOTENCY_CONFLICT";
 
 export class WalletMutationError extends Error {
-  constructor(
-    readonly code: WalletMutationErrorCode,
-    message: string,
-  ) {
+  readonly code: WalletMutationErrorCode;
+
+  constructor(code: WalletMutationErrorCode, message: string) {
     super(message);
+    this.code = code;
     this.name = "WalletMutationError";
   }
 }

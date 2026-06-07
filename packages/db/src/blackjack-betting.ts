@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 
-import { db } from "./client";
+import { db } from "./client.js";
 import {
   blackjackActions,
   blackjackHands,
@@ -12,13 +12,13 @@ import {
   blackjackTables,
   type BlackjackRuleSnapshot,
   type JsonObject,
-} from "./schema";
+} from "./schema.js";
 import {
   applyWalletMutationInTransaction,
   getActiveWalletForUpdate,
   type WalletMutationResult,
   type WalletMutationTransaction,
-} from "./wallet-transactions";
+} from "./wallet-transactions.js";
 
 export const MAIN_BLACKJACK_TABLE_CODE = "main";
 
@@ -46,11 +46,11 @@ export type BlackjackBettingErrorCode =
   | "IDEMPOTENCY_CONFLICT";
 
 export class BlackjackBettingError extends Error {
-  constructor(
-    readonly code: BlackjackBettingErrorCode,
-    message: string,
-  ) {
+  readonly code: BlackjackBettingErrorCode;
+
+  constructor(code: BlackjackBettingErrorCode, message: string) {
     super(message);
+    this.code = code;
     this.name = "BlackjackBettingError";
   }
 }

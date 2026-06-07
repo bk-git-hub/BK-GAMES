@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 
-import { db } from "./client";
+import { db } from "./client.js";
 import {
   blackjackActions,
   blackjackHands,
@@ -10,12 +10,12 @@ import {
   type BlackjackRuleSnapshot,
   type CardSnapshot,
   type JsonObject,
-} from "./schema";
+} from "./schema.js";
 import {
   applyWalletMutationInTransaction,
   type WalletMutationResult,
   type WalletMutationTransaction,
-} from "./wallet-transactions";
+} from "./wallet-transactions.js";
 
 export type BlackjackSettlementOutcome = "WIN" | "LOSE" | "PUSH";
 
@@ -90,11 +90,11 @@ export type BlackjackSettlementErrorCode =
   | "SETTLEMENT_CONFLICT";
 
 export class BlackjackSettlementError extends Error {
-  constructor(
-    readonly code: BlackjackSettlementErrorCode,
-    message: string,
-  ) {
+  readonly code: BlackjackSettlementErrorCode;
+
+  constructor(code: BlackjackSettlementErrorCode, message: string) {
     super(message);
+    this.code = code;
     this.name = "BlackjackSettlementError";
   }
 }

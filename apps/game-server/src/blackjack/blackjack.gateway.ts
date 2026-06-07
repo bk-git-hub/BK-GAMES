@@ -511,6 +511,15 @@ export class BlackjackGateway {
     });
 
     this.emitTableUpdate(settledUpdate);
+
+    const resetUpdate = this.tableService.resetSettledRound({
+      tableId: update.state.tableId,
+      roundId: settlement.roundId,
+    });
+
+    if (resetUpdate) {
+      this.emitTableUpdate(resetUpdate);
+    }
   }
 
   private scheduleBettingWindowIfNeeded(update: BlackjackTableMutationResult) {

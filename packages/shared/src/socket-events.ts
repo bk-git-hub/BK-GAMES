@@ -204,6 +204,7 @@ export type BlackjackTableEventType =
   | "PLAYER_ACTED"
   | "DEALER_PLAYED"
   | "ROUND_SETTLED"
+  | "ROUND_RESET"
   | "PLAYER_DISCONNECTED";
 
 export type BlackjackTableEventPayload = {

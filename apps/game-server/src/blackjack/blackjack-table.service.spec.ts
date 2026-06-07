@@ -1633,6 +1633,60 @@ describe('BlackjackTableService', () => {
         netAmount: '-500',
       }),
     );
+
+    const reset = service.resetSettledRound({
+      tableId: 'main',
+      roundId: 'round-1',
+    });
+
+    expect(reset?.event.type).toBe('ROUND_RESET');
+    expect(reset?.state.phase).toBe('WAITING_BETS');
+    expect(reset?.state.round).toBeNull();
+    expect(reset?.state.dealer).toEqual({
+      cards: [],
+      visibleScore: null,
+      score: null,
+    });
+    expect(reset?.state.seats[0]).toEqual(
+      expect.objectContaining({
+        seatNo: 1,
+        status: 'OCCUPIED',
+        betAmount: null,
+        handStatus: 'WAITING_BET',
+        cards: [],
+        score: null,
+        isCurrentTurn: false,
+        availableActions: [],
+        activeHandNo: null,
+        hands: [],
+        outcome: null,
+        outcomeReason: null,
+        payoutAmount: null,
+        netAmount: null,
+      }),
+    );
+
+    const nextBet = confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-2',
+      roundId: 'round-2',
+      roundSeatId: 'round-seat-2',
+    });
+
+    expect(nextBet.event.type).toBe('BET_PLACED');
+    expect(nextBet.state.phase).toBe('WAITING_BETS');
+    expect(nextBet.state.seats[0]).toEqual(
+      expect.objectContaining({
+        betAmount: '500',
+        handStatus: 'BET_PLACED',
+        hands: [],
+        outcome: null,
+      }),
+    );
   });
 
   it('blocks leaving a seat with an active bet', () => {

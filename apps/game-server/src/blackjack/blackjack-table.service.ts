@@ -1130,6 +1130,42 @@ export class BlackjackTableService {
     };
   }
 
+  resetSettledRound(
+    input: BlackjackResetSettledRoundInput,
+  ): BlackjackTableMutationResult | null {
+    const table = this.getOrCreateTable(input.tableId);
+
+    if (!table.round || table.phase !== 'SETTLED') {
+      return null;
+    }
+
+    if (table.round.roundId !== input.roundId) {
+      throw new BlackjackTableError(
+        'ROUND_NOT_ACTIVE',
+        `Round ${input.roundId} is not settled on table ${table.tableId}.`,
+      );
+    }
+
+    table.phase = table.seats.size > 0 ? 'WAITING_BETS' : 'WAITING';
+    table.round = undefined;
+    table.shoe = [];
+    table.bettingClosesAt = undefined;
+
+    for (const seat of table.seats.values()) {
+      seat.status = 'OCCUPIED';
+      seat.pendingBet = undefined;
+      seat.bet = undefined;
+      seat.hands = undefined;
+    }
+
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(table, 'ROUND_RESET', 'system'),
+    };
+  }
+
   expireBettingWindow(
     input: BlackjackExpireBettingWindowInput,
   ): BlackjackTableMutationResult | null {
@@ -2006,6 +2042,11 @@ export type BlackjackConfirmSettlementInput = {
   tableId: string;
   roundId: string;
   seats: BlackjackSettlementSeatResult[];
+};
+
+export type BlackjackResetSettledRoundInput = {
+  tableId: string;
+  roundId: string;
 };
 
 export type BlackjackExpireBettingWindowInput = {

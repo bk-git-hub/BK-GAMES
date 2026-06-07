@@ -5,3 +5,4 @@ export * from "./wallet-transactions.js";
 export * from "./daily-rewards.js";
 export * from "./blackjack-betting.js";
 export * from "./blackjack-settlement.js";
+export * from "./admin.js";

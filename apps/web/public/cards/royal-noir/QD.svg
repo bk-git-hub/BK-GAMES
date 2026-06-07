@@ -60,19 +60,15 @@
     </g>
 
     <g class="face-card">
-      <path d="M116 126 H304 L329 294 L304 462 H116 L91 294 Z" fill="#000000" fill-opacity="0.28" stroke="#d8a63a" stroke-width="2"/>
-      <path d="M132 142 H288 L310 294 L288 446 H132 L110 294 Z" fill="none" stroke="#6e4514" stroke-width="1.5" opacity="0.85"/>
+      <path d="M116 126 H304 L329 294 L304 462 H116 L91 294 Z" fill="#000000" fill-opacity="0.24" stroke="#d8a63a" stroke-width="2"/>
+      <path d="M132 142 H288 L310 294 L288 446 H132 L110 294 Z" fill="none" stroke="#6e4514" stroke-width="1.5" opacity="0.82"/>
 
-    <g transform="translate(210 177)" fill="#d8a63a" opacity="0.96">
-      <path d="M-58 26 L-48 -34 L-18 4 L0 -44 L18 4 L48 -34 L58 26 Z"/>
-      <rect x="-54" y="26" width="108" height="13" rx="4"/>
-      <circle cx="-48" cy="-34" r="6"/>
-      <circle cx="0" cy="-44" r="7"/>
-      <circle cx="48" cy="-34" r="6"/>
-    </g>
-      <g class="suit " transform="translate(210 392) rotate(0) scale(0.58)" fill="#d8a63a" opacity="0.94"><path d="M0 -54 L35 0 L0 54 L-35 0 Z"/></g>
-      <g transform="translate(210 294)" opacity="0.08" fill="#d8a63a">
-        <path d="M0 -136 C42 -86 82 -44 120 0 C82 44 42 86 0 136 C-42 86 -82 44 -120 0 C-82 -44 -42 -86 0 -136 Z"/>
+      <g data-face-icon="queen" transform="translate(210 184)" fill="#d8a63a" opacity="0.97">
+        <path d="M-64 30 C-44 -20 -22 12 0 -44 C22 12 44 -20 64 30 L50 48 H-50 Z"/>
+        <circle cx="-64" cy="30" r="6"/>
+        <circle cx="0" cy="-44" r="8"/>
+        <circle cx="64" cy="30" r="6"/>
       </g>
+      <text x="210" y="392" text-anchor="middle" class="face-rank">Q</text>
     </g>
 </svg>

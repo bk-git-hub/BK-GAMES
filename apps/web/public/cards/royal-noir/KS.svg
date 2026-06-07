@@ -70,9 +70,7 @@
       <circle cx="0" cy="-44" r="7"/>
       <circle cx="48" cy="-34" r="6"/>
     </g>
-      <text x="210" y="332" text-anchor="middle" class="face-rank">K</text>
       <g class="suit " transform="translate(210 392) rotate(0) scale(0.58)" fill="#f6d37a" opacity="0.94"><path d="M0 -48 C-28 -22 -46 -3 -39 20 C-33 40 -8 39 -7 18 C-9 35 -16 47 -28 58 H28 C16 47 9 35 7 18 C8 39 33 40 39 20 C46 -3 28 -22 0 -48 Z"/></g>
-      <text x="210" y="432" text-anchor="middle" class="small-label">KING</text>
       <g transform="translate(210 294)" opacity="0.08" fill="#f6d37a">
         <path d="M0 -136 C42 -86 82 -44 120 0 C82 44 42 86 0 136 C-42 86 -82 44 -120 0 C-82 -44 -42 -86 0 -136 Z"/>
       </g>

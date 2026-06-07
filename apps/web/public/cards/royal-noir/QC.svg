@@ -70,9 +70,7 @@
       <circle cx="0" cy="-44" r="7"/>
       <circle cx="48" cy="-34" r="6"/>
     </g>
-      <text x="210" y="332" text-anchor="middle" class="face-rank">Q</text>
       <g class="suit " transform="translate(210 392) rotate(0) scale(0.58)" fill="#f6d37a" opacity="0.94"><circle cx="0" cy="-22" r="21"/><circle cx="-24" cy="6" r="21"/><circle cx="24" cy="6" r="21"/><path d="M-8 20 C-8 35 -16 47 -28 58 H28 C16 47 8 35 8 20 Z"/></g>
-      <text x="210" y="432" text-anchor="middle" class="small-label">QUEEN</text>
       <g transform="translate(210 294)" opacity="0.08" fill="#f6d37a">
         <path d="M0 -136 C42 -86 82 -44 120 0 C82 44 42 86 0 136 C-42 86 -82 44 -120 0 C-82 -44 -42 -86 0 -136 Z"/>
       </g>

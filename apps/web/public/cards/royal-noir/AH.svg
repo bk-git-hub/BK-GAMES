@@ -63,6 +63,5 @@
       <circle cx="210" cy="294" r="104" fill="#000000" fill-opacity="0.28" stroke="#d8a63a" stroke-width="2" opacity="0.95"/>
       <path d="M151 294 C170 249 190 226 210 209 C230 226 250 249 269 294 C250 339 230 362 210 379 C190 362 170 339 151 294 Z" fill="none" stroke="#6e4514" stroke-width="2" opacity="0.75"/>
       <g class="suit " transform="translate(210 294) rotate(0) scale(1.46)" fill="#d8a63a" opacity="1"><path d="M0 45 C-44 8 -52 -28 -25 -43 C-10 -51 0 -37 0 -37 C0 -37 10 -51 25 -43 C52 -28 44 8 0 45 Z"/></g>
-      <text x="210" y="454" text-anchor="middle" class="small-label">ROYAL NOIR</text>
     </g>
 </svg>

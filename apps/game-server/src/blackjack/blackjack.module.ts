@@ -6,9 +6,11 @@ import { BlackjackRoundService } from './blackjack-round.service';
 import { BlackjackSettlementService } from './blackjack-settlement.service';
 import { BlackjackTableConfigService } from './blackjack-table-config.service';
 import { BlackjackTableService } from './blackjack-table.service';
+import { BlackjackTablesController } from './blackjack-tables.controller';
 
 @Module({
   imports: [AuthModule, WalletModule],
+  controllers: [BlackjackTablesController],
   providers: [
     BlackjackGateway,
     BlackjackTableConfigService,

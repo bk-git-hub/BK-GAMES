@@ -197,6 +197,25 @@ export type BlackjackTableState = {
   updatedAt: string;
 };
 
+export type BlackjackTableSummary = {
+  tableId: string;
+  gameType: "BLACKJACK";
+  status: BlackjackTableStatus;
+  phase: BlackjackTablePhase;
+  maxSeats: number;
+  occupiedSeats: number;
+  availableSeats: number;
+  occupiedSeatNos: number[];
+  availableSeatNos: number[];
+  bettingLimits: BlackjackBettingLimitsSnapshot;
+  version: number;
+  updatedAt: string;
+};
+
+export type BlackjackTablesResponse = {
+  tables: BlackjackTableSummary[];
+};
+
 export type BlackjackRoundSnapshot = {
   roundId: string;
   currentTurnSeatNo: number | null;

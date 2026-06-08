@@ -21,6 +21,7 @@ import {
   type BlackjackSocketUser,
   type BlackjackTableEventPayload,
   type BlackjackTablePhase,
+  type BlackjackTableSummary,
   type BlackjackTableState,
   type BlackjackTableStatus,
 } from '@bk-games/shared';
@@ -1353,6 +1354,34 @@ export class BlackjackTableService {
 
   getTableState(tableId: string): BlackjackTableState {
     return this.toState(this.getOrCreateTable(tableId));
+  }
+
+  getTableSummary(tableId: string): BlackjackTableSummary {
+    const table = this.getOrCreateTable(tableId);
+    const state = this.toState(table);
+    const occupiedSeatNos = Array.from(table.seats.keys()).sort(
+      (left, right) => left - right,
+    );
+    const occupiedSeatNoSet = new Set(occupiedSeatNos);
+    const availableSeatNos = Array.from(
+      { length: table.maxSeats },
+      (_, index) => index + 1,
+    ).filter((seatNo) => !occupiedSeatNoSet.has(seatNo));
+
+    return {
+      tableId: state.tableId,
+      gameType: 'BLACKJACK',
+      status: state.status,
+      phase: state.phase,
+      maxSeats: table.maxSeats,
+      occupiedSeats: occupiedSeatNos.length,
+      availableSeats: availableSeatNos.length,
+      occupiedSeatNos,
+      availableSeatNos,
+      bettingLimits: state.bettingLimits,
+      version: state.version,
+      updatedAt: state.updatedAt,
+    };
   }
 
   private getOrCreateTable(tableId: string): BlackjackTableRuntime {

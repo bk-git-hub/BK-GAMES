@@ -5,12 +5,12 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
+  CheckCircle,
   CircleDot,
   Coins,
   LogOut,
   PlugZap,
   RefreshCw,
-  Send,
   Timer,
   Undo2,
 } from "lucide-react";
@@ -27,7 +27,6 @@ import {
 
 import { useBlackjackTable } from "./use-blackjack-table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type BlackjackTableClientProps = {
@@ -44,6 +43,7 @@ type ActionPrompt = {
 
 type ChipHistoryEntry = {
   amount: string;
+  bettingWindowKey: string;
   seatNo: number;
 };
 
@@ -58,10 +58,18 @@ export function BlackjackTableClient({
   userName,
 }: BlackjackTableClientProps) {
   const table = useBlackjackTable({ initialWalletBalance });
-  const [seatBetDrafts, setSeatBetDrafts] = useState<Record<number, string>>({});
+  const [seatBetDraftsByWindow, setSeatBetDraftsByWindow] = useState<
+    Record<string, Record<number, string>>
+  >({});
   const [chipHistory, setChipHistory] = useState<ChipHistoryEntry[]>([]);
-  const [seatNoInput, setSeatNoInput] = useState("1");
+  const [selectedSeatNoOverride, setSelectedSeatNoOverride] = useState<
+    number | null
+  >(null);
   const visibleState = table.tableState;
+  const bettingWindowKey = getBettingWindowKey(visibleState);
+  const seatBetDrafts = bettingWindowKey
+    ? seatBetDraftsByWindow[bettingWindowKey] ?? {}
+    : {};
   const cardAnimationKeys = useCardEventAnimations(table.events);
   const mySeats = useMemo(
     () =>
@@ -69,8 +77,7 @@ export function BlackjackTableClient({
       [],
     [table.player?.id, visibleState?.seats],
   );
-  const selectedSeatNo =
-    parsePositiveInteger(seatNoInput) ?? mySeats[0]?.seatNo ?? null;
+  const selectedSeatNo = selectedSeatNoOverride ?? mySeats[0]?.seatNo ?? null;
   const selectedSeat = mySeats.find((seat) => seat.seatNo === selectedSeatNo);
   const activeSeat =
     mySeats.find(
@@ -95,17 +102,8 @@ export function BlackjackTableClient({
     table.connectionStatus === "connected" && visibleState?.status === "OPEN";
   const canUseSeatCommands =
     canUseTable && !isCommandLockedPhase && !isReviewingRoundResult;
-  const isBettingAmountWithinLimits = visibleState
-    ? isBetWithinLimits(bettingAmount, visibleState.bettingLimits)
-    : false;
   const canSendSeatCommand =
     canUseSeatCommands && selectedSeatNo !== null;
-  const canBet =
-    canSendSeatCommand &&
-    Boolean(bettingAmount) &&
-    isBettingAmountWithinLimits &&
-    visibleState?.phase === "WAITING_BETS" &&
-    selectedSeat?.handStatus === "WAITING_BET";
   const canSendPlayerAction =
     canUseTable &&
     !isCommandLockedPhase &&
@@ -121,7 +119,12 @@ export function BlackjackTableClient({
     selectedSeat?.handStatus === "WAITING_BET";
   const canUndoChip =
     selectedSeatNo !== null &&
-    chipHistory.some((entry) => entry.seatNo === selectedSeatNo);
+    bettingWindowKey !== null &&
+    chipHistory.some(
+      (entry) =>
+        entry.seatNo === selectedSeatNo &&
+        entry.bettingWindowKey === bettingWindowKey,
+    );
   const prompt = getActionPrompt({
     activeSeat,
     actions: availableActions,
@@ -132,30 +135,52 @@ export function BlackjackTableClient({
   });
 
   function updateSeatBetDraft(seatNo: number | null, value: string) {
-    if (seatNo === null) {
+    if (seatNo === null || !bettingWindowKey) {
       return;
     }
 
-    setSeatBetDrafts((currentDrafts) => {
+    setSeatBetDraftsByWindow((currentDraftsByWindow) => {
+      const currentDrafts = currentDraftsByWindow[bettingWindowKey] ?? {};
       const trimmedValue = value.trim();
 
       if (!trimmedValue) {
         const nextDrafts = { ...currentDrafts };
         delete nextDrafts[seatNo];
-        return nextDrafts;
+
+        if (Object.keys(nextDrafts).length === 0) {
+          const nextDraftsByWindow = { ...currentDraftsByWindow };
+          delete nextDraftsByWindow[bettingWindowKey];
+          return nextDraftsByWindow;
+        }
+
+        return {
+          ...currentDraftsByWindow,
+          [bettingWindowKey]: nextDrafts,
+        };
       }
 
       return {
-        ...currentDrafts,
-        [seatNo]: trimmedValue,
+        ...currentDraftsByWindow,
+        [bettingWindowKey]: {
+          ...currentDrafts,
+          [seatNo]: trimmedValue,
+        },
       };
     });
   }
 
   function clearSeatBetDraft(seatNo: number) {
     updateSeatBetDraft(seatNo, "");
+
+    if (!bettingWindowKey) {
+      return;
+    }
+
     setChipHistory((currentHistory) =>
-      currentHistory.filter((entry) => entry.seatNo !== seatNo),
+      currentHistory.filter(
+        (entry) =>
+          entry.seatNo !== seatNo || entry.bettingWindowKey !== bettingWindowKey,
+      ),
     );
   }
 
@@ -165,7 +190,12 @@ export function BlackjackTableClient({
   }
 
   function addChipToSelectedSeat(amount: (typeof quickBetAmounts)[number]) {
-    if (selectedSeatNo === null || !visibleState || !canStackChips) {
+    if (
+      selectedSeatNo === null ||
+      !visibleState ||
+      !bettingWindowKey ||
+      !canStackChips
+    ) {
       return;
     }
 
@@ -175,22 +205,23 @@ export function BlackjackTableClient({
       return;
     }
 
-    setSeatBetDrafts((currentDrafts) => ({
-      ...currentDrafts,
-      [selectedSeatNo]: nextAmount,
-    }));
+    updateSeatBetDraft(selectedSeatNo, nextAmount);
     setChipHistory((currentHistory) => [
       ...currentHistory,
-      { amount, seatNo: selectedSeatNo },
+      { amount, bettingWindowKey, seatNo: selectedSeatNo },
     ]);
   }
 
   function undoLastChipForSelectedSeat() {
-    if (selectedSeatNo === null) {
+    if (selectedSeatNo === null || !bettingWindowKey) {
       return;
     }
 
-    const historyIndex = findLastChipHistoryIndex(chipHistory, selectedSeatNo);
+    const historyIndex = findLastChipHistoryIndex(
+      chipHistory,
+      selectedSeatNo,
+      bettingWindowKey,
+    );
 
     if (historyIndex === -1) {
       return;
@@ -234,14 +265,15 @@ export function BlackjackTableClient({
           </div>
         ) : null}
 
-        <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="order-2 xl:order-1">
+        <div className="flex flex-1 flex-col gap-4">
+          <div>
             <CasinoTable
               cardAnimationKeys={cardAnimationKeys}
               canUseSeatCommands={canUseSeatCommands}
               myUserId={table.player?.id ?? null}
+              onLeaveSeat={table.leaveSeat}
               onSeatClick={(seatNo, seat) => {
-                setSeatNoInput(String(seatNo));
+                setSelectedSeatNoOverride(seatNo);
 
                 if (!canUseSeatCommands || !visibleState) {
                   return;
@@ -258,14 +290,20 @@ export function BlackjackTableClient({
                   return;
                 }
 
+                const seatBetAmount = (seatBetDrafts[seatNo] ?? "").trim();
+                const isSeatBetAmountWithinLimits = isBetWithinLimits(
+                  seatBetAmount,
+                  visibleState.bettingLimits,
+                );
+
                 if (
                   seat.userId === table.player?.id &&
                   visibleState.phase === "WAITING_BETS" &&
                   seat.handStatus === "WAITING_BET" &&
-                  bettingAmount &&
-                  isBettingAmountWithinLimits
+                  seatBetAmount &&
+                  isSeatBetAmountWithinLimits
                 ) {
-                  placeBetForSeat(seatNo, bettingAmount);
+                  placeBetForSeat(seatNo, seatBetAmount);
                 }
               }}
               roundResultReview={table.roundResultReview}
@@ -282,18 +320,12 @@ export function BlackjackTableClient({
               onAddChip={addChipToSelectedSeat}
               onUndo={undoLastChipForSelectedSeat}
             />
-          </div>
-
-          <aside className="order-1 flex flex-col gap-4 xl:order-2">
-            <ActionRail
+            <TableActionBar
               activeHand={activeHand}
               activeSeat={activeSeat}
               actions={availableActions}
-              betAmount={selectedBetDraft}
-              canBet={canBet}
               canJoinTable={canJoinTable}
               canSendPlayerAction={canSendPlayerAction}
-              canSendSeatCommand={canSendSeatCommand}
               onAction={(action) => {
                 if (!activeSeat) {
                   return;
@@ -305,32 +337,14 @@ export function BlackjackTableClient({
                   seatNo: activeSeat.seatNo,
                 });
               }}
-              onBetAmountChange={(value) =>
-                updateSeatBetDraft(selectedSeatNo, value)
-              }
               onJoin={table.joinTable}
-              onLeaveSeat={() => {
-                if (selectedSeatNo !== null) {
-                  table.leaveSeat(selectedSeatNo);
-                }
-              }}
-              onPlaceBet={() => {
-                if (selectedSeatNo !== null && bettingAmount) {
-                  placeBetForSeat(selectedSeatNo, bettingAmount);
-                }
-              }}
               onReconnect={table.reconnect}
-              onSeatNoChange={setSeatNoInput}
-              onTakeSeat={() => {
-                if (selectedSeatNo !== null) {
-                  table.takeSeat(selectedSeatNo);
-                }
-              }}
               prompt={prompt}
-              seatNoInput={seatNoInput}
-              selectedSeatNo={selectedSeatNo}
               state={visibleState}
             />
+          </div>
+
+          <aside>
             <EventStream events={table.events} />
           </aside>
         </div>
@@ -408,6 +422,7 @@ function CasinoTable({
   cardAnimationKeys,
   canUseSeatCommands,
   myUserId,
+  onLeaveSeat,
   onSeatClick,
   roundResultReview,
   selectedSeatNo,
@@ -417,6 +432,7 @@ function CasinoTable({
   cardAnimationKeys: ReadonlySet<string>;
   canUseSeatCommands: boolean;
   myUserId: string | null;
+  onLeaveSeat: (seatNo: number) => void;
   onSeatClick: (seatNo: number, seat: BlackjackSeatSnapshot | null) => void;
   roundResultReview: { endsAt: string; state: BlackjackTableState } | null;
   selectedSeatNo: number | null;
@@ -489,53 +505,55 @@ function CasinoTable({
         </div>
       )}
 
-      <div className="absolute inset-x-4 bottom-10 top-[42%] z-20">
-        {tableSeatNumbers.map((seatNo) => {
-          const seat = seatsByNo.get(seatNo) ?? null;
-          const draftBetAmount = seatBetDrafts[seatNo] ?? "";
-          const isMine = seat?.userId === myUserId;
-          const isSeatBettable =
-            isMine &&
-            state?.phase === "WAITING_BETS" &&
-            seat?.handStatus === "WAITING_BET" &&
-            draftBetAmount !== "" &&
-            (state ? isBetWithinLimits(draftBetAmount, state.bettingLimits) : false);
-          const canClickSeat =
-            canUseSeatCommands &&
-            Boolean(state) &&
-            (seat
-              ? isMine
-              : state?.phase === "WAITING" || state?.phase === "WAITING_BETS");
-          const actionLabel = seat
-            ? isSeatBettable
-              ? `Bet ${formatBetAmountLabel(draftBetAmount)}`
-              : null
-            : "Take seat";
+      <div className="absolute inset-x-4 bottom-6 z-20 overflow-x-auto pb-1">
+        <div className="grid min-w-[1470px] grid-cols-7 items-end gap-3">
+          {tableSeatNumbers.map((seatNo) => {
+            const seat = seatsByNo.get(seatNo) ?? null;
+            const draftBetAmount = seatBetDrafts[seatNo] ?? "";
+            const isMine = seat?.userId === myUserId;
+            const isSeatBettable =
+              isMine &&
+              state?.phase === "WAITING_BETS" &&
+              seat?.handStatus === "WAITING_BET" &&
+              draftBetAmount !== "" &&
+              (state ? isBetWithinLimits(draftBetAmount, state.bettingLimits) : false);
+            const canClickSeat =
+              canUseSeatCommands &&
+              Boolean(state) &&
+              (seat
+                ? isMine
+                : state?.phase === "WAITING" || state?.phase === "WAITING_BETS");
+            const actionLabel = seat
+              ? isSeatBettable
+                ? `Place ${formatBetAmountLabel(draftBetAmount)}`
+                : null
+              : "Take seat";
 
-          return seat ? (
-            <SeatSpot
-              cardAnimationKeys={cardAnimationKeys}
-              index={seatNo - 1}
-              isClickEnabled={canClickSeat}
-              isMine={isMine}
-              isSelected={selectedSeatNo === seatNo}
-              key={seat.seatNo}
-              onClick={() => onSeatClick(seatNo, seat)}
-              quickActionLabel={canClickSeat ? actionLabel : null}
-              draftBetAmount={draftBetAmount}
-              seat={seat}
-            />
-          ) : (
-            <EmptySeatSpot
-              index={seatNo - 1}
-              isClickEnabled={canClickSeat}
-              isSelected={selectedSeatNo === seatNo}
-              key={seatNo}
-              onClick={() => onSeatClick(seatNo, null)}
-              seatNo={seatNo}
-            />
-          );
-        })}
+            return seat ? (
+              <SeatSpot
+                cardAnimationKeys={cardAnimationKeys}
+                canLeaveSeat={canClickSeat && Boolean(isMine)}
+                isClickEnabled={canClickSeat}
+                isMine={isMine}
+                isSelected={selectedSeatNo === seatNo}
+                key={seat.seatNo}
+                onClick={() => onSeatClick(seatNo, seat)}
+                onLeaveSeat={() => onLeaveSeat(seatNo)}
+                quickActionLabel={canClickSeat ? actionLabel : null}
+                draftBetAmount={draftBetAmount}
+                seat={seat}
+              />
+            ) : (
+              <EmptySeatSpot
+                isClickEnabled={canClickSeat}
+                isSelected={selectedSeatNo === seatNo}
+                key={seatNo}
+                onClick={() => onSeatClick(seatNo, null)}
+                seatNo={seatNo}
+              />
+            );
+          })}
+        </div>
       </div>
     </section>
   );
@@ -631,22 +649,24 @@ function RoundResultTableOverlay({
 
 function SeatSpot({
   cardAnimationKeys,
+  canLeaveSeat,
   draftBetAmount,
-  index,
   isClickEnabled,
   isMine,
   isSelected,
   onClick,
+  onLeaveSeat,
   quickActionLabel,
   seat,
 }: {
   cardAnimationKeys: ReadonlySet<string>;
+  canLeaveSeat: boolean;
   draftBetAmount: string;
-  index: number;
   isClickEnabled: boolean;
   isMine: boolean;
   isSelected: boolean;
   onClick: () => void;
+  onLeaveSeat: () => void;
   quickActionLabel: string | null;
   seat: BlackjackSeatSnapshot;
 }) {
@@ -655,20 +675,13 @@ function SeatSpot({
   const hasDraftBet = draftBetAmount.trim() !== "" && seat.betAmount === null;
 
   return (
-    <button
-      type="button"
-      disabled={!isClickEnabled}
-      onClick={onClick}
+    <div
       className={cn(
-        "absolute flex flex-col gap-2 rounded-2xl border bg-[#06150f]/85 p-3 text-left text-white shadow-2xl backdrop-blur-md transition",
-        hasSplitHands ? "w-[260px]" : "w-[210px]",
-        seatPositionClass(index),
+        "flex min-w-0 flex-col gap-3 rounded-2xl border bg-[#06150f]/85 p-4 text-left text-white shadow-2xl backdrop-blur-md transition",
         isMine ? "border-amber-300/80" : "border-white/15",
         isSelected && "ring-2 ring-emerald-200/80",
         seat.isCurrentTurn && "ring-2 ring-amber-200",
-        isClickEnabled
-          ? "cursor-pointer hover:border-amber-200 hover:bg-[#092116]/95 hover:shadow-amber-950/20"
-          : "cursor-default disabled:opacity-90",
+        isClickEnabled && "hover:border-amber-200 hover:bg-[#092116]/95",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -722,7 +735,37 @@ function SeatSpot({
         ) : null}
         {quickActionLabel ? <FeltBadge>{quickActionLabel}</FeltBadge> : null}
       </div>
-    </button>
+
+      {isMine ? (
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 pt-1">
+          <Button
+            type="button"
+            className={cn(
+              "h-10 text-sm font-semibold text-zinc-950",
+              quickActionLabel
+                ? "bg-amber-300 hover:bg-amber-200"
+                : "bg-white hover:bg-emerald-50",
+            )}
+            disabled={!isClickEnabled}
+            onClick={onClick}
+          >
+            <CheckCircle className="size-4" />
+            {quickActionLabel ?? "Select"}
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="h-10 w-10 border-white/15 bg-white/10 text-white hover:bg-white/15"
+            disabled={!canLeaveSeat}
+            onClick={onLeaveSeat}
+            aria-label={`Leave seat ${seat.seatNo}`}
+          >
+            <LogOut className="size-4" />
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -823,13 +866,11 @@ function SeatHandPanel({
 }
 
 function EmptySeatSpot({
-  index,
   isClickEnabled,
   isSelected,
   onClick,
   seatNo,
 }: {
-  index: number;
   isClickEnabled: boolean;
   isSelected: boolean;
   onClick: () => void;
@@ -841,8 +882,7 @@ function EmptySeatSpot({
       disabled={!isClickEnabled}
       onClick={onClick}
       className={cn(
-        "absolute flex w-[190px] flex-col items-center gap-2 rounded-full border border-dashed border-emerald-100/35 bg-emerald-950/30 px-5 py-4 text-center text-emerald-50/75 transition",
-        seatPositionClass(index),
+        "flex min-w-0 flex-col items-center gap-2 rounded-full border border-dashed border-emerald-100/35 bg-emerald-950/30 px-3 py-4 text-center text-emerald-50/75 transition",
         isSelected && "border-emerald-100 bg-emerald-200/10 text-emerald-50",
         isClickEnabled
           ? "cursor-pointer hover:border-amber-200 hover:bg-amber-200/10 hover:text-amber-50"
@@ -928,56 +968,36 @@ function ChipBox({
   );
 }
 
-function ActionRail({
+function TableActionBar({
   activeHand,
   activeSeat,
   actions,
-  betAmount,
-  canBet,
   canJoinTable,
   canSendPlayerAction,
-  canSendSeatCommand,
   onAction,
-  onBetAmountChange,
   onJoin,
-  onLeaveSeat,
-  onPlaceBet,
   onReconnect,
-  onSeatNoChange,
-  onTakeSeat,
   prompt,
-  seatNoInput,
-  selectedSeatNo,
   state,
 }: {
   activeHand: BlackjackHandSnapshot | null;
   activeSeat: BlackjackSeatSnapshot | null;
   actions: BlackjackPlayerAction[];
-  betAmount: string;
-  canBet: boolean;
   canJoinTable: boolean;
   canSendPlayerAction: boolean;
-  canSendSeatCommand: boolean;
   onAction: (action: BlackjackPlayerAction) => void;
-  onBetAmountChange: (value: string) => void;
   onJoin: () => void;
-  onLeaveSeat: () => void;
-  onPlaceBet: () => void;
   onReconnect: () => void;
-  onSeatNoChange: (value: string) => void;
-  onTakeSeat: () => void;
   prompt: ActionPrompt;
-  seatNoInput: string;
-  selectedSeatNo: number | null;
   state: BlackjackTableState | null;
 }) {
   return (
     <section className="rounded-3xl border border-white/10 bg-white/[0.07] p-4 shadow-2xl shadow-black/25 backdrop-blur">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="min-w-0">
           <p
             className={cn(
-              "text-sm font-semibold uppercase tracking-[0.18em]",
+              "text-xs font-semibold uppercase tracking-[0.18em]",
               prompt.tone === "active" && "text-amber-200",
               prompt.tone === "waiting" && "text-emerald-200",
               prompt.tone === "warning" && "text-red-200",
@@ -986,119 +1006,31 @@ function ActionRail({
           >
             Next move
           </p>
-          <h2 className="mt-1 text-3xl font-semibold tracking-normal">
+          <h2 className="mt-1 text-2xl font-semibold tracking-normal">
             {prompt.title}
           </h2>
-          <p className="mt-2 text-sm leading-6 text-white/62">{prompt.detail}</p>
-        </div>
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="border-white/15 bg-white/10 text-white hover:bg-white/15"
-          onClick={onReconnect}
-          aria-label="Reconnect"
-        >
-          <RefreshCw />
-        </Button>
-      </div>
-
-      <div className="mt-5 grid gap-3">
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold">Seat</p>
-            <FeltBadge>{selectedSeatNo ? `Seat ${selectedSeatNo}` : "No seat"}</FeltBadge>
-          </div>
-          <label className="flex flex-col gap-2 text-sm text-white/70">
-            Seat number
-            <Input
-              className="border-white/15 bg-white/10 text-white placeholder:text-white/35"
-              inputMode="numeric"
-              min={1}
-              pattern="[0-9]*"
-              type="number"
-              value={seatNoInput}
-              disabled={!canSendSeatCommand}
-              onChange={(event) => onSeatNoChange(event.target.value)}
-            />
-          </label>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              className="bg-emerald-300 text-zinc-950 hover:bg-emerald-200"
-              disabled={!canSendSeatCommand}
-              onClick={onTakeSeat}
-            >
-              Take seat
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="border-white/15 bg-white/10 text-white hover:bg-white/15"
-              disabled={!canSendSeatCommand}
-              onClick={onLeaveSeat}
-            >
-              <LogOut />
-              Leave
-            </Button>
-          </div>
+          <p className="mt-1 text-sm leading-6 text-white/62">{prompt.detail}</p>
+          {activeSeat && activeSeat.hands.length > 1 ? (
+            <div className="mt-3 max-w-2xl">
+              <ActionHandSummary activeSeat={activeSeat} />
+            </div>
+          ) : null}
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold">Bet</p>
-            <FeltBadge>
-              {state
-                ? `${formatPoints(state.bettingLimits.minInitialBet)} - ${formatPoints(
-                    state.bettingLimits.maxInitialBet,
-                  )}`
-                : "Loading"}
-            </FeltBadge>
-          </div>
-          <label className="flex flex-col gap-2 text-sm text-white/70">
-            Bet amount
-            <Input
-              className="border-white/15 bg-white/10 text-white placeholder:text-white/35"
-              inputMode="numeric"
-              min={1}
-              pattern="[0-9]*"
-              placeholder={state?.bettingLimits.minInitialBet ?? "Amount"}
-              type="number"
-              value={betAmount}
-              disabled={!canBet}
-              onChange={(event) => onBetAmountChange(event.target.value)}
-            />
-          </label>
-          <Button
-            type="button"
-            className="mt-3 h-11 w-full bg-amber-300 text-base font-semibold text-zinc-950 hover:bg-amber-200"
-            disabled={!canBet}
-            onClick={onPlaceBet}
-          >
-            Place bet
-          </Button>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold">Actions</p>
-            <FeltBadge>
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          <FeltBadge>
               {activeSeat
                 ? `Seat ${activeSeat.seatNo} · Hand ${activeHand?.handNo ?? "-"}`
                 : "No active seat"}
-            </FeltBadge>
-          </div>
-          {activeSeat && activeSeat.hands.length > 1 ? (
-            <ActionHandSummary activeSeat={activeSeat} />
-          ) : null}
+          </FeltBadge>
           {actions.length ? (
-            <div className="grid grid-cols-2 gap-2">
+            <>
               {actions.map((action) => (
                 <Button
                   key={action}
                   type="button"
                   className={cn(
-                    "h-11 font-semibold",
+                    "h-11 min-w-24 font-semibold",
                     moneyChangingActions.has(action)
                       ? "bg-amber-300 text-zinc-950 hover:bg-amber-200"
                       : "bg-white text-zinc-950 hover:bg-emerald-50",
@@ -1109,24 +1041,33 @@ function ActionRail({
                   {formatActionLabel(action)}
                 </Button>
               ))}
-            </div>
+            </>
           ) : (
-            <div className="rounded-xl border border-dashed border-white/15 px-3 py-4 text-sm text-white/55">
+            <div className="rounded-full border border-dashed border-white/15 px-3 py-2 text-sm text-white/55">
               {state ? phaseLabel(state.phase) : "Waiting for table state"}
             </div>
           )}
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 border-white/15 bg-white/10 text-white hover:bg-white/15"
+            disabled={!canJoinTable}
+            onClick={onJoin}
+          >
+            <PlugZap className="size-4" />
+            Join
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="h-11 w-11 border-white/15 bg-white/10 text-white hover:bg-white/15"
+            onClick={onReconnect}
+            aria-label="Reconnect"
+          >
+            <RefreshCw className="size-4" />
+          </Button>
         </div>
-
-        <Button
-          type="button"
-          variant="outline"
-          className="border-white/15 bg-white/10 text-white hover:bg-white/15"
-          disabled={!canJoinTable}
-          onClick={onJoin}
-        >
-          <Send />
-          Join main table
-        </Button>
       </div>
     </section>
   );
@@ -1462,7 +1403,9 @@ function getActionPrompt({
 
   if (!activeSeat) {
     return {
-      detail: `Seat ${selectedSeatNo ?? 1} is selected for this table.`,
+      detail: selectedSeatNo
+        ? `Seat ${selectedSeatNo} is selected for this table.`
+        : "No seat selected.",
       title: "Choose a seat",
       tone: "active",
     };
@@ -1629,16 +1572,6 @@ function isSeatHandActive(
   return hand.handNo === seat.activeHandNo || hand.isCurrentTurn;
 }
 
-function parsePositiveInteger(value: string) {
-  if (!value.trim()) {
-    return null;
-  }
-
-  const parsedValue = Number(value);
-
-  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
-}
-
 function formatPoints(value: string) {
   return pointFormatter.format(Number(value));
 }
@@ -1739,14 +1672,29 @@ function subtractPointStrings(currentAmount: string, amountToSubtract: string) {
 function findLastChipHistoryIndex(
   history: ChipHistoryEntry[],
   seatNo: number,
+  bettingWindowKey: string,
 ) {
   for (let index = history.length - 1; index >= 0; index -= 1) {
-    if (history[index]?.seatNo === seatNo) {
+    const entry = history[index];
+
+    if (entry?.seatNo === seatNo && entry.bettingWindowKey === bettingWindowKey) {
       return index;
     }
   }
 
   return -1;
+}
+
+function getBettingWindowKey(state: BlackjackTableState | null) {
+  if (!state || state.phase !== "WAITING_BETS") {
+    return null;
+  }
+
+  return [
+    state.tableId,
+    state.round?.roundId ?? "pending-round",
+    state.timers.phaseEndsAt ?? "open-window",
+  ].join(":");
 }
 
 function chipColorClass(amount: (typeof quickBetAmounts)[number]) {
@@ -1934,20 +1882,6 @@ function suitCode(suit: "clubs" | "diamonds" | "hearts" | "spades") {
 
 function eventKey(event: BlackjackTableEventPayload) {
   return `${event.type}:${event.stateVersion}:${event.createdAt}:${event.seatNo ?? "table"}`;
-}
-
-function seatPositionClass(index: number) {
-  const positions = [
-    "left-1/2 bottom-[2%] -translate-x-1/2",
-    "left-[6%] bottom-[13%]",
-    "right-[6%] bottom-[13%]",
-    "left-[16%] bottom-[38%]",
-    "right-[16%] bottom-[38%]",
-    "left-[34%] bottom-[0%]",
-    "right-[34%] bottom-[0%]",
-  ];
-
-  return positions[index % positions.length];
 }
 
 const moneyChangingActions = new Set<BlackjackPlayerAction>([

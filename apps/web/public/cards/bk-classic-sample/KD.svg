@@ -5,7 +5,7 @@
     </filter>
     <style>
       .rank { font-family: Georgia, 'Times New Roman', serif; font-size: 48px; font-weight: 800; }
-      .center-rank { font-family: Georgia, 'Times New Roman', serif; font-size: 116px; font-weight: 800; }
+      .center-rank { font-family: Georgia, 'Times New Roman', serif; font-size: 172px; font-weight: 800; }
     </style>
   </defs>
   <rect x="10" y="10" width="400" height="568" rx="24" fill="#fbf7ec" filter="url(#shadow)"/>
@@ -23,21 +23,6 @@
       <text x="0" y="0" text-anchor="middle" class="rank">K</text>
       <g transform="translate(0 36) scale(0.34)"><path d="M0 -54 L36 0 L0 54 L-36 0 Z"/></g>
     </g>
-    <g transform="translate(210 132) rotate(0) scale(0.34)" fill="#cf2f32" opacity="0.055"><path d="M0 -54 L36 0 L0 54 L-36 0 Z"/></g>
-    <g transform="translate(112 294) rotate(0) scale(0.28)" fill="#cf2f32" opacity="0.055"><path d="M0 -54 L36 0 L0 54 L-36 0 Z"/></g>
-    <g transform="translate(318 294) rotate(0) scale(0.28)" fill="#cf2f32" opacity="0.055"><path d="M0 -54 L36 0 L0 54 L-36 0 Z"/></g>
-    <g transform="translate(210 456) rotate(180) scale(0.34)" fill="#cf2f32" opacity="0.055"><path d="M0 -54 L36 0 L0 54 L-36 0 Z"/></g>
-    
-    <rect x="126" y="124" width="168" height="324" rx="20" fill="#fffdf7" stroke="#cf2f32" stroke-width="2.5" opacity="0.96"/>
-    <rect x="141" y="140" width="138" height="292" rx="14" fill="none" stroke="#d6a94d" stroke-width="2" opacity="0.72"/>
-    <path d="M156 278 H264 M156 390 H264" stroke="#f2d9d4" stroke-width="3" stroke-linecap="round"/>
-    
-    <g transform="translate(210 184)" fill="#d6a94d">
-      <path d="M-78 -12 L-42 22 L-16 -38 L0 20 L16 -38 L42 22 L78 -12 L58 58 H-58 Z"/>
-      <circle cx="-78" cy="-12" r="7"/><circle cx="-16" cy="-38" r="7"/><circle cx="16" cy="-38" r="7"/><circle cx="78" cy="-12" r="7"/>
-    </g>
-    
-    <text x="210" y="358" text-anchor="middle" class="center-rank" fill="#cf2f32">K</text>
-    <path d="M174 418 H246" stroke="#d6a94d" stroke-width="5" stroke-linecap="round" opacity="0.78"/>
+    <text x="210" y="360" text-anchor="middle" class="center-rank" fill="#cf2f32">K</text>
   
 </svg>

@@ -5,7 +5,7 @@
     </filter>
     <style>
       .rank { font-family: Georgia, 'Times New Roman', serif; font-size: 48px; font-weight: 800; }
-      .center-rank { font-family: Georgia, 'Times New Roman', serif; font-size: 116px; font-weight: 800; }
+      .center-rank { font-family: Georgia, 'Times New Roman', serif; font-size: 172px; font-weight: 800; }
     </style>
   </defs>
   <rect x="10" y="10" width="400" height="568" rx="24" fill="#fbf7ec" filter="url(#shadow)"/>
@@ -23,21 +23,6 @@
       <text x="0" y="0" text-anchor="middle" class="rank">J</text>
       <g transform="translate(0 36) scale(0.34)"><path d="M0 -32 C13 -32 24 -21 24 -8 C24 -5 23 -2 22 1 C25 0 28 -1 31 -1 C45 -1 56 10 56 24 C56 38 45 49 31 49 C20 49 11 42 8 32 C9 49 16 62 29 76 H-29 C-16 62 -9 49 -8 32 C-11 42 -20 49 -31 49 C-45 49 -56 38 -56 24 C-56 10 -45 -1 -31 -1 C-28 -1 -25 0 -22 1 C-23 -2 -24 -5 -24 -8 C-24 -21 -13 -32 0 -32 Z"/></g>
     </g>
-    <g transform="translate(210 132) rotate(0) scale(0.34)" fill="#171717" opacity="0.055"><path d="M0 -32 C13 -32 24 -21 24 -8 C24 -5 23 -2 22 1 C25 0 28 -1 31 -1 C45 -1 56 10 56 24 C56 38 45 49 31 49 C20 49 11 42 8 32 C9 49 16 62 29 76 H-29 C-16 62 -9 49 -8 32 C-11 42 -20 49 -31 49 C-45 49 -56 38 -56 24 C-56 10 -45 -1 -31 -1 C-28 -1 -25 0 -22 1 C-23 -2 -24 -5 -24 -8 C-24 -21 -13 -32 0 -32 Z"/></g>
-    <g transform="translate(112 294) rotate(0) scale(0.28)" fill="#171717" opacity="0.055"><path d="M0 -32 C13 -32 24 -21 24 -8 C24 -5 23 -2 22 1 C25 0 28 -1 31 -1 C45 -1 56 10 56 24 C56 38 45 49 31 49 C20 49 11 42 8 32 C9 49 16 62 29 76 H-29 C-16 62 -9 49 -8 32 C-11 42 -20 49 -31 49 C-45 49 -56 38 -56 24 C-56 10 -45 -1 -31 -1 C-28 -1 -25 0 -22 1 C-23 -2 -24 -5 -24 -8 C-24 -21 -13 -32 0 -32 Z"/></g>
-    <g transform="translate(318 294) rotate(0) scale(0.28)" fill="#171717" opacity="0.055"><path d="M0 -32 C13 -32 24 -21 24 -8 C24 -5 23 -2 22 1 C25 0 28 -1 31 -1 C45 -1 56 10 56 24 C56 38 45 49 31 49 C20 49 11 42 8 32 C9 49 16 62 29 76 H-29 C-16 62 -9 49 -8 32 C-11 42 -20 49 -31 49 C-45 49 -56 38 -56 24 C-56 10 -45 -1 -31 -1 C-28 -1 -25 0 -22 1 C-23 -2 -24 -5 -24 -8 C-24 -21 -13 -32 0 -32 Z"/></g>
-    <g transform="translate(210 456) rotate(180) scale(0.34)" fill="#171717" opacity="0.055"><path d="M0 -32 C13 -32 24 -21 24 -8 C24 -5 23 -2 22 1 C25 0 28 -1 31 -1 C45 -1 56 10 56 24 C56 38 45 49 31 49 C20 49 11 42 8 32 C9 49 16 62 29 76 H-29 C-16 62 -9 49 -8 32 C-11 42 -20 49 -31 49 C-45 49 -56 38 -56 24 C-56 10 -45 -1 -31 -1 C-28 -1 -25 0 -22 1 C-23 -2 -24 -5 -24 -8 C-24 -21 -13 -32 0 -32 Z"/></g>
-    
-    <rect x="126" y="124" width="168" height="324" rx="20" fill="#fffdf7" stroke="#171717" stroke-width="2.5" opacity="0.96"/>
-    <rect x="141" y="140" width="138" height="292" rx="14" fill="none" stroke="#d6a94d" stroke-width="2" opacity="0.72"/>
-    <path d="M156 278 H264 M156 390 H264" stroke="#dedbd2" stroke-width="3" stroke-linecap="round"/>
-    
-    <g transform="translate(210 196)" fill="#d6a94d">
-      <path d="M-72 26 C-56 -24 -28 -12 -10 20 C8 -28 38 -28 54 18 C68 8 76 -6 80 -22 C88 18 72 52 42 62 C22 46 0 45 -22 62 C-52 52 -82 44 -72 26 Z"/>
-      <circle cx="-72" cy="26" r="7"/><circle cx="-10" cy="20" r="7"/><circle cx="54" cy="18" r="7"/><circle cx="80" cy="-22" r="7"/>
-    </g>
-    
-    <text x="210" y="358" text-anchor="middle" class="center-rank" fill="#171717">J</text>
-    <path d="M174 418 H246" stroke="#d6a94d" stroke-width="5" stroke-linecap="round" opacity="0.78"/>
+    <text x="210" y="360" text-anchor="middle" class="center-rank" fill="#171717">J</text>
   
 </svg>

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Send,
   Timer,
+  Undo2,
 } from "lucide-react";
 import {
   type BlackjackCardSnapshot,
@@ -41,6 +42,11 @@ type ActionPrompt = {
   title: string;
 };
 
+type ChipHistoryEntry = {
+  amount: string;
+  seatNo: number;
+};
+
 const pointFormatter = new Intl.NumberFormat("en-US");
 const cardEventAnimationMs = 1400;
 const quickBetAmounts = ["100", "500", "1000"] as const;
@@ -52,7 +58,8 @@ export function BlackjackTableClient({
   userName,
 }: BlackjackTableClientProps) {
   const table = useBlackjackTable({ initialWalletBalance });
-  const [betAmount, setBetAmount] = useState<string>(quickBetAmounts[0]);
+  const [seatBetDrafts, setSeatBetDrafts] = useState<Record<number, string>>({});
+  const [chipHistory, setChipHistory] = useState<ChipHistoryEntry[]>([]);
   const [seatNoInput, setSeatNoInput] = useState("1");
   const visibleState = table.tableState;
   const cardAnimationKeys = useCardEventAnimations(table.events);
@@ -79,10 +86,9 @@ export function BlackjackTableClient({
     : null;
   const availableActions =
     activeHand?.availableActions ?? activeSeat?.availableActions ?? [];
-  const bettingAmount =
-    betAmount.trim() ||
-    visibleState?.bettingLimits.minInitialBet ||
-    quickBetAmounts[0];
+  const selectedBetDraft =
+    selectedSeatNo !== null ? seatBetDrafts[selectedSeatNo] ?? "" : "";
+  const bettingAmount = selectedBetDraft.trim();
   const isReviewingRoundResult = Boolean(table.roundResultReview);
   const isCommandLockedPhase = isTableCommandLockedPhase(visibleState?.phase);
   const canUseTable =
@@ -109,6 +115,13 @@ export function BlackjackTableClient({
     table.connectionStatus === "connected" &&
     !isCommandLockedPhase &&
     !isReviewingRoundResult;
+  const canStackChips =
+    canSendSeatCommand &&
+    visibleState?.phase === "WAITING_BETS" &&
+    selectedSeat?.handStatus === "WAITING_BET";
+  const canUndoChip =
+    selectedSeatNo !== null &&
+    chipHistory.some((entry) => entry.seatNo === selectedSeatNo);
   const prompt = getActionPrompt({
     activeSeat,
     actions: availableActions,
@@ -117,6 +130,81 @@ export function BlackjackTableClient({
     selectedSeatNo,
     state: visibleState,
   });
+
+  function updateSeatBetDraft(seatNo: number | null, value: string) {
+    if (seatNo === null) {
+      return;
+    }
+
+    setSeatBetDrafts((currentDrafts) => {
+      const trimmedValue = value.trim();
+
+      if (!trimmedValue) {
+        const nextDrafts = { ...currentDrafts };
+        delete nextDrafts[seatNo];
+        return nextDrafts;
+      }
+
+      return {
+        ...currentDrafts,
+        [seatNo]: trimmedValue,
+      };
+    });
+  }
+
+  function clearSeatBetDraft(seatNo: number) {
+    updateSeatBetDraft(seatNo, "");
+    setChipHistory((currentHistory) =>
+      currentHistory.filter((entry) => entry.seatNo !== seatNo),
+    );
+  }
+
+  function placeBetForSeat(seatNo: number, amount: string) {
+    table.placeBet(seatNo, amount);
+    clearSeatBetDraft(seatNo);
+  }
+
+  function addChipToSelectedSeat(amount: (typeof quickBetAmounts)[number]) {
+    if (selectedSeatNo === null || !visibleState || !canStackChips) {
+      return;
+    }
+
+    const nextAmount = addPointStrings(selectedBetDraft, amount);
+
+    if (!canAddChipToStack(selectedBetDraft, amount, visibleState.bettingLimits)) {
+      return;
+    }
+
+    setSeatBetDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [selectedSeatNo]: nextAmount,
+    }));
+    setChipHistory((currentHistory) => [
+      ...currentHistory,
+      { amount, seatNo: selectedSeatNo },
+    ]);
+  }
+
+  function undoLastChipForSelectedSeat() {
+    if (selectedSeatNo === null) {
+      return;
+    }
+
+    const historyIndex = findLastChipHistoryIndex(chipHistory, selectedSeatNo);
+
+    if (historyIndex === -1) {
+      return;
+    }
+
+    const chipEntry = chipHistory[historyIndex];
+    const nextAmount = subtractPointStrings(selectedBetDraft, chipEntry.amount);
+
+    updateSeatBetDraft(selectedSeatNo, nextAmount === "0" ? "" : nextAmount);
+    setChipHistory((currentHistory) => [
+      ...currentHistory.slice(0, historyIndex),
+      ...currentHistory.slice(historyIndex + 1),
+    ]);
+  }
 
   return (
     <main className="min-h-screen bg-[#07130f] text-white">
@@ -151,7 +239,6 @@ export function BlackjackTableClient({
             <CasinoTable
               cardAnimationKeys={cardAnimationKeys}
               canUseSeatCommands={canUseSeatCommands}
-              isBettingAmountWithinLimits={isBettingAmountWithinLimits}
               myUserId={table.player?.id ?? null}
               onSeatClick={(seatNo, seat) => {
                 setSeatNoInput(String(seatNo));
@@ -175,20 +262,25 @@ export function BlackjackTableClient({
                   seat.userId === table.player?.id &&
                   visibleState.phase === "WAITING_BETS" &&
                   seat.handStatus === "WAITING_BET" &&
+                  bettingAmount &&
                   isBettingAmountWithinLimits
                 ) {
-                  table.placeBet(seatNo, bettingAmount);
+                  placeBetForSeat(seatNo, bettingAmount);
                 }
               }}
               roundResultReview={table.roundResultReview}
-              selectedBetAmount={bettingAmount}
               selectedSeatNo={selectedSeatNo}
+              seatBetDrafts={seatBetDrafts}
               state={visibleState}
             />
             <ChipBox
+              canAddChips={canStackChips}
+              canUndo={canUndoChip}
               selectedAmount={bettingAmount}
+              selectedSeatNo={selectedSeatNo}
               limits={visibleState?.bettingLimits ?? null}
-              onAmountChange={setBetAmount}
+              onAddChip={addChipToSelectedSeat}
+              onUndo={undoLastChipForSelectedSeat}
             />
           </div>
 
@@ -197,7 +289,7 @@ export function BlackjackTableClient({
               activeHand={activeHand}
               activeSeat={activeSeat}
               actions={availableActions}
-              betAmount={betAmount}
+              betAmount={selectedBetDraft}
               canBet={canBet}
               canJoinTable={canJoinTable}
               canSendPlayerAction={canSendPlayerAction}
@@ -213,7 +305,9 @@ export function BlackjackTableClient({
                   seatNo: activeSeat.seatNo,
                 });
               }}
-              onBetAmountChange={setBetAmount}
+              onBetAmountChange={(value) =>
+                updateSeatBetDraft(selectedSeatNo, value)
+              }
               onJoin={table.joinTable}
               onLeaveSeat={() => {
                 if (selectedSeatNo !== null) {
@@ -222,7 +316,7 @@ export function BlackjackTableClient({
               }}
               onPlaceBet={() => {
                 if (selectedSeatNo !== null && bettingAmount) {
-                  table.placeBet(selectedSeatNo, bettingAmount);
+                  placeBetForSeat(selectedSeatNo, bettingAmount);
                 }
               }}
               onReconnect={table.reconnect}
@@ -313,22 +407,20 @@ function TableHeader({
 function CasinoTable({
   cardAnimationKeys,
   canUseSeatCommands,
-  isBettingAmountWithinLimits,
   myUserId,
   onSeatClick,
   roundResultReview,
-  selectedBetAmount,
   selectedSeatNo,
+  seatBetDrafts,
   state,
 }: {
   cardAnimationKeys: ReadonlySet<string>;
   canUseSeatCommands: boolean;
-  isBettingAmountWithinLimits: boolean;
   myUserId: string | null;
   onSeatClick: (seatNo: number, seat: BlackjackSeatSnapshot | null) => void;
   roundResultReview: { endsAt: string; state: BlackjackTableState } | null;
-  selectedBetAmount: string;
   selectedSeatNo: number | null;
+  seatBetDrafts: Record<number, string>;
   state: BlackjackTableState | null;
 }) {
   const countdown = useCountdown(state?.timers.phaseEndsAt ?? null);
@@ -400,12 +492,14 @@ function CasinoTable({
       <div className="absolute inset-x-4 bottom-10 top-[42%] z-20">
         {tableSeatNumbers.map((seatNo) => {
           const seat = seatsByNo.get(seatNo) ?? null;
+          const draftBetAmount = seatBetDrafts[seatNo] ?? "";
           const isMine = seat?.userId === myUserId;
           const isSeatBettable =
             isMine &&
             state?.phase === "WAITING_BETS" &&
             seat?.handStatus === "WAITING_BET" &&
-            isBettingAmountWithinLimits;
+            draftBetAmount !== "" &&
+            (state ? isBetWithinLimits(draftBetAmount, state.bettingLimits) : false);
           const canClickSeat =
             canUseSeatCommands &&
             Boolean(state) &&
@@ -414,7 +508,7 @@ function CasinoTable({
               : state?.phase === "WAITING" || state?.phase === "WAITING_BETS");
           const actionLabel = seat
             ? isSeatBettable
-              ? `Bet ${formatBetAmountLabel(selectedBetAmount)}`
+              ? `Bet ${formatBetAmountLabel(draftBetAmount)}`
               : null
             : "Take seat";
 
@@ -428,6 +522,7 @@ function CasinoTable({
               key={seat.seatNo}
               onClick={() => onSeatClick(seatNo, seat)}
               quickActionLabel={canClickSeat ? actionLabel : null}
+              draftBetAmount={draftBetAmount}
               seat={seat}
             />
           ) : (
@@ -536,6 +631,7 @@ function RoundResultTableOverlay({
 
 function SeatSpot({
   cardAnimationKeys,
+  draftBetAmount,
   index,
   isClickEnabled,
   isMine,
@@ -545,6 +641,7 @@ function SeatSpot({
   seat,
 }: {
   cardAnimationKeys: ReadonlySet<string>;
+  draftBetAmount: string;
   index: number;
   isClickEnabled: boolean;
   isMine: boolean;
@@ -555,6 +652,7 @@ function SeatSpot({
 }) {
   const activeHand = findActiveHand(seat) ?? seat.hands[0] ?? null;
   const hasSplitHands = seat.hands.length > 1;
+  const hasDraftBet = draftBetAmount.trim() !== "" && seat.betAmount === null;
 
   return (
     <button
@@ -594,7 +692,14 @@ function SeatSpot({
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-xs">
-        <MiniMetric label="Bet" value={formatNullablePoints(seat.betAmount)} />
+        <MiniMetric
+          label={hasDraftBet ? "Stack" : "Bet"}
+          value={
+            hasDraftBet
+              ? `${formatBetAmountLabel(draftBetAmount)} pts`
+              : formatNullablePoints(seat.betAmount)
+          }
+        />
         <MiniMetric
           label={hasSplitHands ? "Active" : "Score"}
           value={formatHandScore(activeHand)}
@@ -612,6 +717,9 @@ function SeatSpot({
         {hasSplitHands ? <FeltBadge>{seat.hands.length} hands</FeltBadge> : null}
         {seat.activeHandNo ? <FeltBadge>Hand {seat.activeHandNo}</FeltBadge> : null}
         {seat.outcome ? <FeltBadge>{seat.outcome}</FeltBadge> : null}
+        {hasDraftBet ? (
+          <FeltBadge>Stack {formatBetAmountLabel(draftBetAmount)}</FeltBadge>
+        ) : null}
         {quickActionLabel ? <FeltBadge>{quickActionLabel}</FeltBadge> : null}
       </div>
     </button>
@@ -753,40 +861,50 @@ function EmptySeatSpot({
 }
 
 function ChipBox({
+  canAddChips,
+  canUndo,
   limits,
-  onAmountChange,
+  onAddChip,
+  onUndo,
   selectedAmount,
+  selectedSeatNo,
 }: {
+  canAddChips: boolean;
+  canUndo: boolean;
   limits: BlackjackTableState["bettingLimits"] | null;
-  onAmountChange: (value: string) => void;
+  onAddChip: (value: (typeof quickBetAmounts)[number]) => void;
+  onUndo: () => void;
   selectedAmount: string;
+  selectedSeatNo: number | null;
 }) {
+  const stackAmount = selectedAmount.trim() || "0";
+
   return (
     <section className="mt-3 rounded-3xl border border-white/10 bg-white/[0.07] px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-white">Chip box</p>
           <p className="text-xs text-white/50">
-            Selected {formatBetAmountLabel(selectedAmount)} pts
+            Seat {selectedSeatNo ?? "-"} · Stack {formatBetAmountLabel(stackAmount)} pts
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {quickBetAmounts.map((amount) => {
-            const isSelected = selectedAmount.trim() === amount;
-            const isDisabled = limits ? !isBetWithinLimits(amount, limits) : false;
+            const isDisabled =
+              !canAddChips ||
+              !limits ||
+              !canAddChipToStack(stackAmount, amount, limits);
 
             return (
               <button
                 type="button"
                 disabled={isDisabled}
                 key={amount}
-                onClick={() => onAmountChange(amount)}
+                onClick={() => onAddChip(amount)}
                 className={cn(
                   "grid size-16 place-items-center rounded-full border-4 text-sm font-bold shadow-xl transition",
                   chipColorClass(amount),
-                  isSelected
-                    ? "scale-105 ring-2 ring-white/80"
-                    : "hover:-translate-y-0.5 hover:scale-105",
+                  !isDisabled && "hover:-translate-y-0.5 hover:scale-105",
                   isDisabled && "cursor-not-allowed opacity-40 hover:translate-y-0",
                 )}
               >
@@ -794,6 +912,16 @@ function ChipBox({
               </button>
             );
           })}
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 border-white/15 bg-white/10 text-white hover:bg-white/15"
+            disabled={!canUndo}
+            onClick={onUndo}
+          >
+            <Undo2 />
+            Undo
+          </Button>
         </div>
       </div>
     </section>
@@ -1573,6 +1701,52 @@ function isBetWithinLimits(
     numericAmount >= minBet &&
     numericAmount <= maxBet
   );
+}
+
+function canAddChipToStack(
+  currentAmount: string,
+  chipAmount: string,
+  limits: BlackjackTableState["bettingLimits"],
+) {
+  const nextAmount = Number(addPointStrings(currentAmount, chipAmount));
+  const maxBet = Number(limits.maxInitialBet);
+
+  return Number.isInteger(nextAmount) && nextAmount > 0 && nextAmount <= maxBet;
+}
+
+function addPointStrings(currentAmount: string, amountToAdd: string) {
+  const currentValue = Number(currentAmount || "0");
+  const addedValue = Number(amountToAdd);
+
+  if (!Number.isFinite(currentValue) || !Number.isFinite(addedValue)) {
+    return currentAmount || "0";
+  }
+
+  return String(currentValue + addedValue);
+}
+
+function subtractPointStrings(currentAmount: string, amountToSubtract: string) {
+  const currentValue = Number(currentAmount || "0");
+  const subtractedValue = Number(amountToSubtract);
+
+  if (!Number.isFinite(currentValue) || !Number.isFinite(subtractedValue)) {
+    return currentAmount || "0";
+  }
+
+  return String(Math.max(0, currentValue - subtractedValue));
+}
+
+function findLastChipHistoryIndex(
+  history: ChipHistoryEntry[],
+  seatNo: number,
+) {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index]?.seatNo === seatNo) {
+      return index;
+    }
+  }
+
+  return -1;
 }
 
 function chipColorClass(amount: (typeof quickBetAmounts)[number]) {

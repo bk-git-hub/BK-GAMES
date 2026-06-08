@@ -43,6 +43,8 @@ type ActionPrompt = {
 
 const pointFormatter = new Intl.NumberFormat("en-US");
 const cardEventAnimationMs = 1400;
+const quickBetAmounts = ["100", "500", "1000"] as const;
+const tableSeatNumbers = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export function BlackjackTableClient({
   initialWalletBalance,
@@ -50,7 +52,7 @@ export function BlackjackTableClient({
   userName,
 }: BlackjackTableClientProps) {
   const table = useBlackjackTable({ initialWalletBalance });
-  const [betAmount, setBetAmount] = useState("");
+  const [betAmount, setBetAmount] = useState<string>(quickBetAmounts[0]);
   const [seatNoInput, setSeatNoInput] = useState("1");
   const visibleState = table.tableState;
   const cardAnimationKeys = useCardEventAnimations(table.events);
@@ -78,20 +80,24 @@ export function BlackjackTableClient({
   const availableActions =
     activeHand?.availableActions ?? activeSeat?.availableActions ?? [];
   const bettingAmount =
-    betAmount.trim() || visibleState?.bettingLimits.minInitialBet || "";
+    betAmount.trim() ||
+    visibleState?.bettingLimits.minInitialBet ||
+    quickBetAmounts[0];
   const isReviewingRoundResult = Boolean(table.roundResultReview);
   const isCommandLockedPhase = isTableCommandLockedPhase(visibleState?.phase);
   const canUseTable =
     table.connectionStatus === "connected" && visibleState?.status === "OPEN";
+  const canUseSeatCommands =
+    canUseTable && !isCommandLockedPhase && !isReviewingRoundResult;
+  const isBettingAmountWithinLimits = visibleState
+    ? isBetWithinLimits(bettingAmount, visibleState.bettingLimits)
+    : false;
   const canSendSeatCommand =
-    canUseTable &&
-    selectedSeatNo !== null &&
-    !isCommandLockedPhase &&
-    !isReviewingRoundResult;
+    canUseSeatCommands && selectedSeatNo !== null;
   const canBet =
     canSendSeatCommand &&
-    !isReviewingRoundResult &&
     Boolean(bettingAmount) &&
+    isBettingAmountWithinLimits &&
     visibleState?.phase === "WAITING_BETS" &&
     selectedSeat?.handStatus === "WAITING_BET";
   const canSendPlayerAction =
@@ -144,10 +150,45 @@ export function BlackjackTableClient({
           <div className="order-2 xl:order-1">
             <CasinoTable
               cardAnimationKeys={cardAnimationKeys}
+              canUseSeatCommands={canUseSeatCommands}
+              isBettingAmountWithinLimits={isBettingAmountWithinLimits}
               myUserId={table.player?.id ?? null}
+              onSeatClick={(seatNo, seat) => {
+                setSeatNoInput(String(seatNo));
+
+                if (!canUseSeatCommands || !visibleState) {
+                  return;
+                }
+
+                if (!seat) {
+                  if (
+                    visibleState.phase === "WAITING" ||
+                    visibleState.phase === "WAITING_BETS"
+                  ) {
+                    table.takeSeat(seatNo);
+                  }
+
+                  return;
+                }
+
+                if (
+                  seat.userId === table.player?.id &&
+                  visibleState.phase === "WAITING_BETS" &&
+                  seat.handStatus === "WAITING_BET" &&
+                  isBettingAmountWithinLimits
+                ) {
+                  table.placeBet(seatNo, bettingAmount);
+                }
+              }}
               roundResultReview={table.roundResultReview}
+              selectedBetAmount={bettingAmount}
               selectedSeatNo={selectedSeatNo}
               state={visibleState}
+            />
+            <ChipBox
+              selectedAmount={bettingAmount}
+              limits={visibleState?.bettingLimits ?? null}
+              onAmountChange={setBetAmount}
             />
           </div>
 
@@ -271,19 +312,28 @@ function TableHeader({
 
 function CasinoTable({
   cardAnimationKeys,
+  canUseSeatCommands,
+  isBettingAmountWithinLimits,
   myUserId,
+  onSeatClick,
   roundResultReview,
+  selectedBetAmount,
   selectedSeatNo,
   state,
 }: {
   cardAnimationKeys: ReadonlySet<string>;
+  canUseSeatCommands: boolean;
+  isBettingAmountWithinLimits: boolean;
   myUserId: string | null;
+  onSeatClick: (seatNo: number, seat: BlackjackSeatSnapshot | null) => void;
   roundResultReview: { endsAt: string; state: BlackjackTableState } | null;
+  selectedBetAmount: string;
   selectedSeatNo: number | null;
   state: BlackjackTableState | null;
 }) {
   const countdown = useCountdown(state?.timers.phaseEndsAt ?? null);
   const resultCountdown = useCountdown(roundResultReview?.endsAt ?? null);
+  const seatsByNo = new Map(state?.seats.map((seat) => [seat.seatNo, seat]));
 
   return (
     <section className="relative min-h-[620px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#10251d] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:min-h-[760px]">
@@ -348,19 +398,49 @@ function CasinoTable({
       )}
 
       <div className="absolute inset-x-4 bottom-10 top-[42%] z-20">
-        {state?.seats.length ? (
-          state.seats.map((seat, index) => (
+        {tableSeatNumbers.map((seatNo) => {
+          const seat = seatsByNo.get(seatNo) ?? null;
+          const isMine = seat?.userId === myUserId;
+          const isSeatBettable =
+            isMine &&
+            state?.phase === "WAITING_BETS" &&
+            seat?.handStatus === "WAITING_BET" &&
+            isBettingAmountWithinLimits;
+          const canClickSeat =
+            canUseSeatCommands &&
+            Boolean(state) &&
+            (seat
+              ? isMine
+              : state?.phase === "WAITING" || state?.phase === "WAITING_BETS");
+          const actionLabel = seat
+            ? isSeatBettable
+              ? `Bet ${formatBetAmountLabel(selectedBetAmount)}`
+              : null
+            : "Take seat";
+
+          return seat ? (
             <SeatSpot
               cardAnimationKeys={cardAnimationKeys}
-              index={index}
-              isMine={seat.userId === myUserId}
+              index={seatNo - 1}
+              isClickEnabled={canClickSeat}
+              isMine={isMine}
+              isSelected={selectedSeatNo === seatNo}
               key={seat.seatNo}
+              onClick={() => onSeatClick(seatNo, seat)}
+              quickActionLabel={canClickSeat ? actionLabel : null}
               seat={seat}
             />
-          ))
-        ) : (
-          <EmptySeatSpot selectedSeatNo={selectedSeatNo} />
-        )}
+          ) : (
+            <EmptySeatSpot
+              index={seatNo - 1}
+              isClickEnabled={canClickSeat}
+              isSelected={selectedSeatNo === seatNo}
+              key={seatNo}
+              onClick={() => onSeatClick(seatNo, null)}
+              seatNo={seatNo}
+            />
+          );
+        })}
       </div>
     </section>
   );
@@ -457,25 +537,40 @@ function RoundResultTableOverlay({
 function SeatSpot({
   cardAnimationKeys,
   index,
+  isClickEnabled,
   isMine,
+  isSelected,
+  onClick,
+  quickActionLabel,
   seat,
 }: {
   cardAnimationKeys: ReadonlySet<string>;
   index: number;
+  isClickEnabled: boolean;
   isMine: boolean;
+  isSelected: boolean;
+  onClick: () => void;
+  quickActionLabel: string | null;
   seat: BlackjackSeatSnapshot;
 }) {
   const activeHand = findActiveHand(seat) ?? seat.hands[0] ?? null;
   const hasSplitHands = seat.hands.length > 1;
 
   return (
-    <article
+    <button
+      type="button"
+      disabled={!isClickEnabled}
+      onClick={onClick}
       className={cn(
-        "absolute flex flex-col gap-2 rounded-2xl border bg-[#06150f]/85 p-3 text-white shadow-2xl backdrop-blur-md",
+        "absolute flex flex-col gap-2 rounded-2xl border bg-[#06150f]/85 p-3 text-left text-white shadow-2xl backdrop-blur-md transition",
         hasSplitHands ? "w-[260px]" : "w-[210px]",
         seatPositionClass(index),
         isMine ? "border-amber-300/80" : "border-white/15",
+        isSelected && "ring-2 ring-emerald-200/80",
         seat.isCurrentTurn && "ring-2 ring-amber-200",
+        isClickEnabled
+          ? "cursor-pointer hover:border-amber-200 hover:bg-[#092116]/95 hover:shadow-amber-950/20"
+          : "cursor-default disabled:opacity-90",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -517,8 +612,9 @@ function SeatSpot({
         {hasSplitHands ? <FeltBadge>{seat.hands.length} hands</FeltBadge> : null}
         {seat.activeHandNo ? <FeltBadge>Hand {seat.activeHandNo}</FeltBadge> : null}
         {seat.outcome ? <FeltBadge>{seat.outcome}</FeltBadge> : null}
+        {quickActionLabel ? <FeltBadge>{quickActionLabel}</FeltBadge> : null}
       </div>
-    </article>
+    </button>
   );
 }
 
@@ -618,12 +714,89 @@ function SeatHandPanel({
   );
 }
 
-function EmptySeatSpot({ selectedSeatNo }: { selectedSeatNo: number | null }) {
+function EmptySeatSpot({
+  index,
+  isClickEnabled,
+  isSelected,
+  onClick,
+  seatNo,
+}: {
+  index: number;
+  isClickEnabled: boolean;
+  isSelected: boolean;
+  onClick: () => void;
+  seatNo: number;
+}) {
   return (
-    <div className="absolute bottom-[3%] left-1/2 flex w-[190px] -translate-x-1/2 flex-col items-center gap-2 rounded-full border border-dashed border-emerald-100/35 bg-emerald-950/30 px-5 py-4 text-center text-emerald-50/75">
-      <p className="text-sm font-semibold">Seat {selectedSeatNo ?? 1}</p>
+    <button
+      type="button"
+      disabled={!isClickEnabled}
+      onClick={onClick}
+      className={cn(
+        "absolute flex w-[190px] flex-col items-center gap-2 rounded-full border border-dashed border-emerald-100/35 bg-emerald-950/30 px-5 py-4 text-center text-emerald-50/75 transition",
+        seatPositionClass(index),
+        isSelected && "border-emerald-100 bg-emerald-200/10 text-emerald-50",
+        isClickEnabled
+          ? "cursor-pointer hover:border-amber-200 hover:bg-amber-200/10 hover:text-amber-50"
+          : "cursor-default disabled:opacity-70",
+      )}
+    >
+      <p className="text-sm font-semibold">Seat {seatNo}</p>
       <p className="text-xs">Open</p>
-    </div>
+      {isClickEnabled ? (
+        <span className="rounded-full bg-amber-300 px-2 py-0.5 text-xs font-semibold text-zinc-950">
+          Take seat
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function ChipBox({
+  limits,
+  onAmountChange,
+  selectedAmount,
+}: {
+  limits: BlackjackTableState["bettingLimits"] | null;
+  onAmountChange: (value: string) => void;
+  selectedAmount: string;
+}) {
+  return (
+    <section className="mt-3 rounded-3xl border border-white/10 bg-white/[0.07] px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-white">Chip box</p>
+          <p className="text-xs text-white/50">
+            Selected {formatBetAmountLabel(selectedAmount)} pts
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {quickBetAmounts.map((amount) => {
+            const isSelected = selectedAmount.trim() === amount;
+            const isDisabled = limits ? !isBetWithinLimits(amount, limits) : false;
+
+            return (
+              <button
+                type="button"
+                disabled={isDisabled}
+                key={amount}
+                onClick={() => onAmountChange(amount)}
+                className={cn(
+                  "grid size-16 place-items-center rounded-full border-4 text-sm font-bold shadow-xl transition",
+                  chipColorClass(amount),
+                  isSelected
+                    ? "scale-105 ring-2 ring-white/80"
+                    : "hover:-translate-y-0.5 hover:scale-105",
+                  isDisabled && "cursor-not-allowed opacity-40 hover:translate-y-0",
+                )}
+              >
+                {amount}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1342,6 +1515,16 @@ function formatPoints(value: string) {
   return pointFormatter.format(Number(value));
 }
 
+function formatBetAmountLabel(value: string) {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return value.trim() || "-";
+  }
+
+  return pointFormatter.format(numericValue);
+}
+
 function formatNullablePoints(value: string | null) {
   return value ? `${formatPoints(value)} pts` : "-";
 }
@@ -1375,6 +1558,31 @@ function formatEnumLabel(value: string) {
     .split("_")
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function isBetWithinLimits(
+  amount: string,
+  limits: BlackjackTableState["bettingLimits"],
+) {
+  const numericAmount = Number(amount);
+  const minBet = Number(limits.minInitialBet);
+  const maxBet = Number(limits.maxInitialBet);
+
+  return (
+    Number.isInteger(numericAmount) &&
+    numericAmount >= minBet &&
+    numericAmount <= maxBet
+  );
+}
+
+function chipColorClass(amount: (typeof quickBetAmounts)[number]) {
+  const colors: Record<(typeof quickBetAmounts)[number], string> = {
+    "100": "border-emerald-100 bg-emerald-700 text-white",
+    "500": "border-amber-100 bg-amber-400 text-zinc-950",
+    "1000": "border-sky-100 bg-sky-700 text-white",
+  };
+
+  return colors[amount];
 }
 
 function formatTime(value: string) {

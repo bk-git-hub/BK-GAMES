@@ -442,6 +442,7 @@ function CasinoTable({
   const countdown = useCountdown(state?.timers.phaseEndsAt ?? null);
   const resultCountdown = useCountdown(roundResultReview?.endsAt ?? null);
   const seatsByNo = new Map(state?.seats.map((seat) => [seat.seatNo, seat]));
+  const showBettingTimer = state?.phase === "WAITING_BETS";
 
   return (
     <section className="relative min-h-[620px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#10251d] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:min-h-[760px]">
@@ -492,6 +493,7 @@ function CasinoTable({
         />
       ) : (
         <div className="absolute left-1/2 top-[47%] z-10 -translate-x-1/2 text-center">
+          {showBettingTimer ? <BettingTimer countdown={countdown} /> : null}
           <p className="text-3xl font-semibold uppercase tracking-[0.3em] text-emerald-50/20 sm:text-5xl">
             Blackjack
           </p>
@@ -556,6 +558,26 @@ function CasinoTable({
         </div>
       </div>
     </section>
+  );
+}
+
+function BettingTimer({ countdown }: { countdown: string | null }) {
+  return (
+    <div
+      className="mx-auto mb-5 inline-flex min-w-48 flex-col items-center rounded-2xl border border-amber-200/55 bg-[#07130f]/78 px-6 py-4 text-amber-50 shadow-2xl shadow-black/35 backdrop-blur-md"
+      role={countdown ? "timer" : "status"}
+      aria-label={
+        countdown ? `Betting closes in ${countdown}` : "Betting window open"
+      }
+    >
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/75">
+        <Timer className="size-4" />
+        {countdown ? "Betting closes" : "Betting open"}
+      </div>
+      <div className="mt-1 font-mono text-5xl font-semibold leading-none tracking-normal text-amber-100 sm:text-6xl">
+        {countdown ?? "Open"}
+      </div>
+    </div>
   );
 }
 

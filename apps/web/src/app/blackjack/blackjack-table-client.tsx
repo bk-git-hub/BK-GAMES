@@ -55,6 +55,11 @@ type TableCelebration = {
   tone: "blackjack" | "twenty-one";
 };
 
+type DeckRemainingInfo = {
+  remaining: number | null;
+  total: number | null;
+};
+
 const pointFormatter = new Intl.NumberFormat("en-US");
 const cardEventAnimationMs = 1400;
 const quickBetAmounts = ["100", "500", "1000"] as const;
@@ -460,6 +465,7 @@ function CasinoTable({
   const seatsByNo = new Map(state?.seats.map((seat) => [seat.seatNo, seat]));
   const showBettingTimer = state?.phase === "WAITING_BETS";
   const celebration = getTableCelebration(state, myUserId);
+  const deckRemainingInfo = getDeckRemainingInfo(state);
 
   return (
     <section className="relative min-h-[620px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#10251d] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:min-h-[760px]">
@@ -501,6 +507,8 @@ function CasinoTable({
           {state?.dealer.score ?? "-"}
         </p>
       </div>
+
+      <DeckRemainingMeter info={deckRemainingInfo} />
 
       {roundResultReview ? (
         <RoundResultTableOverlay
@@ -600,6 +608,35 @@ function BettingTimer({ countdown }: { countdown: string | null }) {
       </div>
       <div className="mt-1 font-mono text-5xl font-semibold leading-none tracking-normal text-amber-100 sm:text-6xl">
         {countdown ?? "Open"}
+      </div>
+    </div>
+  );
+}
+
+function DeckRemainingMeter({ info }: { info: DeckRemainingInfo }) {
+  const hasRemaining = info.remaining !== null;
+  const totalLabel = info.total !== null ? ` / ${info.total}` : "";
+  const remainingLabel = hasRemaining ? `${info.remaining}${totalLabel}` : "Waiting";
+
+  return (
+    <div className="absolute right-6 top-28 z-10 hidden min-w-32 rounded-2xl border border-white/10 bg-[#06150f]/78 px-4 py-3 text-right text-emerald-50 shadow-2xl shadow-black/25 backdrop-blur-md sm:block">
+      <div className="flex items-center justify-end gap-3">
+        <div className="relative h-11 w-10">
+          <span className="absolute left-0 top-2 h-8 w-6 rotate-[-8deg] rounded border border-emerald-100/35 bg-emerald-900 shadow-lg" />
+          <span className="absolute left-2 top-1 h-8 w-6 rotate-[4deg] rounded border border-emerald-100/45 bg-emerald-800 shadow-lg" />
+          <span className="absolute left-4 top-0 h-8 w-6 rotate-[12deg] rounded border border-amber-100/55 bg-zinc-950 shadow-lg" />
+        </div>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-100/55">
+            Shoe
+          </p>
+          <p className="mt-1 font-mono text-xl font-semibold tracking-normal text-emerald-50">
+            {remainingLabel}
+          </p>
+          <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-white/40">
+            Cards left
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -1363,6 +1400,15 @@ function CardFan({
   );
 }
 
+function dealtCardAnimationClass(size: "lg" | "sm") {
+  return cn(
+    "will-change-transform motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:ease-out motion-safe:[animation-fill-mode:both]",
+    size === "lg"
+      ? "motion-safe:slide-in-from-top-16 motion-safe:duration-700"
+      : "motion-safe:slide-in-from-top-10 motion-safe:duration-600",
+  );
+}
+
 function PlayingCard({
   card,
   index,
@@ -1385,8 +1431,7 @@ function PlayingCard({
         aria-label="Hidden card"
         className={cn(
           "flex shrink-0 items-center justify-center border border-amber-200/40 bg-zinc-950 text-[10px] font-semibold text-amber-200 shadow-xl",
-          isFresh &&
-            "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-500",
+          isFresh && dealtCardAnimationClass(size),
           cardClass,
           index % 2 === 0 ? "rotate-[-3deg]" : "rotate-[3deg]",
         )}
@@ -1401,8 +1446,7 @@ function PlayingCard({
       alt={`${card.rank} of ${card.suit}`}
       className={cn(
         "h-auto shrink-0 shadow-xl",
-        isFresh &&
-          "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-500",
+        isFresh && dealtCardAnimationClass(size),
         cardClass,
         index % 2 === 0 ? "rotate-[-3deg]" : "rotate-[3deg]",
       )}
@@ -1808,6 +1852,43 @@ function getBettingWindowKey(state: BlackjackTableState | null) {
     state.round?.roundId ?? "pending-round",
     state.timers.phaseEndsAt ?? "open-window",
   ].join(":");
+}
+
+function getDeckRemainingInfo(
+  state: BlackjackTableState | null,
+): DeckRemainingInfo {
+  if (!state) {
+    return {
+      remaining: null,
+      total: null,
+    };
+  }
+
+  const record = state as Record<string, unknown>;
+  const shoe = isRecord(record.shoe) ? record.shoe : null;
+  const deck = isRecord(record.deck) ? record.deck : null;
+  const remaining =
+    readNumber(record.shoeRemaining) ??
+    readNumber(record.cardsRemaining) ??
+    readNumber(record.remainingCards) ??
+    readNumber(record.deckRemaining) ??
+    readNumber(shoe?.remaining) ??
+    readNumber(shoe?.cardsRemaining) ??
+    readNumber(deck?.remaining) ??
+    null;
+  const total =
+    readNumber(record.shoeSize) ??
+    readNumber(record.totalCards) ??
+    readNumber(record.deckSize) ??
+    readNumber(shoe?.total) ??
+    readNumber(shoe?.size) ??
+    readNumber(deck?.total) ??
+    null;
+
+  return {
+    remaining,
+    total,
+  };
 }
 
 function getTableCelebration(

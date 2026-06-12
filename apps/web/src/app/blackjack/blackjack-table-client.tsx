@@ -11,6 +11,7 @@ import {
   LogOut,
   PlugZap,
   RefreshCw,
+  Sparkles,
   Timer,
   Undo2,
 } from "lucide-react";
@@ -47,10 +48,25 @@ type ChipHistoryEntry = {
   seatNo: number;
 };
 
+type TableCelebration = {
+  detail: string;
+  key: string;
+  title: string;
+  tone: "blackjack" | "twenty-one";
+};
+
 const pointFormatter = new Intl.NumberFormat("en-US");
 const cardEventAnimationMs = 1400;
 const quickBetAmounts = ["100", "500", "1000"] as const;
 const tableSeatNumbers = [1, 2, 3, 4, 5, 6, 7] as const;
+const celebrationParticles = [
+  "left-[6%] top-[20%] bg-amber-200",
+  "left-[18%] top-[70%] bg-emerald-200",
+  "left-[32%] top-[10%] bg-white",
+  "left-[72%] top-[18%] bg-amber-300",
+  "left-[86%] top-[62%] bg-emerald-100",
+  "left-[58%] top-[80%] bg-white",
+] as const;
 
 export function BlackjackTableClient({
   initialWalletBalance,
@@ -443,6 +459,7 @@ function CasinoTable({
   const resultCountdown = useCountdown(roundResultReview?.endsAt ?? null);
   const seatsByNo = new Map(state?.seats.map((seat) => [seat.seatNo, seat]));
   const showBettingTimer = state?.phase === "WAITING_BETS";
+  const celebration = getTableCelebration(state, myUserId);
 
   return (
     <section className="relative min-h-[620px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#10251d] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:min-h-[760px]">
@@ -506,6 +523,13 @@ function CasinoTable({
           </p>
         </div>
       )}
+
+      {!roundResultReview && celebration ? (
+        <TableCelebrationOverlay
+          celebration={celebration}
+          key={celebration.key}
+        />
+      ) : null}
 
       <div className="absolute inset-x-4 bottom-6 z-20 overflow-x-auto pb-1">
         <div className="grid min-w-[1470px] grid-cols-7 items-end gap-3">
@@ -576,6 +600,73 @@ function BettingTimer({ countdown }: { countdown: string | null }) {
       </div>
       <div className="mt-1 font-mono text-5xl font-semibold leading-none tracking-normal text-amber-100 sm:text-6xl">
         {countdown ?? "Open"}
+      </div>
+    </div>
+  );
+}
+
+function TableCelebrationOverlay({
+  celebration,
+}: {
+  celebration: TableCelebration;
+}) {
+  const isBlackjack = celebration.tone === "blackjack";
+
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-[38%] z-30 w-[min(92%,520px)] -translate-x-1/2 text-center">
+      <div
+        className={cn(
+          "relative overflow-hidden rounded-3xl border px-6 py-5 shadow-2xl shadow-black/40 backdrop-blur-md motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-500",
+          isBlackjack
+            ? "border-amber-200/80 bg-amber-200/[0.16] text-amber-50"
+            : "border-emerald-100/75 bg-emerald-200/[0.14] text-emerald-50",
+        )}
+      >
+        <div
+          className={cn(
+            "absolute inset-0 opacity-35",
+            isBlackjack
+              ? "bg-[radial-gradient(circle_at_50%_20%,rgba(253,230,138,0.75),rgba(253,230,138,0)_42%)]"
+              : "bg-[radial-gradient(circle_at_50%_20%,rgba(167,243,208,0.75),rgba(167,243,208,0)_42%)]",
+          )}
+        />
+        <div className="absolute inset-0">
+          {celebrationParticles.map((particleClass, index) => (
+            <span
+              aria-hidden="true"
+              className={cn(
+                "absolute size-2 rounded-full shadow-[0_0_18px_currentColor] motion-safe:animate-ping",
+                particleClass,
+              )}
+              key={`${celebration.key}:${index}`}
+              style={{
+                animationDelay: `${index * 110}ms`,
+                animationDuration: `${900 + index * 90}ms`,
+              }}
+            />
+          ))}
+        </div>
+        <div className="relative flex flex-col items-center">
+          <div
+            className={cn(
+              "mb-2 grid size-12 place-items-center rounded-full border motion-safe:animate-bounce",
+              isBlackjack
+                ? "border-amber-100/70 bg-amber-200 text-zinc-950"
+                : "border-emerald-100/70 bg-emerald-200 text-zinc-950",
+            )}
+          >
+            <Sparkles className="size-6" />
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
+            {isBlackjack ? "Natural hit" : "Clean hand"}
+          </p>
+          <h2 className="mt-1 text-4xl font-semibold tracking-normal sm:text-5xl">
+            {celebration.title}
+          </h2>
+          <p className="mt-2 text-sm font-medium text-white/75">
+            {celebration.detail}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -1717,6 +1808,79 @@ function getBettingWindowKey(state: BlackjackTableState | null) {
     state.round?.roundId ?? "pending-round",
     state.timers.phaseEndsAt ?? "open-window",
   ].join(":");
+}
+
+function getTableCelebration(
+  state: BlackjackTableState | null,
+  myUserId: string | null,
+): TableCelebration | null {
+  if (!state || !myUserId || state.phase === "WAITING_BETS") {
+    return null;
+  }
+
+  let twentyOneCelebration: TableCelebration | null = null;
+
+  for (const seat of state.seats) {
+    if (seat.userId !== myUserId) {
+      continue;
+    }
+
+    for (const hand of seat.hands) {
+      const celebration = getHandCelebration(state, seat, hand);
+
+      if (!celebration) {
+        continue;
+      }
+
+      if (celebration.tone === "blackjack") {
+        return celebration;
+      }
+
+      twentyOneCelebration ??= celebration;
+    }
+  }
+
+  return twentyOneCelebration;
+}
+
+function getHandCelebration(
+  state: BlackjackTableState,
+  seat: BlackjackSeatSnapshot,
+  hand: BlackjackHandSnapshot,
+): TableCelebration | null {
+  if (hand.score !== 21 || hand.cards.length === 0) {
+    return null;
+  }
+
+  const handLabel = `Seat ${seat.seatNo} · Hand ${hand.handNo}`;
+  const betLabel = formatNullablePoints(hand.betAmount);
+  const cardSignature = hand.cards.map(cardKey).join("-");
+  const baseKey = [
+    state.tableId,
+    state.round?.roundId ?? "no-round",
+    seat.seatNo,
+    hand.handNo,
+    cardSignature,
+  ].join(":");
+  const isNaturalBlackjack =
+    hand.outcomeReason === "NATURAL_BLACKJACK" ||
+    (seat.hands.length === 1 && hand.cards.length === 2);
+
+  if (isNaturalBlackjack) {
+    return {
+      detail: `${handLabel} · ${betLabel}`,
+      key: `${baseKey}:blackjack`,
+      title: "Blackjack!",
+      tone: "blackjack",
+    };
+  }
+
+  return {
+    detail: `${handLabel} · ${betLabel}`,
+    key: `${baseKey}:twenty-one`,
+    title: "Nice 21",
+    tone: "twenty-one",
+  };
 }
 
 function chipColorClass(amount: (typeof quickBetAmounts)[number]) {

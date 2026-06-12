@@ -616,27 +616,65 @@ function BettingTimer({ countdown }: { countdown: string | null }) {
 function DeckRemainingMeter({ info }: { info: DeckRemainingInfo }) {
   const hasRemaining = info.remaining !== null;
   const totalLabel = info.total !== null ? ` / ${info.total}` : "";
-  const remainingLabel = hasRemaining ? `${info.remaining}${totalLabel}` : "Waiting";
+  const remainingLabel = hasRemaining
+    ? `${info.remaining}${totalLabel}`
+    : "Count unavailable";
+  const remainingPercent =
+    info.remaining !== null && info.total
+      ? Math.max(0, Math.min(100, (info.remaining / info.total) * 100))
+      : null;
 
   return (
-    <div className="absolute right-6 top-28 z-10 hidden min-w-32 rounded-2xl border border-white/10 bg-[#06150f]/78 px-4 py-3 text-right text-emerald-50 shadow-2xl shadow-black/25 backdrop-blur-md sm:block">
-      <div className="flex items-center justify-end gap-3">
-        <div className="relative h-11 w-10">
-          <span className="absolute left-0 top-2 h-8 w-6 rotate-[-8deg] rounded border border-emerald-100/35 bg-emerald-900 shadow-lg" />
-          <span className="absolute left-2 top-1 h-8 w-6 rotate-[4deg] rounded border border-emerald-100/45 bg-emerald-800 shadow-lg" />
-          <span className="absolute left-4 top-0 h-8 w-6 rotate-[12deg] rounded border border-amber-100/55 bg-zinc-950 shadow-lg" />
+    <div className="absolute right-4 top-24 z-20 w-52 rounded-[1.35rem] border border-amber-100/25 bg-[#05110d]/84 p-3 text-emerald-50 shadow-2xl shadow-black/35 backdrop-blur-md sm:right-8 sm:top-28">
+      <div className="relative mx-auto h-24 w-40">
+        <div className="absolute inset-x-2 bottom-0 h-16 skew-x-[-14deg] rounded-lg border border-white/20 bg-zinc-950/88 shadow-[inset_0_0_24px_rgba(255,255,255,0.09),0_18px_28px_rgba(0,0,0,0.35)]" />
+        <div className="absolute right-0 top-2 h-14 w-20 skew-x-[-14deg] rounded-md border border-amber-100/40 bg-white/10 shadow-[inset_0_0_18px_rgba(255,255,255,0.12)]" />
+        <div className="absolute left-5 top-5 flex gap-0.5">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <span
+              aria-hidden="true"
+              className="block h-14 w-2 rounded-sm border border-emerald-100/20 bg-emerald-950 shadow-sm"
+              key={index}
+              style={{
+                transform: `translateY(${index % 2}px) rotate(${-8 + index * 1.2}deg)`,
+              }}
+            />
+          ))}
         </div>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-100/55">
-            Shoe
-          </p>
-          <p className="mt-1 font-mono text-xl font-semibold tracking-normal text-emerald-50">
-            {remainingLabel}
-          </p>
-          <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-white/40">
-            Cards left
-          </p>
+        <div className="absolute right-3 top-6 h-8 w-14 skew-x-[-14deg] rounded-sm border border-amber-100/60 bg-amber-50/90 shadow-[0_0_24px_rgba(253,230,138,0.22)]" />
+        <div className="absolute right-1 top-8 h-5 w-9 skew-x-[-14deg] rounded-sm bg-zinc-950/50" />
+      </div>
+      <div className="mt-2 grid gap-1 text-center">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-100/55">
+          Casino shoe
+        </p>
+        <p
+          className={cn(
+            "font-mono font-semibold tracking-normal",
+            hasRemaining ? "text-3xl text-emerald-50" : "text-base text-amber-100",
+          )}
+        >
+          {remainingLabel}
+        </p>
+        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div
+            className={cn(
+              "h-full rounded-full bg-emerald-300 transition-all",
+              (!hasRemaining || !info.total) && "w-full",
+              !hasRemaining && "bg-amber-200/45",
+            )}
+            style={
+              remainingPercent !== null
+                ? {
+                    width: `${remainingPercent}%`,
+                  }
+                : undefined
+            }
+          />
         </div>
+        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">
+          Cards left
+        </p>
       </div>
     </div>
   );
@@ -1402,10 +1440,10 @@ function CardFan({
 
 function dealtCardAnimationClass(size: "lg" | "sm") {
   return cn(
-    "will-change-transform motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:ease-out motion-safe:[animation-fill-mode:both]",
+    "will-change-transform motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:slide-in-from-right-24 motion-safe:ease-out motion-safe:[animation-fill-mode:both]",
     size === "lg"
-      ? "motion-safe:slide-in-from-top-16 motion-safe:duration-700"
-      : "motion-safe:slide-in-from-top-10 motion-safe:duration-600",
+      ? "motion-safe:slide-in-from-top-20 motion-safe:duration-700"
+      : "motion-safe:slide-in-from-top-14 motion-safe:duration-600",
   );
 }
 

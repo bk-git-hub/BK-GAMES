@@ -56,6 +56,8 @@ type TableCelebration = {
 };
 
 type DeckRemainingInfo = {
+  deckCount: number | null;
+  percentRemaining: number | null;
   remaining: number | null;
   total: number | null;
 };
@@ -614,67 +616,76 @@ function BettingTimer({ countdown }: { countdown: string | null }) {
 }
 
 function DeckRemainingMeter({ info }: { info: DeckRemainingInfo }) {
-  const hasRemaining = info.remaining !== null;
-  const totalLabel = info.total !== null ? ` / ${info.total}` : "";
-  const remainingLabel = hasRemaining
-    ? `${info.remaining}${totalLabel}`
-    : "Count unavailable";
-  const remainingPercent =
-    info.remaining !== null && info.total
-      ? Math.max(0, Math.min(100, (info.remaining / info.total) * 100))
-      : null;
+  const remaining = info.remaining;
+  const percentRemaining = info.percentRemaining;
+  const hasRemaining = remaining !== null;
+  const hasPercent = percentRemaining !== null;
+  const deckLabel =
+    info.deckCount !== null
+      ? `${info.deckCount} deck${info.deckCount === 1 ? "" : "s"} mixed`
+      : info.total !== null
+        ? `${pointFormatter.format(info.total)} card shoe`
+        : "Deck mix pending";
+  const percentLabel = hasPercent
+    ? `${Math.round(percentRemaining)}%`
+    : "Waiting";
+  const cardLabel =
+    remaining !== null && info.total !== null
+      ? `${pointFormatter.format(remaining)} / ${pointFormatter.format(
+          info.total,
+        )} cards`
+      : hasRemaining
+        ? `${pointFormatter.format(remaining)} cards left`
+        : "Server count pending";
 
   return (
-    <div className="absolute right-4 top-24 z-20 w-52 rounded-[1.35rem] border border-amber-100/25 bg-[#05110d]/84 p-3 text-emerald-50 shadow-2xl shadow-black/35 backdrop-blur-md sm:right-8 sm:top-28">
-      <div className="relative mx-auto h-24 w-40">
-        <div className="absolute inset-x-2 bottom-0 h-16 skew-x-[-14deg] rounded-lg border border-white/20 bg-zinc-950/88 shadow-[inset_0_0_24px_rgba(255,255,255,0.09),0_18px_28px_rgba(0,0,0,0.35)]" />
-        <div className="absolute right-0 top-2 h-14 w-20 skew-x-[-14deg] rounded-md border border-amber-100/40 bg-white/10 shadow-[inset_0_0_18px_rgba(255,255,255,0.12)]" />
-        <div className="absolute left-5 top-5 flex gap-0.5">
-          {Array.from({ length: 8 }).map((_, index) => (
-            <span
-              aria-hidden="true"
-              className="block h-14 w-2 rounded-sm border border-emerald-100/20 bg-emerald-950 shadow-sm"
-              key={index}
-              style={{
-                transform: `translateY(${index % 2}px) rotate(${-8 + index * 1.2}deg)`,
-              }}
-            />
-          ))}
+    <div className="absolute right-4 top-24 z-20 w-56 rounded-2xl border border-white/10 bg-[#06150f]/82 p-4 text-emerald-50 shadow-2xl shadow-black/30 backdrop-blur-md sm:right-8 sm:top-28">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-100/55">
+            Deck mix
+          </p>
+          <p className="mt-1 text-sm font-semibold text-emerald-50">
+            {deckLabel}
+          </p>
         </div>
-        <div className="absolute right-3 top-6 h-8 w-14 skew-x-[-14deg] rounded-sm border border-amber-100/60 bg-amber-50/90 shadow-[0_0_24px_rgba(253,230,138,0.22)]" />
-        <div className="absolute right-1 top-8 h-5 w-9 skew-x-[-14deg] rounded-sm bg-zinc-950/50" />
+        <p className="font-mono text-3xl font-semibold leading-none tracking-normal text-amber-100">
+          {percentLabel}
+        </p>
       </div>
-      <div className="mt-2 grid gap-1 text-center">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-100/55">
-          Casino shoe
-        </p>
-        <p
+      <div
+        aria-label={
+          hasPercent
+            ? `${Math.round(percentRemaining)} percent of the shoe remaining`
+            : "Shoe remaining percent waiting for server count"
+        }
+        className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/10"
+        role="meter"
+        aria-valuemax={100}
+        aria-valuemin={0}
+        aria-valuenow={hasPercent ? Math.round(percentRemaining) : undefined}
+      >
+        <div
           className={cn(
-            "font-mono font-semibold tracking-normal",
-            hasRemaining ? "text-3xl text-emerald-50" : "text-base text-amber-100",
+            "h-full rounded-full transition-all duration-500",
+            hasPercent
+              ? "bg-gradient-to-r from-emerald-300 to-amber-200"
+              : "w-1/3 bg-white/25",
           )}
-        >
-          {remainingLabel}
-        </p>
-        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div
-            className={cn(
-              "h-full rounded-full bg-emerald-300 transition-all",
-              (!hasRemaining || !info.total) && "w-full",
-              !hasRemaining && "bg-amber-200/45",
-            )}
-            style={
-              remainingPercent !== null
-                ? {
-                    width: `${remainingPercent}%`,
-                  }
-                : undefined
-            }
-          />
-        </div>
-        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">
-          Cards left
-        </p>
+          style={
+            hasPercent
+              ? {
+                  width: `${percentRemaining}%`,
+                }
+              : undefined
+          }
+        />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] text-white/45">
+        <span>Remaining</span>
+        <span className="text-right font-mono tracking-normal text-white/65">
+          {cardLabel}
+        </span>
       </div>
     </div>
   );
@@ -1897,6 +1908,8 @@ function getDeckRemainingInfo(
 ): DeckRemainingInfo {
   if (!state) {
     return {
+      deckCount: null,
+      percentRemaining: null,
       remaining: null,
       total: null,
     };
@@ -1922,11 +1935,56 @@ function getDeckRemainingInfo(
     readNumber(shoe?.size) ??
     readNumber(deck?.total) ??
     null;
+  const deckCount =
+    readNumber(record.deckCount) ??
+    readNumber(record.shoeDeckCount) ??
+    readNumber(record.shoeDecks) ??
+    readNumber(record.decks) ??
+    readNumber(shoe?.deckCount) ??
+    readNumber(shoe?.decks) ??
+    readNumber(deck?.deckCount) ??
+    inferDeckCount(total);
+  const rawPercent =
+    readFiniteNumber(record.shoeRemainingPercent) ??
+    readFiniteNumber(record.remainingPercent) ??
+    readFiniteNumber(record.deckRemainingPercent) ??
+    readFiniteNumber(shoe?.remainingPercent) ??
+    readFiniteNumber(shoe?.percentRemaining) ??
+    readFiniteNumber(deck?.remainingPercent) ??
+    null;
+  const percentRemaining =
+    remaining !== null && total
+      ? clampPercent((remaining / total) * 100)
+      : normalizePercent(rawPercent);
 
   return {
+    deckCount,
+    percentRemaining,
     remaining,
     total,
   };
+}
+
+function inferDeckCount(total: number | null) {
+  const cardsPerDeck = 52;
+
+  if (!total || total % cardsPerDeck !== 0) {
+    return null;
+  }
+
+  return total / cardsPerDeck;
+}
+
+function normalizePercent(value: number | null) {
+  if (value === null) {
+    return null;
+  }
+
+  return clampPercent(value <= 1 ? value * 100 : value);
+}
+
+function clampPercent(value: number) {
+  return Math.max(0, Math.min(100, value));
 }
 
 function getTableCelebration(
@@ -2162,6 +2220,22 @@ function readNumber(value: unknown) {
     const parsedValue = Number(value);
 
     if (Number.isInteger(parsedValue)) {
+      return parsedValue;
+    }
+  }
+
+  return null;
+}
+
+function readFiniteNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsedValue = Number(value);
+
+    if (Number.isFinite(parsedValue)) {
       return parsedValue;
     }
   }

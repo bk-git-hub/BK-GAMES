@@ -249,10 +249,21 @@ Persistent horse records may contain:
 ```ts
 type HorseEntry = {
   horseId: string;
-  number: number;
   name: string;
   silkColor: string;
+};
+```
+
+Race-specific entry records contain:
+
+```ts
+type RaceEntry = {
+  raceEntryId: string;
+  raceId: string;
+  horseId: string;
+  number: number;
   gateNo: number;
+  lane: number;
 };
 ```
 
@@ -276,6 +287,21 @@ The same horse does not secretly remain stronger across races.
 ```
 
 This must be documented in product/UI copy before players see horse names, silk colors, or history-like presentation that could imply permanent hidden advantages.
+
+Horse number rule:
+
+```text
+racing_horses does not own the race number
+racing_race_entries.number is the source of truth for each race
+```
+
+Reason:
+
+```text
+the same fictional horse display record may be reused across many races
+real racing programs assign entry numbers per race
+betting must target the race entry, not a reusable horse display record
+```
 
 ### 6.1 Equal Probability Verification
 
@@ -802,6 +828,21 @@ table:leave
 bet:place
 ```
 
+`bet:place` payload:
+
+```ts
+type RacingPlaceBetPayload = {
+  commandId: string;
+  tableId: string;
+  raceId: string;
+  betType: "WIN";
+  raceEntryId: string;
+  amount: string;
+};
+```
+
+The server must verify that `raceEntryId` belongs to `raceId`.
+
 Server to client:
 
 ```text
@@ -863,6 +904,24 @@ MVP bet type:
 
 ```text
 WIN
+```
+
+The bet target is a race entry, not a reusable horse display record.
+
+```text
+client selects raceEntryId
+server verifies raceEntry.raceId = raceId
+server settles against raceEntry.finalRank
+```
+
+Do not settle a bet by `horseId` alone.
+
+Reason:
+
+```text
+the same fictional horse can appear in multiple races
+race entry number/gate/lane/profile are race-specific
+race_entry_id prevents cross-race target ambiguity
 ```
 
 Because all horses have equal base stats, starting odds should be equal.
@@ -963,6 +1022,17 @@ wallet update
 idempotency check
 ```
 
+Settlement ledger creation:
+
+```text
+BET ledger is created when a bet is accepted.
+PAYOUT ledger is created only for winning bets with payoutAmount > 0.
+CANCEL_REFUND ledger is created only for cancelled/refunded bets.
+Losing bets do not create an additional settlement ledger.
+```
+
+This follows the existing wallet pattern where ledger rows represent actual point movement.
+
 ---
 
 ## 23. Suggested DB Tables
@@ -990,7 +1060,6 @@ updated_at
 
 ```text
 id
-number
 name
 silk_color
 is_active
@@ -1001,6 +1070,10 @@ updated_at
 These are fictional display horses.
 
 No real horse data.
+
+`racing_horses` does not store the race number.
+
+Race number is assigned by `racing_race_entries.number`.
 
 ### racing_races
 
@@ -1057,7 +1130,7 @@ race_id
 table_id
 user_id
 bet_type
-horse_id
+race_entry_id
 status
 amount
 odds_numerator
@@ -1077,8 +1150,10 @@ MVP constraints:
 ```text
 unique race_id + user_id
 unique race_id + user_id + command_id for idempotent bet placement
+race_entry_id must belong to the same race_id
 odds_numerator and odds_denominator are copied onto the bet row at acceptance time
 accepted bet rows are not updated for user-requested cancellation or modification
+settlement_ledger_id is nullable and only set for winning bets with PAYOUT
 ```
 
 ### racing_ticks
@@ -1119,11 +1194,16 @@ Action types:
 ```text
 PLACE_BET
 RACE_START
-TICK
 FINISH
 SETTLE
 CANCEL
 ```
+
+Do not write every race tick into `racing_actions`.
+
+`racing_actions` is for command/audit milestones.
+
+Tick state belongs in `racing_ticks`.
 
 ---
 
@@ -1256,9 +1336,12 @@ Before merging racing backend work, verify:
 [ ] all horses sample temporary profiles from the same distribution
 [ ] equal probability test runs 10,000+ simulations per supported field size
 [ ] accepted bets are idempotent
+[ ] bet target is race_entry_id, not horse_id alone
+[ ] bet placement verifies race_entry_id belongs to race_id
 [ ] accepted bets cannot be cancelled or modified in MVP
 [ ] accepted odds are stored as odds_numerator and odds_denominator
 [ ] settlement uses integer payout math only
+[ ] losing bets do not create PAYOUT ledgers
 [ ] wallet balance is never broadcast to the table room
 [ ] every 100ms tick is persisted for MVP
 [ ] race ticks can be replayed or audited

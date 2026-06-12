@@ -618,41 +618,44 @@ function BettingTimer({ countdown }: { countdown: string | null }) {
 function DeckRemainingMeter({ info }: { info: DeckRemainingInfo }) {
   const remaining = info.remaining;
   const percentRemaining = info.percentRemaining;
-  const hasRemaining = remaining !== null;
   const hasPercent = percentRemaining !== null;
   const deckLabel =
     info.deckCount !== null
-      ? `${info.deckCount} deck${info.deckCount === 1 ? "" : "s"} mixed`
+      ? `${info.deckCount} deck${info.deckCount === 1 ? "" : "s"}`
       : info.total !== null
         ? `${pointFormatter.format(info.total)} card shoe`
-        : "Deck mix pending";
+        : null;
   const percentLabel = hasPercent
-    ? `${Math.round(percentRemaining)}%`
-    : "Waiting";
+    ? `${Math.round(percentRemaining)}% left`
+    : "Count unavailable";
   const cardLabel =
     remaining !== null && info.total !== null
       ? `${pointFormatter.format(remaining)} / ${pointFormatter.format(
           info.total,
         )} cards`
-      : hasRemaining
+      : remaining !== null
         ? `${pointFormatter.format(remaining)} cards left`
-        : "Server count pending";
+        : null;
+  const detailLabel =
+    deckLabel && cardLabel
+      ? `${deckLabel} · ${cardLabel}`
+      : deckLabel ?? cardLabel;
 
   return (
-    <div className="absolute right-4 top-24 z-20 w-56 rounded-2xl border border-white/10 bg-[#06150f]/82 p-4 text-emerald-50 shadow-2xl shadow-black/30 backdrop-blur-md sm:right-8 sm:top-28">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-100/55">
-            Deck mix
-          </p>
-          <p className="mt-1 text-sm font-semibold text-emerald-50">
-            {deckLabel}
-          </p>
-        </div>
-        <p className="font-mono text-3xl font-semibold leading-none tracking-normal text-amber-100">
-          {percentLabel}
-        </p>
-      </div>
+    <div className="absolute right-4 top-24 z-20 w-52 rounded-2xl border border-white/10 bg-[#06150f]/82 p-4 text-emerald-50 shadow-2xl shadow-black/30 backdrop-blur-md sm:right-8 sm:top-28">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-100/55">
+        Shoe
+      </p>
+      <p
+        className={cn(
+          "mt-1 font-semibold leading-none tracking-normal",
+          hasPercent
+            ? "font-mono text-3xl text-amber-100"
+            : "text-sm text-emerald-50/70",
+        )}
+      >
+        {percentLabel}
+      </p>
       <div
         aria-label={
           hasPercent
@@ -681,12 +684,11 @@ function DeckRemainingMeter({ info }: { info: DeckRemainingInfo }) {
           }
         />
       </div>
-      <div className="mt-3 flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] text-white/45">
-        <span>Remaining</span>
-        <span className="text-right font-mono tracking-normal text-white/65">
-          {cardLabel}
-        </span>
-      </div>
+      {detailLabel ? (
+        <p className="mt-2 text-[11px] uppercase tracking-[0.12em] text-white/45">
+          {detailLabel}
+        </p>
+      ) : null}
     </div>
   );
 }

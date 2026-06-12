@@ -1167,7 +1167,6 @@ export class BlackjackTableService {
       );
     }
 
-    table.phase = table.seats.size > 0 ? 'WAITING_BETS' : 'WAITING';
     table.round = undefined;
     table.shoe = [];
     table.bettingClosesAt = undefined;
@@ -1179,6 +1178,13 @@ export class BlackjackTableService {
       seat.hands = undefined;
     }
 
+    for (const seat of Array.from(table.seats.values())) {
+      if (!hasConnectedUser(table, seat.userId)) {
+        table.seats.delete(seat.seatNo);
+      }
+    }
+
+    table.phase = table.seats.size > 0 ? 'WAITING_BETS' : 'WAITING';
     this.bump(table);
 
     return {
@@ -1342,11 +1348,43 @@ export class BlackjackTableService {
       }
 
       table.connections.delete(socketId);
-      this.bump(table);
-      updates.push({
-        state: this.toState(table),
-        event: this.toEvent(table, 'PLAYER_DISCONNECTED', user.userId),
-      });
+      const disconnectedUserStillConnected = hasConnectedUser(
+        table,
+        user.userId,
+      );
+
+      if (disconnectedUserStillConnected) {
+        continue;
+      }
+
+      const releasedSeatNos = Array.from(table.seats.values())
+        .filter(
+          (seat) =>
+            seat.userId === user.userId && !seatHasLiveBetOrReservation(seat),
+        )
+        .map((seat) => seat.seatNo);
+
+      for (const seatNo of releasedSeatNos) {
+        table.seats.delete(seatNo);
+
+        if (table.seats.size === 0) {
+          table.phase = 'WAITING';
+        }
+
+        this.bump(table);
+        updates.push({
+          state: this.toState(table),
+          event: this.toEvent(table, 'SEAT_LEFT', user.userId, seatNo),
+        });
+      }
+
+      if (releasedSeatNos.length === 0) {
+        this.bump(table);
+        updates.push({
+          state: this.toState(table),
+          event: this.toEvent(table, 'PLAYER_DISCONNECTED', user.userId),
+        });
+      }
     }
 
     return updates;
@@ -2893,6 +2931,10 @@ function hasConfirmedBet(
 
 function hasAnyConfirmedBet(table: BlackjackTableRuntime) {
   return Array.from(table.seats.values()).some((seat) => Boolean(seat.bet));
+}
+
+function seatHasLiveBetOrReservation(seat: BlackjackSeatRuntime) {
+  return Boolean(seat.bet || seat.pendingBet);
 }
 
 function isBettingWindowExpired(table: BlackjackTableRuntime, now: Date) {

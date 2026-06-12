@@ -4,7 +4,7 @@ This file is the handoff document for multiple Codex chat threads working on the
 
 Every new thread should read this file first, then read `AGENTS.md`, then inspect the current git status before making changes.
 
-Last updated: 2026-06-08
+Last updated: 2026-06-12
 
 ## Current Repository State
 
@@ -112,6 +112,15 @@ It contains:
 Future threads should update the Notion page when the user asks for user-facing project tracking, but should not rely on Notion as the only source of truth for implementation.
 
 ## Completed Work
+
+### Blackjack Seat Release on Disconnect
+
+Backend behavior:
+
+- When a blackjack socket disconnects and that user has no other active socket connection on the table, seats without a pending or confirmed bet are released automatically.
+- Seats with a pending bet reservation or confirmed live bet stay reserved and are marked disconnected through the existing `PLAYER_DISCONNECTED` table event/state.
+- If a disconnected live-bet seat reaches `ROUND_RESET` and the user still has no active table connection, the backend clears that seat after the bet is removed.
+- No new socket event names were added. Frontend should continue handling existing `SEAT_LEFT`, `PLAYER_DISCONNECTED`, and `ROUND_RESET` updates from `TABLE_EVENT` plus the authoritative `TABLE_STATE`.
 
 ### Initial Monorepo Setup
 

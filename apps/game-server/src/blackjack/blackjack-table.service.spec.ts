@@ -500,7 +500,7 @@ describe('BlackjackTableService', () => {
     ).toThrow(BlackjackTableError);
   });
 
-  it('marks seats disconnected without removing them', () => {
+  it('releases disconnected seats without live bets', () => {
     const service = new BlackjackTableService();
 
     service.takeSeat({
@@ -512,10 +512,65 @@ describe('BlackjackTableService', () => {
 
     const [disconnectUpdate] = service.disconnectSocket('socket-alice');
 
-    expect(disconnectUpdate?.event.type).toBe('PLAYER_DISCONNECTED');
-    expect(disconnectUpdate?.state.seats).toEqual([
-      expectWaitingSeat(1, alice, false),
+    expect(disconnectUpdate?.event.type).toBe('SEAT_LEFT');
+    expect(disconnectUpdate?.event.seatNo).toBe(1);
+    expect(disconnectUpdate?.state.phase).toBe('WAITING');
+    expect(disconnectUpdate?.state.seats).toEqual([]);
+  });
+
+  it('keeps seats when the same user has another table connection', () => {
+    const service = new BlackjackTableService();
+
+    service.takeSeat({
+      tableId: 'table-1',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    service.joinTable({
+      tableId: 'table-1',
+      socketId: 'socket-alice-mobile',
+      user: alice,
+    });
+
+    const updates = service.disconnectSocket('socket-alice');
+
+    expect(updates).toEqual([]);
+    expect(service.getTableState('table-1').seats).toEqual([
+      expectWaitingSeat(1, alice),
     ]);
+  });
+
+  it('keeps disconnected seats with live bets until the round is cleared', () => {
+    const service = createDeterministicService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+
+    const [disconnectUpdate] = service.disconnectSocket('socket-alice');
+
+    expect(disconnectUpdate?.event.type).toBe('PLAYER_DISCONNECTED');
+    expect(disconnectUpdate?.state.seats[0]).toEqual(
+      expect.objectContaining({
+        seatNo: 1,
+        connected: false,
+        betAmount: '500',
+      }),
+    );
   });
 
   it('confirms a reserved bet and opens the betting window', () => {
@@ -2232,6 +2287,66 @@ describe('BlackjackTableService', () => {
         outcome: null,
       }),
     );
+  });
+
+  it('releases disconnected live-bet seats after round reset clears the bet', () => {
+    const service = createDeterministicService();
+
+    service.takeSeat({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+    });
+    confirmInitialBet({
+      service,
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      commandId: 'command-1',
+      roundId: 'round-1',
+      roundSeatId: 'round-seat-1',
+    });
+    startActiveRoundOrFail(service);
+    service.playerAction({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+      seatNo: 1,
+      action: 'STAND',
+    });
+
+    const [disconnectUpdate] = service.disconnectSocket('socket-alice');
+
+    expect(disconnectUpdate?.event.type).toBe('PLAYER_DISCONNECTED');
+    expect(disconnectUpdate?.state.seats[0]?.connected).toBe(false);
+
+    advanceDealerTurnToSettlementOrFail(service);
+    service.confirmSettlement({
+      tableId: 'main',
+      roundId: 'round-1',
+      seats: [
+        {
+          roundSeatId: 'round-seat-1',
+          handNo: 1,
+          seatNo: 1,
+          outcome: 'LOSE',
+          outcomeReason: 'STANDARD',
+          payoutAmount: 0n,
+          netAmount: -500n,
+        },
+      ],
+    });
+
+    const reset = service.resetSettledRound({
+      tableId: 'main',
+      roundId: 'round-1',
+    });
+
+    expect(reset?.event.type).toBe('ROUND_RESET');
+    expect(reset?.state.phase).toBe('WAITING');
+    expect(reset?.state.seats).toEqual([]);
   });
 
   it('blocks leaving a seat with an active bet', () => {

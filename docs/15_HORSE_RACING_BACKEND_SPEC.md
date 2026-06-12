@@ -40,7 +40,17 @@ The server simulates the race tick by tick.
 The result is confirmed only when horses cross the finish line.
 ```
 
-The server may create a deterministic random seed at race start for audit/replay, but it must not create a separate "winner" value and then force the animation to match it.
+Seed timing:
+
+```text
+The race seed must not exist while betting is open.
+The race seed is generated and locked only after betting closes.
+The seed is generated once, persisted immediately, and never regenerated for the same race.
+```
+
+This avoids the appearance that the server already knew the race result while users were still placing bets.
+
+The server may create a deterministic random seed after betting closes for audit/replay, but it must not create a separate "winner" value and then force the animation to match it.
 
 ---
 
@@ -137,6 +147,9 @@ MVP rule:
 
 ```text
 one user may place one Win bet per race
+accepted bets cannot be cancelled
+accepted bets cannot be modified
+retries are allowed only with the same commandId and the same bet details
 ```
 
 ### 4.3 LOCKING_BETS
@@ -144,6 +157,19 @@ one user may place one Win bet per race
 Short transition phase.
 
 The server rejects new bets and prepares race state.
+
+Required behavior:
+
+```text
+close betting
+reject new bet:place commands
+generate and persist race seed
+sample temporary horse profiles
+lock accepted odds per bet
+transition to RUNNING
+```
+
+The seed and temporary profiles are created in this phase, not during BETTING.
 
 ### 4.4 RUNNING
 
@@ -196,6 +222,22 @@ This means the server broadcasts a tick every `tickIntervalMs` during `RUNNING`.
 
 The client should animate between ticks, but the source of truth is the latest server tick.
 
+MVP tick persistence decision:
+
+```text
+store every 100ms tick for MVP
+```
+
+Reason:
+
+```text
+debugging live race behavior is more important than storage optimization at this stage
+single-table MVP tick volume is acceptable
+full tick history makes replay and settlement review easier
+```
+
+Future optimization may replace this with 1-second snapshots plus deterministic RNG state.
+
 ---
 
 ## 6. Horse Model
@@ -225,11 +267,49 @@ Every horse starts with the same expected win probability.
 Any advantage exists only inside one race and is sampled fairly.
 ```
 
+Fairness explanation:
+
+```text
+Temporary profiles are not hidden permanent horse stats.
+They are one-race-only variance sampled after betting closes.
+The same horse does not secretly remain stronger across races.
+```
+
+This must be documented in product/UI copy before players see horse names, silk colors, or history-like presentation that could imply permanent hidden advantages.
+
+### 6.1 Equal Probability Verification
+
+The backend must verify equal starting probability statistically.
+
+Required simulation test:
+
+```text
+run at least 10,000 races per supported field size
+use varied deterministic seeds
+confirm every horse slot wins at roughly the same rate
+confirm lane/gate/horse id does not create persistent bias
+```
+
+Suggested MVP tolerance:
+
+```text
+absolute win-rate difference from expected probability <= 2 percentage points
+```
+
+Examples:
+
+```text
+6-horse field expected win rate = 16.67% per horse
+8-horse field expected win rate = 12.50% per horse
+```
+
+If future tuning intentionally changes probability through visible stats, this section must be revised before implementation.
+
 ---
 
 ## 7. Temporary Pace Profile
 
-At race start, the server samples a temporary pace profile for each horse.
+After betting closes, the server samples a temporary pace profile for each horse.
 
 All horses use the same sampling distribution.
 
@@ -600,10 +680,14 @@ The race is calculated online.
 
 The server should not preselect the winner.
 
+The online simulation starts only after betting has closed and the race seed has been persisted.
+
 Pseudo-code:
 
 ```ts
-function startRace(raceId) {
+function startRaceAfterBettingClosed(raceId) {
+  assertBettingClosed(raceId);
+
   const seed = createRaceSeed(raceId);
   const rng = createDeterministicRng(seed);
   const horses = createRaceHorseStates(entries, rng);
@@ -652,18 +736,22 @@ function tickRace(raceId) {
 }
 ```
 
-For Win-only MVP:
-
-```text
-The race can settle after first place is confirmed.
-The UI can still show remaining horses crossing if desired.
-```
-
-Recommended:
+Settlement rule:
 
 ```text
 Continue until all horses finish.
-Then settle and show complete order.
+Then settle and show the complete finish order.
+```
+
+Do not settle immediately after first place is confirmed.
+
+Reason:
+
+```text
+complete finish order is cleaner for replay
+complete finish order is cleaner for race history
+frontend result display is simpler
+future Place / Exacta / Trifecta expansion is easier
 ```
 
 ---
@@ -689,9 +777,10 @@ settlement ledger ids
 Recommended:
 
 ```text
-persist every tick for MVP debugging, or
-persist every N ticks plus deterministic RNG state
+persist every 100ms tick for MVP debugging and replay
 ```
+
+Persisted tick history is required for the first backend version.
 
 If storage is a concern later, store snapshots every 1 second and the final result.
 
@@ -784,19 +873,48 @@ Example:
 field size = 6
 fair odds = 6.0x
 payout rate = 0.90
-display odds = 5.4x
+locked odds = 54000 / 10000
 ```
 
 Payout:
 
 ```text
-payoutAmount = floor(betAmount * displayOdds)
+payoutAmount = floor(betAmount * oddsNumerator / oddsDenominator)
 netAmount = payoutAmount - betAmount
 ```
 
-`displayOdds` must be locked when the bet is accepted.
+Do not use floating point odds for settlement.
+
+Recommended integer representation:
+
+```text
+oddsNumerator = fieldSize * payoutRateBps
+oddsDenominator = 10000
+```
+
+For a 6-horse field with a 90% payout rate:
+
+```text
+oddsNumerator = 6 * 9000 = 54000
+oddsDenominator = 10000
+100P bet payout = floor(100 * 54000 / 10000) = 540P
+```
+
+The UI may display this as `5.4x`, but backend settlement must use numerator/denominator integer math.
+
+`oddsNumerator` and `oddsDenominator` must be locked on the bet row when the bet is accepted.
 
 Do not change a user's accepted odds after betting.
+
+Bet cancellation and modification:
+
+```text
+MVP does not support bet cancellation.
+MVP does not support bet modification.
+If the same commandId is retried with identical details, return the existing accepted bet.
+If the same commandId is retried with different details, reject with IDEMPOTENCY_CONFLICT.
+If the user sends a new commandId after already placing a bet for that race, reject with BET_ALREADY_PLACED.
+```
 
 ---
 
@@ -892,6 +1010,7 @@ table_id
 race_no
 status
 seed
+seed_locked_at
 distance_m
 field_size
 phase
@@ -903,6 +1022,15 @@ cancel_reason
 result_order
 created_at
 updated_at
+```
+
+Seed rule:
+
+```text
+seed must be null while the race is in BETTING
+seed is set exactly once in LOCKING_BETS after betting closes
+seed_locked_at is set at the same time
+seed must never be regenerated for the same race
 ```
 
 ### racing_race_entries
@@ -944,9 +1072,18 @@ settled_at
 updated_at
 ```
 
+MVP constraints:
+
+```text
+unique race_id + user_id
+unique race_id + user_id + command_id for idempotent bet placement
+odds_numerator and odds_denominator are copied onto the bet row at acceptance time
+accepted bet rows are not updated for user-requested cancellation or modification
+```
+
 ### racing_ticks
 
-For MVP debugging, store race ticks.
+For MVP debugging and replay, store every race tick.
 
 ```text
 id
@@ -957,7 +1094,9 @@ state
 created_at
 ```
 
-This can later be optimized into snapshots.
+This is required for MVP.
+
+This can later be optimized into 1-second snapshots plus deterministic RNG state.
 
 ### racing_actions
 
@@ -990,13 +1129,15 @@ CANCEL
 
 ## 24. Reconnect
 
-On reconnect, the server sends:
+On reconnect, the server sends a full current race snapshot.
 
 ```text
 current table state
 current race phase
 accepted bet for the user
-latest race tick
+latest authoritative race tick
+all current horse positions/speeds/ranks
+current race clock
 current odds board if betting is open
 final result if settled
 private wallet snapshot or wallet update
@@ -1007,9 +1148,16 @@ For an active race:
 ```text
 client resumes from latest server tick
 client does not simulate authority locally
+client may interpolate visually after receiving the authoritative snapshot
 ```
 
-The client may interpolate between ticks for smooth visuals.
+The reconnect response should not require the client to replay recent tick history to recover.
+
+Recent tick history can be provided as an optimization later, but the MVP contract is:
+
+```text
+one full current snapshot is enough for correct recovery
+```
 
 ---
 
@@ -1031,6 +1179,19 @@ MVP recommendation:
 
 ```text
 cancel active RUNNING races and refund
+```
+
+This is a required tested path, not an optional fallback.
+
+The restart recovery job must:
+
+```text
+find non-settled active races
+mark them CANCELLED
+refund each accepted bet exactly once
+write CANCEL_REFUND ledgers
+record cancellation reason
+be safe to run multiple times
 ```
 
 Future option:
@@ -1088,18 +1249,27 @@ Before merging racing backend work, verify:
 
 ```text
 [ ] race winner is not preselected
+[ ] race seed is generated only after betting closes
+[ ] race seed is persisted once and never regenerated
 [ ] race result comes from tick simulation
 [ ] tick simulation runs server-side
 [ ] all horses sample temporary profiles from the same distribution
+[ ] equal probability test runs 10,000+ simulations per supported field size
 [ ] accepted bets are idempotent
+[ ] accepted bets cannot be cancelled or modified in MVP
+[ ] accepted odds are stored as odds_numerator and odds_denominator
+[ ] settlement uses integer payout math only
 [ ] wallet balance is never broadcast to the table room
+[ ] every 100ms tick is persisted for MVP
 [ ] race ticks can be replayed or audited
-[ ] reconnect receives latest authoritative race state
+[ ] reconnect receives a full current race snapshot
 [ ] cancelled races refund exactly once per bet
-[ ] settlement pays only after finish order is confirmed
+[ ] server restart cancellation/refund path is tested
+[ ] settlement pays only after all horses finish
 [ ] tests cover equal starting probability distribution
 [ ] tests cover finish crossing and rank ordering
 [ ] tests cover idempotent bet retry
+[ ] tests cover idempotency conflict on changed retry details
 [ ] tests cover cancellation refund retry
 ```
 
@@ -1109,10 +1279,11 @@ Before merging racing backend work, verify:
 
 1. Implement pure race simulation in `packages/game-engine/src/racing`.
 2. Add deterministic RNG helper scoped to racing.
-3. Add unit tests for tick progression, finish ordering, and replay determinism.
-4. Add DB schema for racing tables, races, entries, bets, ticks, and actions.
-5. Add `placeRacingWinBet` transaction helper.
-6. Add `settleRacingRace` transaction helper.
-7. Add `RacingGateway` with live `race:tick` broadcast.
-8. Add reconnect state recovery.
-9. Add cancellation/refund path.
+3. Add 10,000+ race distribution tests for equal win probability.
+4. Add unit tests for tick progression, finish ordering, and replay determinism.
+5. Add DB schema for racing tables, races, entries, bets, ticks, and actions.
+6. Add `placeRacingWinBet` transaction helper with no cancellation/modification path.
+7. Add `settleRacingRace` transaction helper using integer odds math.
+8. Add server restart cancellation/refund recovery.
+9. Add `RacingGateway` with live `race:tick` broadcast.
+10. Add reconnect full-snapshot state recovery.

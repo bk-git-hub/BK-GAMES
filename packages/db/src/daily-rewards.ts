@@ -8,7 +8,7 @@ import {
   type WalletMutationTransaction,
 } from "./wallet-transactions.js";
 
-export const DEFAULT_DAILY_REWARD_AMOUNT = BigInt(100);
+export const DEFAULT_DAILY_REWARD_AMOUNT = BigInt(1000);
 export const DEFAULT_DAILY_REWARD_TIME_ZONE = "Asia/Seoul";
 
 export type ClaimDailyRewardInput = {

@@ -95,8 +95,8 @@ try {
   if (
     summary.sameDateIdempotentCount < 2 ||
     !summary.retryIdempotent ||
-    summary.nextDateBalance !== "200" ||
-    summary.finalBalance !== "200" ||
+    summary.nextDateBalance !== "2000" ||
+    summary.finalBalance !== "2000" ||
     summary.ledgerCount !== 2 ||
     summary.claimCount !== 2 ||
     summary.firstDateClaimCount !== 1 ||

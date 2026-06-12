@@ -113,6 +113,13 @@ Future threads should update the Notion page when the user asks for user-facing 
 
 ## Completed Work
 
+### Daily Reward Amount
+
+Backend/database behavior:
+
+- The default daily reward amount is now `1000` points via `DEFAULT_DAILY_REWARD_AMOUNT` in `packages/db/src/daily-rewards.ts`.
+- The lobby page imports this shared DB package constant, so the displayed daily reward amount should follow the backend default without a frontend copy change.
+
 ### Blackjack Seat Release on Disconnect
 
 Backend behavior:

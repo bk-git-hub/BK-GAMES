@@ -1453,11 +1453,15 @@ function CardFan({
 
 function dealtCardAnimationClass(size: "lg" | "sm") {
   return cn(
-    "will-change-transform motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:slide-in-from-right-24 motion-safe:ease-out motion-safe:[animation-fill-mode:both]",
-    size === "lg"
-      ? "motion-safe:slide-in-from-top-20 motion-safe:duration-700"
-      : "motion-safe:slide-in-from-top-14 motion-safe:duration-600",
+    "will-change-transform motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:ease-out motion-safe:[animation-fill-mode:both]",
+    size === "lg" ? "motion-safe:duration-300" : "motion-safe:duration-[250ms]",
   );
+}
+
+function dealtCardAnimationStyle(index: number) {
+  return {
+    animationDelay: `${Math.min(index * 85, 255)}ms`,
+  };
 }
 
 function PlayingCard({
@@ -1486,6 +1490,7 @@ function PlayingCard({
           cardClass,
           index % 2 === 0 ? "rotate-[-3deg]" : "rotate-[3deg]",
         )}
+        style={isFresh ? dealtCardAnimationStyle(index) : undefined}
       >
         BK
       </div>
@@ -1503,6 +1508,7 @@ function PlayingCard({
       )}
       height={588}
       src={`/cards/royal-noir/${card.rank}${suitCode(card.suit)}.svg`}
+      style={isFresh ? dealtCardAnimationStyle(index) : undefined}
       width={420}
     />
   );

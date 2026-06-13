@@ -321,3 +321,163 @@ export function blackjackTableRoom(tableId: string) {
 export function blackjackUserRoom(userId: string) {
   return `user:${userId}`;
 }
+
+export const RACING_NAMESPACE = "/racing";
+
+export const RACING_CLIENT_EVENTS = {
+  TABLE_JOIN: "table:join",
+} as const;
+
+export const RACING_SERVER_EVENTS = {
+  TABLE_STATE: "table:state",
+  TABLE_EVENT: "table:event",
+  WALLET_UPDATED: "wallet:updated",
+  ERROR: "error",
+} as const;
+
+export type RacingClientEvent =
+  (typeof RACING_CLIENT_EVENTS)[keyof typeof RACING_CLIENT_EVENTS];
+
+export type RacingServerEvent =
+  (typeof RACING_SERVER_EVENTS)[keyof typeof RACING_SERVER_EVENTS];
+
+export type RacingTableStatus = "OPEN" | "MAINTENANCE" | "CLOSED";
+
+export type RacingTablePhase =
+  | "WAITING"
+  | "BETTING"
+  | "LOCKING_BETS"
+  | "RUNNING"
+  | "FINISHING"
+  | "SETTLING"
+  | "SETTLED"
+  | "CANCELLED";
+
+export type RacingBetType = "WIN" | "QUINELLA" | "EXACTA";
+
+export type RacingSocketUser = {
+  userId: string;
+  nickname: string;
+  role: "USER" | "ADMIN";
+};
+
+export type RacingJoinTablePayload = {
+  tableId: string;
+  nickname?: string;
+};
+
+export type RacingBettingLimitsSnapshot = {
+  minBet: string;
+  maxBet: string;
+};
+
+export type RacingTimingSnapshot = {
+  bettingTimeoutSeconds: number;
+  raceIntervalSeconds: number;
+  bettingCloseBeforeStartSeconds: number;
+  tickIntervalMs: number;
+  raceDistanceM: number;
+  roundEndDelaySeconds: number;
+};
+
+export type RacingHorseSnapshot = {
+  horseId: string;
+  name: string;
+  silkColor: string;
+  number: number;
+};
+
+export type RacingRaceEntrySnapshot = RacingHorseSnapshot & {
+  raceEntryId: string;
+  gateNo: number;
+  lane: number;
+};
+
+export type RacingRaceSnapshot = {
+  raceId: string;
+  raceNo: number;
+  status: RacingTablePhase;
+  phase: RacingTablePhase;
+  scheduledStartAt: string | null;
+  bettingOpensAt: string | null;
+  bettingClosesAt: string | null;
+  entries: RacingRaceEntrySnapshot[];
+};
+
+export type RacingTimerSnapshot = {
+  scheduledStartAt: string | null;
+  bettingClosesAt: string | null;
+};
+
+export type RacingTableState = {
+  tableId: string;
+  status: RacingTableStatus;
+  phase: RacingTablePhase;
+  fieldSize: number;
+  viewerCount: number;
+  bettingLimits: RacingBettingLimitsSnapshot;
+  betTypes: RacingBetType[];
+  timing: RacingTimingSnapshot;
+  horses: RacingHorseSnapshot[];
+  race: RacingRaceSnapshot | null;
+  timers: RacingTimerSnapshot;
+  version: number;
+  updatedAt: string;
+};
+
+export type RacingTableSummary = {
+  tableId: string;
+  gameType: "RACING";
+  status: RacingTableStatus;
+  phase: RacingTablePhase;
+  fieldSize: number;
+  viewerCount: number;
+  bettingLimits: RacingBettingLimitsSnapshot;
+  betTypes: RacingBetType[];
+  timing: RacingTimingSnapshot;
+  version: number;
+  updatedAt: string;
+};
+
+export type RacingTablesResponse = {
+  tables: RacingTableSummary[];
+};
+
+export type RacingTableEventType = "TABLE_JOINED" | "PLAYER_DISCONNECTED";
+
+export type RacingTableEventPayload = {
+  tableId: string;
+  type: RacingTableEventType;
+  actorUserId: string;
+  stateVersion: number;
+  createdAt: string;
+};
+
+export type RacingSocketErrorCode =
+  | "UNAUTHORIZED"
+  | "TABLE_NOT_FOUND"
+  | "TABLE_NOT_OPEN"
+  | "INVALID_TABLE_ID"
+  | "INVALID_SOCKET_USER"
+  | "UNKNOWN_ERROR";
+
+export type RacingSocketErrorPayload = {
+  code: RacingSocketErrorCode;
+  message: string;
+  event?: RacingClientEvent;
+};
+
+export type RacingWalletUpdatedPayload = {
+  balance: string;
+  delta: string;
+  reason: "BET_PLACED" | "PAYOUT" | "CANCEL_REFUND";
+  ledgerId: string;
+};
+
+export function racingTableRoom(tableId: string) {
+  return `table:${tableId}`;
+}
+
+export function racingUserRoom(userId: string) {
+  return `user:${userId}`;
+}

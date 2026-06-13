@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 import { db } from "./client.js";
 import { racingHorses, racingTables, type JsonObject } from "./schema.js";
@@ -76,6 +76,36 @@ export async function ensureMainRacingSeed(): Promise<MainRacingSeedResult> {
       horses,
     };
   });
+}
+
+export async function getRacingTableByCode(tableCode: string) {
+  const normalizedTableCode = tableCode.trim();
+
+  if (!normalizedTableCode) {
+    return null;
+  }
+
+  const [table] = await db
+    .select()
+    .from(racingTables)
+    .where(eq(racingTables.code, normalizedTableCode))
+    .limit(1);
+
+  return table ?? null;
+}
+
+export async function listActiveRacingHorses(limit?: number) {
+  const query = db
+    .select()
+    .from(racingHorses)
+    .where(eq(racingHorses.isActive, true))
+    .orderBy(asc(racingHorses.createdAt), asc(racingHorses.name));
+
+  if (limit === undefined) {
+    return query;
+  }
+
+  return query.limit(limit);
 }
 
 async function ensureMainRacingTable(

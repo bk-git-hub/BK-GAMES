@@ -1,0 +1,73 @@
+{
+    "assetId":  "entry-06",
+    "type":  "horse-racing-entry-sprite",
+    "fictional":  true,
+    "horseName":  "Golden Relay",
+    "jockeyName":  "Ivo Lane",
+    "saddleclothNumber":  6,
+    "visualTier":  "production-v1-polished-stylized-realistic",
+    "frame":  {
+                  "width":  640,
+                  "height":  320
+              },
+    "sheet":  {
+                  "columns":  8,
+                  "rows":  4,
+                  "width":  5120,
+                  "height":  1280
+              },
+    "anchor":  {
+                   "x":  318,
+                   "y":  264
+               },
+    "groundY":  264,
+    "facing":  "right",
+    "animations":  {
+                       "gallop":  {
+                                      "row":  0,
+                                      "y":  0,
+                                      "frames":  8,
+                                      "loop":  true,
+                                      "frameDurationMs":  78
+                                  },
+                       "start":  {
+                                     "row":  1,
+                                     "y":  320,
+                                     "frames":  6,
+                                     "loop":  false,
+                                     "frameDurationMs":  68
+                                 },
+                       "fatigue":  {
+                                       "row":  2,
+                                       "y":  640,
+                                       "frames":  8,
+                                       "loop":  true,
+                                       "frameDurationMs":  88
+                                   },
+                       "finish":  {
+                                      "row":  3,
+                                      "y":  960,
+                                      "frames":  4,
+                                      "loop":  false,
+                                      "frameDurationMs":  92
+                                  }
+                   },
+    "palette":  {
+                    "horseCoat":  "#7b3f24",
+                    "silksPrimary":  "#ffd400",
+                    "silksSecondary":  "#111827",
+                    "saddlecloth":  "#ffffff",
+                    "saddleclothNumber":  "#111827"
+                },
+    "usageNotes":  [
+                       "Transparent sheet with no baked track or background; place on lane groundY/anchor for live-race movement.",
+                       "Gallop and fatigue rows are loops. Start and finish rows are one-shot transitions.",
+                       "Rows with fewer than 8 frames leave transparent cells at the end.",
+                       "Entries 1-6 use intentionally distinct high-contrast jockey colors for fast race readability."
+                   ],
+    "files":  {
+                  "png":  "entry-06-spritesheet.png",
+                  "webp":  "entry-06-spritesheet.webp",
+                  "preview":  "entry-06-preview.png"
+              }
+}

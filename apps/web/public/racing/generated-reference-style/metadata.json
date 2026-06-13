@@ -1,0 +1,55 @@
+{
+  "description": "Reference-style generated racing assets based on the approved BK Racing mockup direction. These are independently generated assets, not crops from the UI screenshot.",
+  "track": {
+    "file": "track-background.png",
+    "width": 1672,
+    "height": 941,
+    "containsHorses": false,
+    "containsUi": false
+  },
+  "sprites": {
+    "sourceFile": "horse-gallop-6x7-source-magenta.png",
+    "alphaFile": "horse-gallop-6x7-alpha.png",
+    "rows": 6,
+    "columns": 7,
+    "frameWidth": 206,
+    "frameHeight": 181,
+    "animationHint": "Use CSS steps(7) or canvas frame indexing. Position each horse from server race ticks; use this sheet only for local gallop motion."
+  },
+  "entries": [
+    {
+      "number": 1,
+      "color": "red",
+      "file": "horse-01-red-gallop-7f.png"
+    },
+    {
+      "number": 2,
+      "color": "orange",
+      "file": "horse-02-orange-gallop-7f.png"
+    },
+    {
+      "number": 3,
+      "color": "blue",
+      "file": "horse-03-blue-gallop-7f.png"
+    },
+    {
+      "number": 4,
+      "color": "yellow",
+      "file": "horse-04-yellow-gallop-7f.png"
+    },
+    {
+      "number": 5,
+      "color": "purple",
+      "file": "horse-05-purple-gallop-7f.png"
+    },
+    {
+      "number": 6,
+      "color": "green",
+      "file": "horse-06-green-gallop-7f.png"
+    }
+  ],
+  "preview": {
+    "file": "preview-track-with-sprites.png",
+    "purpose": "Visual QA only. Do not use as the runtime race layer."
+  }
+}

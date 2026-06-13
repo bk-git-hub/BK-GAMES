@@ -7,6 +7,35 @@
     "containsHorses": false,
     "containsUi": false
   },
+  "trackSequence": [
+    {
+      "phase": "start",
+      "file": "track-straight-start.png",
+      "width": 1672,
+      "height": 941,
+      "containsHorses": false,
+      "containsUi": false,
+      "purpose": "Straight start-section race background with gate and start marker."
+    },
+    {
+      "phase": "middle",
+      "file": "track-straight-middle.png",
+      "width": 1672,
+      "height": 941,
+      "containsHorses": false,
+      "containsUi": false,
+      "purpose": "Straight open-stretch race background for the middle race phase."
+    },
+    {
+      "phase": "finish",
+      "file": "track-straight-finish.png",
+      "width": 1672,
+      "height": 941,
+      "containsHorses": false,
+      "containsUi": false,
+      "purpose": "Straight finish-section race background with finish marker."
+    }
+  ],
   "startGate": {
     "file": "start-gate-background.png",
     "width": 1672,

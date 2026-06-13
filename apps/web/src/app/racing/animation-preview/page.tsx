@@ -15,6 +15,13 @@ type HorseEntry = {
   startX: string;
 };
 
+type TrackPhase = {
+  className: "phaseStart" | "phaseMiddle" | "phaseFinish";
+  file: string;
+  label: string;
+  window: string;
+};
+
 const horses: HorseEntry[] = [
   {
     color: "red",
@@ -90,6 +97,27 @@ const horses: HorseEntry[] = [
   },
 ];
 
+const trackPhases: TrackPhase[] = [
+  {
+    className: "phaseStart",
+    file: "/racing/generated-reference-style/track-straight-start.png",
+    label: "Start",
+    window: "Gate to break",
+  },
+  {
+    className: "phaseMiddle",
+    file: "/racing/generated-reference-style/track-straight-middle.png",
+    label: "Middle",
+    window: "Open straight",
+  },
+  {
+    className: "phaseFinish",
+    file: "/racing/generated-reference-style/track-straight-finish.png",
+    label: "Finish",
+    window: "Final line",
+  },
+];
+
 export default function RacingAnimationPreviewPage() {
   return (
     <main className={styles.page}>
@@ -161,6 +189,28 @@ export default function RacingAnimationPreviewPage() {
 
         <div className={styles.raceFrame}>
           <div className={styles.track} aria-label="Animated horse race preview">
+            <div className={styles.phaseStack} aria-hidden="true">
+              {trackPhases.map((phase) => (
+                <div
+                  className={`${styles.trackPhase} ${styles[phase.className]}`}
+                  key={phase.label}
+                  style={
+                    {
+                      "--phase-bg": `url("${phase.file}")`,
+                    } as CSSProperties
+                  }
+                />
+              ))}
+            </div>
+            <div className={styles.straightLaneOverlay} aria-hidden="true" />
+            <div className={styles.phaseHud} aria-label="Race background phase sequence">
+              {trackPhases.map((phase) => (
+                <span className={styles.phasePill} key={phase.label}>
+                  <strong>{phase.label}</strong>
+                  <span>{phase.window}</span>
+                </span>
+              ))}
+            </div>
             <div className={styles.finishLine} aria-hidden="true" />
             {horses.map((horse) => (
               <div
@@ -171,7 +221,7 @@ export default function RacingAnimationPreviewPage() {
                     "--duration": horse.duration,
                     "--lane-top": horse.laneTop,
                     "--offset": horse.offset,
-                    zIndex: 10 + horse.lane,
+                    zIndex: 30 + horse.lane,
                   } as CSSProperties
                 }
               >

@@ -94,7 +94,7 @@
   background-image:
     linear-gradient(90deg, rgb(3 8 10 / 6%), transparent 24%, transparent 76%, rgb(3 8 10 / 16%)),
     linear-gradient(180deg, rgb(5 10 14 / 8%), transparent 58%, rgb(4 8 9 / 28%)),
-    url("/racing/generated-reference-style/start-gate-background.png");
+    url("/racing/generated-reference-style/track-straight-start.png");
   background-position: center;
   background-size: cover;
   border: 1px solid rgb(255 255 255 / 12%);
@@ -202,11 +202,7 @@
 
 .track {
   aspect-ratio: 1672 / 941;
-  background-image:
-    linear-gradient(90deg, rgb(6 12 14 / 18%), transparent 14%, transparent 84%, rgb(6 12 14 / 28%)),
-    url("/racing/generated-reference-style/track-background.png");
-  background-position: center;
-  background-size: cover;
+  background: #081315;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 8px;
   box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
@@ -215,12 +211,103 @@
   position: relative;
 }
 
+.phaseStack,
+.trackPhase {
+  inset: 0;
+  position: absolute;
+}
+
+.phaseStack {
+  z-index: 0;
+}
+
+.trackPhase {
+  animation-duration: 15s;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  background-image:
+    linear-gradient(90deg, rgb(6 12 14 / 16%), transparent 16%, transparent 84%, rgb(6 12 14 / 26%)),
+    linear-gradient(180deg, rgb(5 9 12 / 8%), transparent 56%, rgb(4 9 10 / 26%)),
+    var(--phase-bg);
+  background-position: center;
+  background-size: cover;
+  opacity: 0;
+}
+
+.phaseStart {
+  animation-name: racePhaseStart;
+}
+
+.phaseMiddle {
+  animation-name: racePhaseMiddle;
+}
+
+.phaseFinish {
+  animation-name: racePhaseFinish;
+}
+
+.straightLaneOverlay {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 18%), transparent 12%, transparent 88%, rgb(255 255 255 / 14%)),
+    repeating-linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0%) 0,
+      rgb(255 255 255 / 0%) calc((100% / 6) - 2px),
+      rgb(255 255 255 / 42%) calc((100% / 6) - 2px),
+      rgb(255 255 255 / 42%) calc(100% / 6)
+    );
+  inset: 31% 0 10%;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.phaseHud {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  left: 18px;
+  position: absolute;
+  top: 18px;
+  z-index: 55;
+}
+
+.phasePill {
+  background: rgb(5 12 14 / 66%);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 8px;
+  box-shadow: 0 14px 38px rgb(0 0 0 / 26%);
+  color: #dbe6df;
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  min-width: 94px;
+  padding: 7px 10px;
+}
+
+.phasePill strong {
+  color: #66ef9b;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.phasePill span {
+  color: #f5f8f5;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
 .track::after {
-  background: linear-gradient(180deg, transparent, rgb(4 9 10 / 38%));
+  background: linear-gradient(180deg, transparent 60%, rgb(4 9 10 / 38%));
   content: "";
   inset: 0;
   pointer-events: none;
   position: absolute;
+  z-index: 25;
 }
 
 .finishLine {
@@ -233,11 +320,13 @@
   border-left: 3px solid #f4f0dd;
   bottom: 17%;
   box-shadow: 0 0 0 1px rgb(0 0 0 / 15%);
+  opacity: 0;
+  animation: finishLineReveal 15s linear infinite;
   position: absolute;
   right: 9%;
   top: 31%;
   width: 22px;
-  z-index: 1;
+  z-index: 4;
 }
 
 .runner {
@@ -248,6 +337,7 @@
   position: absolute;
   top: var(--lane-top);
   width: 206px;
+  z-index: 10;
 }
 
 .sprite,
@@ -392,6 +482,59 @@
   }
 }
 
+@keyframes racePhaseStart {
+  0%,
+  29% {
+    opacity: 1;
+  }
+
+  37%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes racePhaseMiddle {
+  0%,
+  28% {
+    opacity: 0;
+  }
+
+  38%,
+  64% {
+    opacity: 1;
+  }
+
+  72%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes racePhaseFinish {
+  0%,
+  63% {
+    opacity: 0;
+  }
+
+  73%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes finishLineReveal {
+  0%,
+  66% {
+    opacity: 0;
+  }
+
+  74%,
+  100% {
+    opacity: 1;
+  }
+}
+
 @media (max-width: 1100px) {
   .startFrame,
   .raceFrame {
@@ -436,12 +579,10 @@
     font-size: 22px;
   }
 
+  .startTrack,
   .track {
-    min-height: 290px;
-  }
-
-  .startTrack {
-    min-height: 300px;
+    aspect-ratio: 4 / 3;
+    min-height: unset;
   }
 
   .startHud {
@@ -452,6 +593,28 @@
 
   .startHud strong {
     font-size: 18px;
+  }
+
+  .phaseHud {
+    flex-wrap: wrap;
+    gap: 6px;
+    left: 10px;
+    right: 10px;
+    top: 10px;
+  }
+
+  .phasePill {
+    min-height: 36px;
+    min-width: 72px;
+    padding: 6px 8px;
+  }
+
+  .phasePill strong {
+    font-size: 10px;
+  }
+
+  .phasePill span {
+    font-size: 10px;
   }
 
   .startLine {
@@ -485,8 +648,22 @@
 @media (prefers-reduced-motion: reduce) {
   .runner,
   .sprite,
-  .rowSprite {
+  .rowSprite,
+  .finishLine {
     animation-duration: 1ms;
     animation-iteration-count: 1;
+  }
+
+  .trackPhase {
+    animation: none;
+  }
+
+  .phaseStart {
+    opacity: 1;
+  }
+
+  .phaseMiddle,
+  .phaseFinish {
+    opacity: 0;
   }
 }

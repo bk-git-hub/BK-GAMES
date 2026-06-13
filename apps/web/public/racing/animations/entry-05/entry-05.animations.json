@@ -1,0 +1,76 @@
+{
+    "assetId":  "entry-05",
+    "type":  "horse-racing-entry-animation-strips",
+    "sourceSpritesheet":  "../entries/entry-05/entry-05-spritesheet.png",
+    "horseName":  "Velvet Signal",
+    "jockeyName":  "Mara Kestrel",
+    "saddleclothNumber":  5,
+    "frame":  {
+                  "width":  640,
+                  "height":  320
+              },
+    "anchor":  {
+                   "x":  318,
+                   "y":  264
+               },
+    "groundY":  264,
+    "facing":  "right",
+    "palette":  {
+                    "horseCoat":  "#7b3f24",
+                    "silksPrimary":  "#8a2be2",
+                    "silksSecondary":  "#8a2be2",
+                    "saddlecloth":  "#ffffff",
+                    "saddleclothNumber":  "#6d22b5"
+                },
+    "animations":  {
+                       "gallop":  {
+                                      "png":  "entry-05-gallop.png",
+                                      "webp":  "entry-05-gallop.webp",
+                                      "row":  0,
+                                      "sourceY":  0,
+                                      "frames":  8,
+                                      "loop":  true,
+                                      "frameDurationMs":  78,
+                                      "width":  5120,
+                                      "height":  320
+                                  },
+                       "start":  {
+                                     "png":  "entry-05-start.png",
+                                     "webp":  "entry-05-start.webp",
+                                     "row":  1,
+                                     "sourceY":  320,
+                                     "frames":  6,
+                                     "loop":  false,
+                                     "frameDurationMs":  68,
+                                     "width":  3840,
+                                     "height":  320
+                                 },
+                       "fatigue":  {
+                                       "png":  "entry-05-fatigue.png",
+                                       "webp":  "entry-05-fatigue.webp",
+                                       "row":  2,
+                                       "sourceY":  640,
+                                       "frames":  8,
+                                       "loop":  true,
+                                       "frameDurationMs":  88,
+                                       "width":  5120,
+                                       "height":  320
+                                   },
+                       "finish":  {
+                                      "png":  "entry-05-finish.png",
+                                      "webp":  "entry-05-finish.webp",
+                                      "row":  3,
+                                      "sourceY":  960,
+                                      "frames":  4,
+                                      "loop":  false,
+                                      "frameDurationMs":  92,
+                                      "width":  2560,
+                                      "height":  320
+                                  }
+                   },
+    "usageNotes":  [
+                       "Each file is a single horizontal animation strip with transparent background.",
+                       "Use frame width 640 and frame height 320 to step through frames.",
+                       "Anchor and groundY match the original entry spritesheet so strips can be swapped without visual jumping."
+                   ]
+}

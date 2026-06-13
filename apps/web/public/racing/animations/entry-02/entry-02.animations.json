@@ -1,0 +1,76 @@
+{
+    "assetId":  "entry-02",
+    "type":  "horse-racing-entry-animation-strips",
+    "sourceSpritesheet":  "../entries/entry-02/entry-02-spritesheet.png",
+    "horseName":  "Emerald Circuit",
+    "jockeyName":  "Mika Rowe",
+    "saddleclothNumber":  2,
+    "frame":  {
+                  "width":  640,
+                  "height":  320
+              },
+    "anchor":  {
+                   "x":  318,
+                   "y":  264
+               },
+    "groundY":  264,
+    "facing":  "right",
+    "palette":  {
+                    "horseCoat":  "#7b3f24",
+                    "silksPrimary":  "#006dff",
+                    "silksSecondary":  "#006dff",
+                    "saddlecloth":  "#ffffff",
+                    "saddleclothNumber":  "#0059d6"
+                },
+    "animations":  {
+                       "gallop":  {
+                                      "png":  "entry-02-gallop.png",
+                                      "webp":  "entry-02-gallop.webp",
+                                      "row":  0,
+                                      "sourceY":  0,
+                                      "frames":  8,
+                                      "loop":  true,
+                                      "frameDurationMs":  78,
+                                      "width":  5120,
+                                      "height":  320
+                                  },
+                       "start":  {
+                                     "png":  "entry-02-start.png",
+                                     "webp":  "entry-02-start.webp",
+                                     "row":  1,
+                                     "sourceY":  320,
+                                     "frames":  6,
+                                     "loop":  false,
+                                     "frameDurationMs":  68,
+                                     "width":  3840,
+                                     "height":  320
+                                 },
+                       "fatigue":  {
+                                       "png":  "entry-02-fatigue.png",
+                                       "webp":  "entry-02-fatigue.webp",
+                                       "row":  2,
+                                       "sourceY":  640,
+                                       "frames":  8,
+                                       "loop":  true,
+                                       "frameDurationMs":  88,
+                                       "width":  5120,
+                                       "height":  320
+                                   },
+                       "finish":  {
+                                      "png":  "entry-02-finish.png",
+                                      "webp":  "entry-02-finish.webp",
+                                      "row":  3,
+                                      "sourceY":  960,
+                                      "frames":  4,
+                                      "loop":  false,
+                                      "frameDurationMs":  92,
+                                      "width":  2560,
+                                      "height":  320
+                                  }
+                   },
+    "usageNotes":  [
+                       "Each file is a single horizontal animation strip with transparent background.",
+                       "Use frame width 640 and frame height 320 to step through frames.",
+                       "Anchor and groundY match the original entry spritesheet so strips can be swapped without visual jumping."
+                   ]
+}

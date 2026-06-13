@@ -54,16 +54,16 @@
                    },
     "palette":  {
                     "horseCoat":  "#7b3f24",
-                    "silksPrimary":  "#7c3cff",
-                    "silksSecondary":  "#b8ff00",
+                    "silksPrimary":  "#00b050",
+                    "silksSecondary":  "#00b050",
                     "saddlecloth":  "#ffffff",
-                    "saddleclothNumber":  "#7c3cff"
+                    "saddleclothNumber":  "#008c40"
                 },
     "usageNotes":  [
                        "Transparent sheet with no baked track or background; place on lane groundY/anchor for live-race movement.",
                        "Gallop and fatigue rows are loops. Start and finish rows are one-shot transitions.",
                        "Rows with fewer than 8 frames leave transparent cells at the end.",
-                       "Entries 1-6 use intentionally distinct high-contrast jockey colors for fast race readability."
+                       "Entries 1-6 use single-tone, high-saturation jockey silks so riders remain distinct at racing distance."
                    ],
     "files":  {
                   "png":  "entry-03-spritesheet.png",

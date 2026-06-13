@@ -1,0 +1,343 @@
+.page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 12%, rgb(27 81 70 / 44%), transparent 28rem),
+    linear-gradient(180deg, #071013 0%, #091317 48%, #05090b 100%);
+  color: #eef7f2;
+  padding: 24px;
+}
+
+.shell {
+  display: grid;
+  gap: 18px;
+  margin: 0 auto;
+  max-width: 1500px;
+}
+
+.header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 72px;
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+}
+
+.brandMark {
+  color: #20d278;
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.brand h1 {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.brand p {
+  color: #91a69d;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 5px 0 0;
+}
+
+.statusBar {
+  align-items: center;
+  background: rgb(255 255 255 / 7%);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 8%);
+  color: #58e391;
+  display: flex;
+  font-size: 14px;
+  font-weight: 800;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 16px;
+  text-transform: uppercase;
+}
+
+.statusBar strong {
+  color: #f5f8f5;
+  font-size: 15px;
+  text-transform: none;
+}
+
+.liveDot {
+  background: #32e785;
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgb(50 231 133 / 74%);
+  display: block;
+  height: 9px;
+  width: 9px;
+}
+
+.raceFrame {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 190px;
+}
+
+.track {
+  aspect-ratio: 1672 / 941;
+  background-image:
+    linear-gradient(90deg, rgb(6 12 14 / 18%), transparent 14%, transparent 84%, rgb(6 12 14 / 28%)),
+    url("/racing/generated-reference-style/track-background.png");
+  background-position: center;
+  background-size: cover;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
+  min-height: 430px;
+  overflow: hidden;
+  position: relative;
+}
+
+.track::after {
+  background: linear-gradient(180deg, transparent, rgb(4 9 10 / 38%));
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.finishLine {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      #f5f5ef 0 9px,
+      #24312a 9px 18px
+    );
+  border-left: 3px solid #f4f0dd;
+  bottom: 17%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 15%);
+  position: absolute;
+  right: 9%;
+  top: 31%;
+  width: 22px;
+  z-index: 1;
+}
+
+.runner {
+  animation: raceMove var(--duration) linear infinite;
+  animation-delay: var(--offset);
+  height: 181px;
+  left: -16%;
+  position: absolute;
+  top: var(--lane-top);
+  width: 206px;
+}
+
+.sprite,
+.rowSprite {
+  background-image: var(--sprite);
+  background-position: 0 0;
+  background-repeat: no-repeat;
+  background-size: 1442px 181px;
+  height: 181px;
+  width: 206px;
+}
+
+.sprite {
+  animation: gallop 0.58s steps(7) infinite;
+  filter: drop-shadow(0 12px 7px rgb(0 0 0 / 35%));
+  transform: scale(0.8);
+  transform-origin: center bottom;
+}
+
+.rankPanel {
+  background: linear-gradient(180deg, rgb(17 24 28 / 92%), rgb(8 13 16 / 96%));
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 32%);
+  min-height: 430px;
+  padding: 16px;
+}
+
+.rankPanel h2 {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin: 0 0 14px;
+}
+
+.rankPanel ol {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rankPanel li {
+  align-items: center;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+  color: #dbe6df;
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.badge {
+  align-items: center;
+  border-radius: 6px;
+  color: white;
+  display: inline-flex;
+  font-size: 18px;
+  font-weight: 900;
+  height: 34px;
+  justify-content: center;
+  min-width: 34px;
+}
+
+.red {
+  background: #e83434;
+}
+
+.orange {
+  background: #f17a21;
+}
+
+.blue {
+  background: #2f6fe8;
+}
+
+.yellow {
+  background: #f0ce24;
+  color: #19200f;
+}
+
+.purple {
+  background: #8e55d9;
+}
+
+.green {
+  background: #2ba65a;
+}
+
+.spriteRows {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.spriteCard {
+  background: linear-gradient(180deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 4%));
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.cardTop {
+  align-items: center;
+  color: #dfeae4;
+  display: flex;
+  font-size: 14px;
+  font-weight: 800;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.rowSprite {
+  animation: gallop 0.68s steps(7) infinite;
+  filter: drop-shadow(0 10px 6px rgb(0 0 0 / 30%));
+  transform: scale(0.72);
+  transform-origin: left center;
+}
+
+@keyframes gallop {
+  to {
+    background-position: -1442px 0;
+  }
+}
+
+@keyframes raceMove {
+  from {
+    left: -18%;
+  }
+
+  to {
+    left: 88%;
+  }
+}
+
+@media (max-width: 1100px) {
+  .raceFrame {
+    grid-template-columns: 1fr;
+  }
+
+  .rankPanel {
+    min-height: unset;
+  }
+
+  .rankPanel ol {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .track {
+    min-height: 340px;
+  }
+
+  .spriteRows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .page {
+    padding: 14px;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .brandMark {
+    font-size: 34px;
+  }
+
+  .brand h1 {
+    font-size: 22px;
+  }
+
+  .track {
+    min-height: 290px;
+  }
+
+  .sprite {
+    transform: scale(0.58);
+  }
+
+  .spriteRows {
+    grid-template-columns: 1fr;
+  }
+
+  .rowSprite {
+    transform: scale(0.62);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runner,
+  .sprite,
+  .rowSprite {
+    animation-duration: 1ms;
+    animation-iteration-count: 1;
+  }
+}

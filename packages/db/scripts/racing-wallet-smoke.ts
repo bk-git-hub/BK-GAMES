@@ -168,7 +168,7 @@ try {
       maxBet: BigInt(6000),
       payoutRateBps: 9_000,
       bettingTimeoutSeconds: 150,
-      raceIntervalSeconds: 180,
+      raceIntervalSeconds: 240,
       bettingCloseBeforeStartSeconds: 30,
     })
     .returning();

@@ -374,6 +374,7 @@ export type RacingBettingLimitsSnapshot = {
 export type RacingTimingSnapshot = {
   bettingTimeoutSeconds: number;
   raceIntervalSeconds: number;
+  raceAndResultSeconds: number;
   bettingCloseBeforeStartSeconds: number;
   tickIntervalMs: number;
   raceDistanceM: number;

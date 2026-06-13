@@ -43,6 +43,13 @@
       "when": 1781325695814,
       "tag": "0005_dazzling_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781340733761,
+      "tag": "0006_spicy_leper_queen",
+      "breakpoints": true
     }
   ]
 }

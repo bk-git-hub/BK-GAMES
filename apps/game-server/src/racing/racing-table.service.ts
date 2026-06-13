@@ -184,6 +184,7 @@ export class RacingTableService {
       timing: {
         bettingTimeoutSeconds: table.bettingTimeoutSeconds,
         raceIntervalSeconds: table.raceIntervalSeconds,
+        raceAndResultSeconds: calculateRaceAndResultSeconds(table),
         bettingCloseBeforeStartSeconds:
           table.bettingCloseBeforeStartSeconds,
         tickIntervalMs: table.tickIntervalMs,
@@ -277,6 +278,16 @@ function normalizeTableConfig(config: RacingTableConfig): RacingTableConfig {
     );
   }
 
+  if (
+    config.bettingTimeoutSeconds + config.bettingCloseBeforeStartSeconds >=
+    config.raceIntervalSeconds
+  ) {
+    throw new RacingTableError(
+      'UNKNOWN_ERROR',
+      'Racing timing must leave time for race and result display.',
+    );
+  }
+
   if (config.horses.length < config.fieldSize) {
     throw new RacingTableError(
       'UNKNOWN_ERROR',
@@ -323,6 +334,14 @@ function countUniqueViewers(table: RacingTableRuntime) {
   return new Set(
     Array.from(table.connections.values()).map((user) => user.userId),
   ).size;
+}
+
+function calculateRaceAndResultSeconds(table: RacingTableRuntime) {
+  return (
+    table.raceIntervalSeconds -
+    table.bettingTimeoutSeconds -
+    table.bettingCloseBeforeStartSeconds
+  );
 }
 
 const racingBetTypes = new Set<RacingBetType>(['WIN', 'QUINELLA', 'EXACTA']);

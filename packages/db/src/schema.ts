@@ -898,7 +898,7 @@ export const racingTables = pgTable(
     bettingTimeoutSeconds: integer("betting_timeout_seconds")
       .default(150)
       .notNull(),
-    raceIntervalSeconds: integer("race_interval_seconds").default(180).notNull(),
+    raceIntervalSeconds: integer("race_interval_seconds").default(240).notNull(),
     bettingCloseBeforeStartSeconds: integer(
       "betting_close_before_start_seconds",
     )
@@ -950,7 +950,7 @@ export const racingTables = pgTable(
     ),
     check(
       "racing_tables_betting_close_before_start_check",
-      sql`${table.bettingCloseBeforeStartSeconds} > 0 and ${table.bettingCloseBeforeStartSeconds} < ${table.raceIntervalSeconds}`,
+      sql`${table.bettingCloseBeforeStartSeconds} > 0 and ${table.bettingTimeoutSeconds} + ${table.bettingCloseBeforeStartSeconds} < ${table.raceIntervalSeconds}`,
     ),
     check(
       "racing_tables_tick_interval_check",

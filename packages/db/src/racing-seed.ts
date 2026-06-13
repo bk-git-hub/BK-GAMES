@@ -42,7 +42,8 @@ const mainRacingRules = {
   equalBaseStats: true,
   fixedOdds: true,
   oddsDenominator: 10_000,
-  raceIntervalSeconds: 180,
+  raceIntervalSeconds: 240,
+  raceAndResultSeconds: 60,
   bettingCloseBeforeStartSeconds: 30,
   cancellation: "SERVER_ONLY",
 } satisfies JsonObject;
@@ -54,7 +55,7 @@ const mainRacingTableValues = {
   maxBet: BigInt(6000),
   payoutRateBps: 9_000,
   bettingTimeoutSeconds: 150,
-  raceIntervalSeconds: 180,
+  raceIntervalSeconds: 240,
   bettingCloseBeforeStartSeconds: 30,
   tickIntervalMs: 100,
   raceDistanceM: 1200,

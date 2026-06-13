@@ -15,6 +15,10 @@ async function main() {
           payoutRateBps: seed.table.payoutRateBps,
           bettingTimeoutSeconds: seed.table.bettingTimeoutSeconds,
           raceIntervalSeconds: seed.table.raceIntervalSeconds,
+          raceAndResultSeconds:
+            seed.table.raceIntervalSeconds -
+            seed.table.bettingTimeoutSeconds -
+            seed.table.bettingCloseBeforeStartSeconds,
           bettingCloseBeforeStartSeconds:
             seed.table.bettingCloseBeforeStartSeconds,
           tickIntervalMs: seed.table.tickIntervalMs,

@@ -4,7 +4,7 @@ This file is the handoff document for multiple Codex chat threads working on the
 
 Every new thread should read this file first, then read `AGENTS.md`, then inspect the current git status before making changes.
 
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 
 ## Current Repository State
 
@@ -112,6 +112,15 @@ It contains:
 Future threads should update the Notion page when the user asks for user-facing project tracking, but should not rely on Notion as the only source of truth for implementation.
 
 ## Completed Work
+
+### Horse Racing Engine Foundation
+
+Backend/game-engine behavior:
+
+- `packages/game-engine` now exports a pure racing simulation engine under `src/racing`.
+- The engine creates server-authoritative race state from a post-betting seed, samples per-race temporary horse profiles/events, advances tick-by-tick, and produces finish order only after horses cross the finish line.
+- Tests cover deterministic replay, immutable tick advancement, complete finish/rank ordering, varied winners, and 10,000-race equal-probability distribution checks for 6- and 8-horse fields.
+- This commit does not add DB schema, wallet ledger helpers, NestJS gateway, socket contracts, or frontend racing UI. The next racing backend slice should add DB schema/migrations and transaction helpers.
 
 ### Daily Reward Amount
 

@@ -6,4 +6,5 @@ export * from "./daily-rewards.js";
 export * from "./blackjack-betting.js";
 export * from "./blackjack-settlement.js";
 export * from "./racing-betting.js";
+export * from "./racing-seed.js";
 export * from "./admin.js";

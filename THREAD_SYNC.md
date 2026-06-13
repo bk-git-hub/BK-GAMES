@@ -145,6 +145,16 @@ Backend/database behavior:
 - Local Drizzle migrations through `0004_same_jean_grey.sql` have been applied to the Docker Postgres database.
 - `pnpm --filter @bk-games/db smoke:racing-wallet` verifies bet retry, idempotency conflict, already-placed rejection, payout retry, cancel refund retry, and final wallet/ledger counts.
 
+### Horse Racing Main Seed
+
+Backend/database behavior:
+
+- `packages/db/src/racing-seed.ts` now exports `ensureMainRacingSeed`.
+- `pnpm --filter @bk-games/db seed:racing-main` idempotently creates the main racing table with code `main`.
+- The main racing table defaults to 6 entries, 100-6,000 point Win bets, 90% payout rate, 20-second betting window, 100ms tick interval, 1,200m race distance, and 8-second round-end delay.
+- The seed creates or reactivates six fictional display horses: Crimson Circuit, Azure Relay, Golden Vector, Emerald Drift, Ivory Signal, and Violet Comet.
+- Race-specific entry numbers/gates/lanes are still created per race, not stored on `racing_horses`.
+
 ### Daily Reward Amount
 
 Backend/database behavior:
@@ -443,6 +453,7 @@ As of 2026-06-05:
 - `localhost:5432` accepts PostgreSQL connections through the Docker container.
 - Drizzle migrations through `0004_same_jean_grey.sql` have been applied to the local `bk_games` database.
 - The `main` blackjack table seed has been applied with `pnpm --filter @bk-games/db seed:blackjack-main`.
+- The `main` racing table and six fictional racing horses have been applied with `pnpm --filter @bk-games/db seed:racing-main`.
 - `packages/db/drizzle.config.ts` and `packages/db/src/client.ts` explicitly load the root `.env`, because filtered package commands run from `packages/db`.
 - `psql`, `postgres`, and `pg_ctl` are still not installed directly on Windows, but `psql` is available inside the Postgres container through `docker exec`.
 
@@ -456,7 +467,6 @@ Next task should continue the horse racing backend in small slices.
 
 Recommended order:
 
-- Add seed data for the main racing table and fictional horse display records.
 - Add shared racing socket contracts when the gateway slice begins.
 - Add the NestJS racing module/gateway with table join/state, betting phase, race ticks, settlement, cancellation, and private wallet updates.
 - Add reconnect/recovery logic for active races and server restart cancellation/refund.
@@ -565,3 +575,4 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 
 - Horse racing DB schema and Drizzle migration were added. Impact: backend racing work can now build DB-backed table/race/entry/bet/tick/action flows.
 - Horse racing wallet transaction helpers were added and verified with a DB smoke test. Impact: racing gateway work can now call DB-backed `placeRacingWinBet`, `settleRacingRace`, and `cancelRacingRace` instead of touching wallets directly.
+- Horse racing main seed was added and applied locally. Impact: racing gateway work can load table code `main` and reuse seeded fictional horse display records when creating race entries.

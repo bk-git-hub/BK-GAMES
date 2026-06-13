@@ -7,6 +7,14 @@
     "containsHorses": false,
     "containsUi": false
   },
+  "startGate": {
+    "file": "start-gate-background.png",
+    "width": 1672,
+    "height": 941,
+    "containsHorses": false,
+    "containsUi": false,
+    "purpose": "Pre-race gate-ready background for the animation preview and runtime start state."
+  },
   "sprites": {
     "sourceFile": "horse-gallop-6x7-source-magenta.png",
     "alphaFile": "horse-gallop-6x7-alpha.png",

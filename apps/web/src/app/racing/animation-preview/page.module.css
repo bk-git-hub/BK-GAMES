@@ -82,10 +82,103 @@
   width: 9px;
 }
 
+.startFrame,
 .raceFrame {
   display: grid;
   gap: 14px;
   grid-template-columns: minmax(0, 1fr) 190px;
+}
+
+.startTrack {
+  aspect-ratio: 16 / 9;
+  background-image:
+    linear-gradient(90deg, rgb(3 8 10 / 6%), transparent 24%, transparent 76%, rgb(3 8 10 / 16%)),
+    linear-gradient(180deg, rgb(5 10 14 / 8%), transparent 58%, rgb(4 8 9 / 28%)),
+    url("/racing/generated-reference-style/start-gate-background.png");
+  background-position: center;
+  background-size: cover;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
+  min-height: 430px;
+  overflow: hidden;
+  position: relative;
+}
+
+.startTrack::after {
+  background: linear-gradient(180deg, transparent 62%, rgb(1 5 5 / 38%));
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.startHud {
+  align-items: center;
+  background: rgb(5 12 14 / 68%);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 8px;
+  box-shadow: 0 16px 42px rgb(0 0 0 / 28%);
+  display: flex;
+  gap: 14px;
+  min-height: 46px;
+  padding: 0 14px;
+  position: absolute;
+  right: 24px;
+  top: 22px;
+  z-index: 60;
+}
+
+.startHud span {
+  color: #66ef9b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.startHud strong {
+  color: #fff4c4;
+  font-size: 23px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.starter {
+  height: 181px;
+  left: var(--start-x);
+  position: absolute;
+  top: var(--start-lane-top);
+  transform: translateY(-50%);
+  width: 206px;
+}
+
+.staticSprite {
+  background-image: var(--sprite);
+  background-position: 0 0;
+  background-repeat: no-repeat;
+  background-size: 1442px 181px;
+  filter: drop-shadow(0 12px 7px rgb(0 0 0 / 38%));
+  height: 181px;
+  transform: scale(0.58);
+  transform-origin: center bottom;
+  width: 206px;
+}
+
+.startBadge {
+  align-items: center;
+  border: 2px solid rgb(255 255 255 / 84%);
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 34%);
+  color: white;
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 900;
+  height: 28px;
+  justify-content: center;
+  left: 54px;
+  min-width: 28px;
+  position: absolute;
+  top: 58px;
+  transform: scale(0.86);
 }
 
 .track {
@@ -155,6 +248,7 @@
   transform-origin: center bottom;
 }
 
+.startPanel,
 .rankPanel {
   background: linear-gradient(180deg, rgb(17 24 28 / 92%), rgb(8 13 16 / 96%));
   border: 1px solid rgb(255 255 255 / 12%);
@@ -164,6 +258,7 @@
   padding: 16px;
 }
 
+.startPanel h2,
 .rankPanel h2 {
   font-size: 17px;
   font-weight: 800;
@@ -171,6 +266,7 @@
   margin: 0 0 14px;
 }
 
+.startPanel ol,
 .rankPanel ol {
   display: grid;
   gap: 10px;
@@ -179,6 +275,7 @@
   padding: 0;
 }
 
+.startPanel li,
 .rankPanel li {
   align-items: center;
   border-bottom: 1px solid rgb(255 255 255 / 8%);
@@ -277,18 +374,22 @@
 }
 
 @media (max-width: 1100px) {
+  .startFrame,
   .raceFrame {
     grid-template-columns: 1fr;
   }
 
+  .startPanel,
   .rankPanel {
     min-height: unset;
   }
 
+  .startPanel ol,
   .rankPanel ol {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .startTrack,
   .track {
     min-height: 340px;
   }
@@ -320,8 +421,32 @@
     min-height: 290px;
   }
 
+  .startTrack {
+    min-height: 300px;
+  }
+
+  .startHud {
+    min-height: 38px;
+    right: 12px;
+    top: 12px;
+  }
+
+  .startHud strong {
+    font-size: 18px;
+  }
+
   .sprite {
     transform: scale(0.58);
+  }
+
+  .staticSprite {
+    transform: scale(0.43);
+  }
+
+  .startBadge {
+    left: 38px;
+    top: 72px;
+    transform: scale(0.74);
   }
 
   .spriteRows {

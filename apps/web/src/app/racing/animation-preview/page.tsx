@@ -11,6 +11,8 @@ type HorseEntry = {
   number: number;
   offset: string;
   rank: string;
+  startLaneTop: string;
+  startX: string;
 };
 
 const horses: HorseEntry[] = [
@@ -23,6 +25,8 @@ const horses: HorseEntry[] = [
     number: 1,
     offset: "-7.6s",
     rank: "1st",
+    startLaneTop: "31%",
+    startX: "8%",
   },
   {
     color: "orange",
@@ -33,6 +37,8 @@ const horses: HorseEntry[] = [
     number: 2,
     offset: "-6.2s",
     rank: "2nd",
+    startLaneTop: "39.5%",
+    startX: "10.5%",
   },
   {
     color: "blue",
@@ -43,6 +49,8 @@ const horses: HorseEntry[] = [
     number: 3,
     offset: "-4.9s",
     rank: "3rd",
+    startLaneTop: "48%",
+    startX: "13%",
   },
   {
     color: "yellow",
@@ -53,6 +61,8 @@ const horses: HorseEntry[] = [
     number: 4,
     offset: "-3.5s",
     rank: "4th",
+    startLaneTop: "56.5%",
+    startX: "15.5%",
   },
   {
     color: "purple",
@@ -63,6 +73,8 @@ const horses: HorseEntry[] = [
     number: 5,
     offset: "-2.2s",
     rank: "5th",
+    startLaneTop: "65%",
+    startX: "18%",
   },
   {
     color: "green",
@@ -73,6 +85,8 @@ const horses: HorseEntry[] = [
     number: 6,
     offset: "-0.9s",
     rank: "6th",
+    startLaneTop: "73.5%",
+    startX: "20.5%",
   },
 ];
 
@@ -90,10 +104,59 @@ export default function RacingAnimationPreviewPage() {
           </div>
           <div className={styles.statusBar} aria-label="Preview status">
             <span className={styles.liveDot} />
-            <span>RUNNING</span>
+            <span>PRE-RACE</span>
             <strong>6 entries</strong>
           </div>
         </header>
+
+        <section className={styles.startFrame} aria-label="Pre-race start state preview">
+          <div className={styles.startTrack}>
+            <div className={styles.startHud} aria-label="Start state">
+              <span>GATE READY</span>
+              <strong>00:03</strong>
+            </div>
+            {horses.map((horse) => (
+              <div
+                className={styles.starter}
+                key={horse.number}
+                style={
+                  {
+                    "--start-lane-top": horse.startLaneTop,
+                    "--start-x": horse.startX,
+                    zIndex: 20 + horse.lane,
+                  } as CSSProperties
+                }
+              >
+                <div
+                  aria-label={`${horse.number}번 말 출발 대기 상태`}
+                  className={styles.staticSprite}
+                  style={
+                    {
+                      "--sprite": `url("${horse.file}")`,
+                    } as CSSProperties
+                  }
+                />
+                <span className={`${styles.startBadge} ${styles[horse.color]}`}>
+                  {horse.number}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <aside className={styles.startPanel} aria-label="Start lane status">
+            <h2>Start Gate</h2>
+            <ol>
+              {horses.map((horse) => (
+                <li key={horse.number}>
+                  <span className={`${styles.badge} ${styles[horse.color]}`}>
+                    {horse.number}
+                  </span>
+                  <span>Lane {horse.lane}</span>
+                </li>
+              ))}
+            </ol>
+          </aside>
+        </section>
 
         <div className={styles.raceFrame}>
           <div className={styles.track} aria-label="Animated horse race preview">

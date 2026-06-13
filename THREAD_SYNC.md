@@ -130,7 +130,20 @@ Backend/database behavior:
 - `point_ledgers.game_type` now allows `RACING`, so future racing bet/settlement/cancel wallet mutations can share the same wallet and append-only ledger model as blackjack.
 - Racing bets enforce one Win bet per user per race and keep command-id idempotency keys for retry-safe placement.
 - DB constraints protect racing bet integrity by tying `table_id + race_id` to the same race and tying `race_id + race_entry_id + horse_id` to the same race entry.
-- The migration has been generated but not applied to the local database in this slice. The next racing backend slice should implement racing wallet transaction helpers and then run/apply the migration when needed for smoke tests.
+- The initial racing schema migration was generated in this slice and was applied locally in the following wallet-transaction slice.
+
+### Horse Racing Wallet Transactions
+
+Backend/database behavior:
+
+- `packages/db/src/racing-betting.ts` now implements `placeRacingWinBet`, `settleRacingRace`, and `cancelRacingRace`.
+- Racing bet placement creates a `BET` ledger, stores locked integer odds on `racing_bets`, enforces one Win bet per user per race, and returns the accepted bet on identical command retry.
+- Reusing the same command with different bet details returns `IDEMPOTENCY_CONFLICT`; sending a new command after an accepted race bet returns `BET_ALREADY_PLACED`.
+- Racing settlement pays only winning bets through `PAYOUT` ledgers using integer odds math: `floor(amount * oddsNumerator / oddsDenominator)`.
+- Racing cancellation refunds accepted bets through idempotent `CANCEL_REFUND` ledgers.
+- `racing_actions` command uniqueness was tightened to `race_id + user_id + command_id` so different users can safely generate the same client command string.
+- Local Drizzle migrations through `0004_same_jean_grey.sql` have been applied to the Docker Postgres database.
+- `pnpm --filter @bk-games/db smoke:racing-wallet` verifies bet retry, idempotency conflict, already-placed rejection, payout retry, cancel refund retry, and final wallet/ledger counts.
 
 ### Daily Reward Amount
 
@@ -428,7 +441,7 @@ As of 2026-06-05:
 - `docker-compose.yml` defines the local PostgreSQL service.
 - `bk-games-postgres` is running and healthy.
 - `localhost:5432` accepts PostgreSQL connections through the Docker container.
-- Drizzle migrations through `0001_oval_forgotten_one.sql` have been applied to the local `bk_games` database.
+- Drizzle migrations through `0004_same_jean_grey.sql` have been applied to the local `bk_games` database.
 - The `main` blackjack table seed has been applied with `pnpm --filter @bk-games/db seed:blackjack-main`.
 - `packages/db/drizzle.config.ts` and `packages/db/src/client.ts` explicitly load the root `.env`, because filtered package commands run from `packages/db`.
 - `psql`, `postgres`, and `pg_ctl` are still not installed directly on Windows, but `psql` is available inside the Postgres container through `docker exec`.
@@ -443,11 +456,10 @@ Next task should continue the horse racing backend in small slices.
 
 Recommended order:
 
-- Implement racing wallet transaction helpers for place-bet, settle, and cancel/refund using `applyWalletMutation`.
 - Add seed data for the main racing table and fictional horse display records.
-- Apply the racing migration locally before the first DB-backed racing smoke test.
-- Add the NestJS racing module/gateway after transaction helpers are verified.
-- Add shared racing socket contracts only when the gateway slice begins, so frontend and backend stay aligned.
+- Add shared racing socket contracts when the gateway slice begins.
+- Add the NestJS racing module/gateway with table join/state, betting phase, race ticks, settlement, cancellation, and private wallet updates.
+- Add reconnect/recovery logic for active races and server restart cancellation/refund.
 
 The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, game-server sockets can verify short-lived game tokens from `POST /api/game-token`, game-server runtime tables load limits/rules from `blackjack_tables`, initial blackjack bets, double-down bets, split bets, and insurance bets now debit wallets through idempotent DB transactions, HIT/STAND/DOUBLE/SPLIT/SURRENDER/INSURANCE/EVEN_MONEY rounds now settle through wallet-backed ledgers, and `packages/game-engine` now has pure blackjack card/hand/action helpers. The web app now has a `/blackjack` table page linked from `/lobby` that requests a game token, connects to the blackjack namespace, joins `main`, renders table state/events/timer/seats/dealer/hands/actions, sends command-id protected wager actions, and updates local wallet display from private `wallet:updated`.
 
@@ -551,4 +563,5 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 
 ### 2026-06-13
 
-- Horse racing DB schema and Drizzle migration were added. Impact: backend racing work can now build DB-backed table/race/entry/bet/tick/action flows, but the migration is not applied locally yet in this slice.
+- Horse racing DB schema and Drizzle migration were added. Impact: backend racing work can now build DB-backed table/race/entry/bet/tick/action flows.
+- Horse racing wallet transaction helpers were added and verified with a DB smoke test. Impact: racing gateway work can now call DB-backed `placeRacingWinBet`, `settleRacingRace`, and `cancelRacingRace` instead of touching wallets directly.

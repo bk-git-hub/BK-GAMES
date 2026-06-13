@@ -1,0 +1,2 @@
+DROP INDEX "racing_actions_race_command_unique";--> statement-breakpoint
+CREATE UNIQUE INDEX "racing_actions_race_user_command_unique" ON "racing_actions" USING btree ("race_id","user_id","command_id") WHERE "racing_actions"."user_id" is not null and "racing_actions"."command_id" is not null;

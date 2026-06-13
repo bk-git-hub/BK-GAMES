@@ -1249,9 +1249,11 @@ export const racingActions = pgTable(
       table.raceId,
       table.actionSequence,
     ),
-    uniqueIndex("racing_actions_race_command_unique")
-      .on(table.raceId, table.commandId)
-      .where(sql`${table.commandId} is not null`),
+    uniqueIndex("racing_actions_race_user_command_unique")
+      .on(table.raceId, table.userId, table.commandId)
+      .where(
+        sql`${table.userId} is not null and ${table.commandId} is not null`,
+      ),
     index("racing_actions_race_id_idx").on(table.raceId),
     index("racing_actions_bet_id_idx").on(table.betId),
     index("racing_actions_user_id_idx").on(table.userId),

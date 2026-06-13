@@ -29,6 +29,13 @@
       "when": 1781310832754,
       "tag": "0003_stale_the_executioner",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781312918211,
+      "tag": "0004_same_jean_grey",
+      "breakpoints": true
     }
   ]
 }

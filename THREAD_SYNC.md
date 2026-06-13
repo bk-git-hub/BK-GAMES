@@ -122,6 +122,16 @@ Backend/game-engine behavior:
 - Tests cover deterministic replay, immutable tick advancement, complete finish/rank ordering, varied winners, and 10,000-race equal-probability distribution checks for 6- and 8-horse fields.
 - This commit does not add DB schema, wallet ledger helpers, NestJS gateway, socket contracts, or frontend racing UI. The next racing backend slice should add DB schema/migrations and transaction helpers.
 
+### Horse Racing DB Schema Foundation
+
+Backend/database behavior:
+
+- `packages/db` now has Drizzle schema and migration support for horse racing tables: `racing_tables`, `racing_horses`, `racing_races`, `racing_race_entries`, `racing_bets`, `racing_ticks`, and `racing_actions`.
+- `point_ledgers.game_type` now allows `RACING`, so future racing bet/settlement/cancel wallet mutations can share the same wallet and append-only ledger model as blackjack.
+- Racing bets enforce one Win bet per user per race and keep command-id idempotency keys for retry-safe placement.
+- DB constraints protect racing bet integrity by tying `table_id + race_id` to the same race and tying `race_id + race_entry_id + horse_id` to the same race entry.
+- The migration has been generated but not applied to the local database in this slice. The next racing backend slice should implement racing wallet transaction helpers and then run/apply the migration when needed for smoke tests.
+
 ### Daily Reward Amount
 
 Backend/database behavior:
@@ -393,6 +403,16 @@ Blackjack:
 - `blackjack_side_bets`
 - `blackjack_actions`
 
+Horse racing:
+
+- `racing_tables`
+- `racing_horses`
+- `racing_races`
+- `racing_race_entries`
+- `racing_bets`
+- `racing_ticks`
+- `racing_actions`
+
 Admin:
 
 - `admin_audit_logs`
@@ -419,14 +439,15 @@ The user chose Docker as the preferred path.
 
 ## Next Recommended Work
 
-Next task should stabilize the live blackjack socket smoke path.
+Next task should continue the horse racing backend in small slices.
 
 Recommended order:
 
-- Fix the shared package dev-runtime barrel issue so `apps/game-server` can import `@bk-games/shared` in watch mode without looking for source `.js` files.
-- Run a live end-to-end Socket.IO smoke for `/blackjack`: token request, blackjack namespace connect, join table `main`, take/leave seat, bet, player actions, private wallet updates, `ROUND_SETTLED`, and `ROUND_RESET`.
-- Add reconnect/resume tests for joined table state, private wallet rooms, and duplicate seat prevention.
-- Replace the current in-memory betting timer with a DB-backed or worker-backed scheduler if multiple game-server instances are introduced.
+- Implement racing wallet transaction helpers for place-bet, settle, and cancel/refund using `applyWalletMutation`.
+- Add seed data for the main racing table and fictional horse display records.
+- Apply the racing migration locally before the first DB-backed racing smoke test.
+- Add the NestJS racing module/gateway after transaction helpers are verified.
+- Add shared racing socket contracts only when the gateway slice begins, so frontend and backend stay aligned.
 
 The local DB is migrated, Better Auth wiring has been verified, authenticated users are bootstrapped into `user_profiles` and `wallets`, wallet mutations now go through `applyWalletMutation`, daily rewards go through `claimDailyReward`, game-server sockets can verify short-lived game tokens from `POST /api/game-token`, game-server runtime tables load limits/rules from `blackjack_tables`, initial blackjack bets, double-down bets, split bets, and insurance bets now debit wallets through idempotent DB transactions, HIT/STAND/DOUBLE/SPLIT/SURRENDER/INSURANCE/EVEN_MONEY rounds now settle through wallet-backed ledgers, and `packages/game-engine` now has pure blackjack card/hand/action helpers. The web app now has a `/blackjack` table page linked from `/lobby` that requests a game token, connects to the blackjack namespace, joins `main`, renders table state/events/timer/seats/dealer/hands/actions, sends command-id protected wager actions, and updates local wallet display from private `wallet:updated`.
 
@@ -527,3 +548,7 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 - Blackjack table rules now include `allow_ten_value_split`, defaulting to true. Runtime table config and DB round rule snapshots carry this setting, so `availableActions` can expose `SPLIT` for mixed ten-value pairs such as `10/J`, `J/Q`, or `K/Q` when split is otherwise allowed. Impact: frontend does not need card-rank split logic; render the action buttons from backend `availableActions`.
 - Natural blackjack payout timing was corrected for no-player-turn rounds. If every active hand is a natural blackjack and the dealer is not blackjack after the initial deal/peek/insurance decision path, the runtime now moves straight to `SETTLING` without dealer draw steps and reveals the dealer hole card in the settlement state. Impact: frontend should be ready for `CARD_DEALT`/`ROUND_STARTED` updates whose `state.phase` is already `SETTLING`, then process the usual `ROUND_SETTLED` wallet update/reset flow.
 - Blackjack lobby table summary API was added on the game-server: `GET /blackjack/tables` returns `{ tables }` with `tableId`, `status`, `phase`, `maxSeats`, `occupiedSeats`, `availableSeats`, `occupiedSeatNos`, `availableSeatNos`, betting limits, version, and updatedAt. Impact: frontend lobby can fetch `${NEXT_PUBLIC_GAME_SERVER_URL}/tables` because the existing env points at `http://localhost:4000/blackjack`; it should stop hardcoding lobby seat availability.
+
+### 2026-06-13
+
+- Horse racing DB schema and Drizzle migration were added. Impact: backend racing work can now build DB-backed table/race/entry/bet/tick/action flows, but the migration is not applied locally yet in this slice.

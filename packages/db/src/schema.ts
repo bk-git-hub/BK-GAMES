@@ -4,12 +4,14 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -265,7 +267,7 @@ export const pointLedgers = pgTable(
     ),
     check(
       "point_ledgers_game_type_check",
-      sql`${table.gameType} is null or ${table.gameType} in ('BLACKJACK', 'BACCARAT')`,
+      sql`${table.gameType} is null or ${table.gameType} in ('BLACKJACK', 'BACCARAT', 'RACING')`,
     ),
     check(
       "point_ledgers_type_check",
@@ -878,6 +880,402 @@ export const blackjackActions = pgTable(
         'SETTLE',
         'CANCEL'
       )`,
+    ),
+  ],
+);
+
+export const racingTables = pgTable(
+  "racing_tables",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    status: text("status").default("OPEN").notNull(),
+    fieldSize: integer("field_size").default(6).notNull(),
+    minBet: pointAmount("min_bet").notNull(),
+    maxBet: pointAmount("max_bet").notNull(),
+    payoutRateBps: integer("payout_rate_bps").default(9000).notNull(),
+    bettingTimeoutSeconds: integer("betting_timeout_seconds")
+      .default(20)
+      .notNull(),
+    tickIntervalMs: integer("tick_interval_ms").default(100).notNull(),
+    raceDistanceM: integer("race_distance_m").default(1200).notNull(),
+    roundEndDelaySeconds: integer("round_end_delay_seconds")
+      .default(8)
+      .notNull(),
+    rules: jsonb("rules")
+      .$type<JsonObject>()
+      .default(emptyJsonObject)
+      .notNull(),
+    createdAt: now(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("racing_tables_code_unique").on(table.code),
+    index("racing_tables_status_idx").on(table.status),
+    check(
+      "racing_tables_code_not_empty",
+      sql`length(trim(${table.code})) > 0`,
+    ),
+    check(
+      "racing_tables_status_check",
+      sql`${table.status} in ('OPEN', 'MAINTENANCE', 'CLOSED')`,
+    ),
+    check(
+      "racing_tables_field_size_check",
+      sql`${table.fieldSize} between 6 and 8`,
+    ),
+    check("racing_tables_min_bet_positive", sql`${table.minBet} > 0`),
+    check(
+      "racing_tables_max_bet_check",
+      sql`${table.maxBet} >= ${table.minBet}`,
+    ),
+    check(
+      "racing_tables_payout_rate_check",
+      sql`${table.payoutRateBps} between 1 and 10000`,
+    ),
+    check(
+      "racing_tables_betting_timeout_check",
+      sql`${table.bettingTimeoutSeconds} > 0`,
+    ),
+    check(
+      "racing_tables_tick_interval_check",
+      sql`${table.tickIntervalMs} > 0`,
+    ),
+    check(
+      "racing_tables_distance_check",
+      sql`${table.raceDistanceM} > 0`,
+    ),
+    check(
+      "racing_tables_round_end_delay_check",
+      sql`${table.roundEndDelaySeconds} >= 0`,
+    ),
+  ],
+);
+
+export const racingHorses = pgTable(
+  "racing_horses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    silkColor: text("silk_color").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: now(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index("racing_horses_active_idx").on(table.isActive),
+    check(
+      "racing_horses_name_not_empty",
+      sql`length(trim(${table.name})) > 0`,
+    ),
+    check(
+      "racing_horses_silk_color_not_empty",
+      sql`length(trim(${table.silkColor})) > 0`,
+    ),
+  ],
+);
+
+export const racingRaces = pgTable(
+  "racing_races",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tableId: uuid("table_id")
+      .notNull()
+      .references(() => racingTables.id),
+    raceNo: integer("race_no").notNull(),
+    status: text("status").default("BETTING").notNull(),
+    seed: text("seed"),
+    seedLockedAt: timestamp("seed_locked_at", { withTimezone: true }),
+    distanceM: integer("distance_m").notNull(),
+    fieldSize: integer("field_size").notNull(),
+    phase: text("phase").default("BETTING").notNull(),
+    bettingOpensAt: timestamp("betting_opens_at", { withTimezone: true }),
+    bettingClosesAt: timestamp("betting_closes_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelReason: text("cancel_reason"),
+    resultOrder: jsonb("result_order")
+      .$type<string[]>()
+      .default(emptyJsonArray)
+      .notNull(),
+    runtimeSnapshot: jsonb("runtime_snapshot").$type<JsonObject>(),
+    createdAt: now(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique("racing_races_table_id_id_unique").on(table.tableId, table.id),
+    uniqueIndex("racing_races_table_race_no_unique").on(
+      table.tableId,
+      table.raceNo,
+    ),
+    index("racing_races_table_status_idx").on(table.tableId, table.status),
+    index("racing_races_table_phase_idx").on(table.tableId, table.phase),
+    check("racing_races_race_no_positive", sql`${table.raceNo} > 0`),
+    check(
+      "racing_races_status_check",
+      sql`${table.status} in (
+        'BETTING',
+        'LOCKING_BETS',
+        'RUNNING',
+        'FINISHING',
+        'SETTLING',
+        'SETTLED',
+        'ROUND_END',
+        'CANCELLED'
+      )`,
+    ),
+    check(
+      "racing_races_phase_check",
+      sql`${table.phase} in (
+        'BETTING',
+        'LOCKING_BETS',
+        'RUNNING',
+        'FINISHING',
+        'SETTLING',
+        'SETTLED',
+        'ROUND_END',
+        'CANCELLED'
+      )`,
+    ),
+    check(
+      "racing_races_seed_lock_check",
+      sql`(
+        (${table.seed} is null and ${table.seedLockedAt} is null) or
+        (${table.seed} is not null and ${table.seedLockedAt} is not null)
+      )`,
+    ),
+    check(
+      "racing_races_seed_after_betting_check",
+      sql`(
+        ${table.phase} <> 'BETTING' or
+        (${table.seed} is null and ${table.seedLockedAt} is null)
+      )`,
+    ),
+    check(
+      "racing_races_distance_positive",
+      sql`${table.distanceM} > 0`,
+    ),
+    check(
+      "racing_races_field_size_check",
+      sql`${table.fieldSize} between 6 and 8`,
+    ),
+  ],
+);
+
+export const racingRaceEntries = pgTable(
+  "racing_race_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    raceId: uuid("race_id")
+      .notNull()
+      .references(() => racingRaces.id),
+    horseId: uuid("horse_id")
+      .notNull()
+      .references(() => racingHorses.id),
+    number: integer("number").notNull(),
+    gateNo: integer("gate_no").notNull(),
+    lane: integer("lane").notNull(),
+    temporaryProfile: jsonb("temporary_profile").$type<JsonObject>(),
+    finalRank: integer("final_rank"),
+    finishedAtMs: integer("finished_at_ms"),
+    createdAt: now(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique("racing_entries_race_id_id_horse_id_unique").on(
+      table.raceId,
+      table.id,
+      table.horseId,
+    ),
+    uniqueIndex("racing_entries_race_horse_unique").on(
+      table.raceId,
+      table.horseId,
+    ),
+    uniqueIndex("racing_entries_race_number_unique").on(
+      table.raceId,
+      table.number,
+    ),
+    uniqueIndex("racing_entries_race_gate_unique").on(
+      table.raceId,
+      table.gateNo,
+    ),
+    index("racing_entries_race_id_idx").on(table.raceId),
+    index("racing_entries_horse_id_idx").on(table.horseId),
+    check("racing_entries_number_positive", sql`${table.number} > 0`),
+    check("racing_entries_gate_no_positive", sql`${table.gateNo} > 0`),
+    check("racing_entries_lane_positive", sql`${table.lane} > 0`),
+    check(
+      "racing_entries_final_rank_positive",
+      sql`${table.finalRank} is null or ${table.finalRank} > 0`,
+    ),
+    check(
+      "racing_entries_finished_at_non_negative",
+      sql`${table.finishedAtMs} is null or ${table.finishedAtMs} >= 0`,
+    ),
+  ],
+);
+
+export const racingBets = pgTable(
+  "racing_bets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    raceId: uuid("race_id").notNull(),
+    tableId: uuid("table_id")
+      .notNull()
+      .references(() => racingTables.id),
+    raceEntryId: uuid("race_entry_id").notNull(),
+    horseId: uuid("horse_id")
+      .notNull()
+      .references(() => racingHorses.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id),
+    betType: text("bet_type").default("WIN").notNull(),
+    status: text("status").default("PLACED").notNull(),
+    amount: pointAmount("amount").notNull(),
+    oddsNumerator: integer("odds_numerator").notNull(),
+    oddsDenominator: integer("odds_denominator").notNull(),
+    payoutAmount: pointAmount("payout_amount")
+      .default(sql`0`)
+      .notNull(),
+    netAmount: pointAmount("net_amount")
+      .default(sql`0`)
+      .notNull(),
+    placedLedgerId: uuid("placed_ledger_id")
+      .notNull()
+      .references(() => pointLedgers.id),
+    settlementLedgerId: uuid("settlement_ledger_id").references(
+      () => pointLedgers.id,
+    ),
+    commandId: text("command_id").notNull(),
+    createdAt: now(),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    foreignKey({
+      name: "racing_bets_race_table_fk",
+      columns: [table.tableId, table.raceId],
+      foreignColumns: [racingRaces.tableId, racingRaces.id],
+    }),
+    foreignKey({
+      name: "racing_bets_race_entry_fk",
+      columns: [table.raceId, table.raceEntryId, table.horseId],
+      foreignColumns: [
+        racingRaceEntries.raceId,
+        racingRaceEntries.id,
+        racingRaceEntries.horseId,
+      ],
+    }),
+    uniqueIndex("racing_bets_race_user_unique").on(table.raceId, table.userId),
+    uniqueIndex("racing_bets_race_user_command_unique").on(
+      table.raceId,
+      table.userId,
+      table.commandId,
+    ),
+    uniqueIndex("racing_bets_placed_ledger_unique").on(table.placedLedgerId),
+    uniqueIndex("racing_bets_settlement_ledger_unique")
+      .on(table.settlementLedgerId)
+      .where(sql`${table.settlementLedgerId} is not null`),
+    index("racing_bets_race_id_idx").on(table.raceId),
+    index("racing_bets_table_id_idx").on(table.tableId),
+    index("racing_bets_race_entry_id_idx").on(table.raceEntryId),
+    index("racing_bets_user_id_idx").on(table.userId),
+    check("racing_bets_amount_positive", sql`${table.amount} > 0`),
+    check(
+      "racing_bets_type_check",
+      sql`${table.betType} in ('WIN')`,
+    ),
+    check(
+      "racing_bets_status_check",
+      sql`${table.status} in ('PLACED', 'WON', 'LOST', 'CANCELLED')`,
+    ),
+    check(
+      "racing_bets_odds_positive",
+      sql`${table.oddsNumerator} > 0 and ${table.oddsDenominator} > 0`,
+    ),
+    check(
+      "racing_bets_payout_non_negative",
+      sql`${table.payoutAmount} >= 0`,
+    ),
+  ],
+);
+
+export const racingTicks = pgTable(
+  "racing_ticks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    raceId: uuid("race_id")
+      .notNull()
+      .references(() => racingRaces.id),
+    tick: integer("tick").notNull(),
+    elapsedMs: integer("elapsed_ms").notNull(),
+    state: jsonb("state").$type<JsonObject>().notNull(),
+    createdAt: now(),
+  },
+  (table) => [
+    uniqueIndex("racing_ticks_race_tick_unique").on(table.raceId, table.tick),
+    index("racing_ticks_race_id_idx").on(table.raceId),
+    check("racing_ticks_tick_non_negative", sql`${table.tick} >= 0`),
+    check("racing_ticks_elapsed_non_negative", sql`${table.elapsedMs} >= 0`),
+  ],
+);
+
+export const racingActions = pgTable(
+  "racing_actions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    raceId: uuid("race_id")
+      .notNull()
+      .references(() => racingRaces.id),
+    betId: uuid("bet_id").references(() => racingBets.id),
+    userId: text("user_id").references(() => authUsers.id),
+    actorType: text("actor_type").notNull(),
+    actionType: text("action_type").notNull(),
+    actionSequence: integer("action_sequence").notNull(),
+    commandId: text("command_id"),
+    amount: pointAmount("amount"),
+    payload: jsonb("payload")
+      .$type<JsonObject>()
+      .default(emptyJsonObject)
+      .notNull(),
+    createdAt: now(),
+  },
+  (table) => [
+    uniqueIndex("racing_actions_race_sequence_unique").on(
+      table.raceId,
+      table.actionSequence,
+    ),
+    uniqueIndex("racing_actions_race_command_unique")
+      .on(table.raceId, table.commandId)
+      .where(sql`${table.commandId} is not null`),
+    index("racing_actions_race_id_idx").on(table.raceId),
+    index("racing_actions_bet_id_idx").on(table.betId),
+    index("racing_actions_user_id_idx").on(table.userId),
+    check(
+      "racing_actions_sequence_positive",
+      sql`${table.actionSequence} > 0`,
+    ),
+    check(
+      "racing_actions_actor_type_check",
+      sql`${table.actorType} in ('PLAYER', 'SYSTEM')`,
+    ),
+    check(
+      "racing_actions_action_type_check",
+      sql`${table.actionType} in (
+        'PLACE_BET',
+        'RACE_START',
+        'FINISH',
+        'SETTLE',
+        'CANCEL'
+      )`,
+    ),
+    check(
+      "racing_actions_amount_non_negative",
+      sql`${table.amount} is null or ${table.amount} >= 0`,
     ),
   ],
 );

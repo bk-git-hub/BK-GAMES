@@ -4,7 +4,7 @@ import { db } from "./client.js";
 import { pointLedgers, wallets, type JsonObject } from "./schema.js";
 
 export type WalletMutationCategory = "GAME" | "REWARD" | "ADMIN" | "SYSTEM";
-export type WalletMutationGameType = "BLACKJACK" | "BACCARAT";
+export type WalletMutationGameType = "BLACKJACK" | "BACCARAT" | "RACING";
 export type WalletMutationLedgerType =
   | "ADMIN_ADJUST"
   | "DAILY_REWARD"

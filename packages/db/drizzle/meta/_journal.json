@@ -22,6 +22,13 @@
       "when": 1780874204075,
       "tag": "0002_fancy_newton_destine",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781310832754,
+      "tag": "0003_stale_the_executioner",
+      "breakpoints": true
     }
   ]
 }

@@ -54,10 +54,10 @@
   },
   "palette": {
     "horseCoat": "#7b3f24",
-    "silksPrimary": "#174ea6",
-    "silksSecondary": "#f1d66b",
+    "silksPrimary": "#e41834",
+    "silksSecondary": "#00c2ff",
     "saddlecloth": "#ffffff",
-    "saddleclothNumber": "#173a78"
+    "saddleclothNumber": "#e41834"
   },
   "usageNotes": [
     "Transparent sheet with no baked track or background; place on lane groundY/anchor for live-race movement.",

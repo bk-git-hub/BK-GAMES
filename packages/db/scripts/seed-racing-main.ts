@@ -14,6 +14,9 @@ async function main() {
           maxBet: seed.table.maxBet.toString(),
           payoutRateBps: seed.table.payoutRateBps,
           bettingTimeoutSeconds: seed.table.bettingTimeoutSeconds,
+          raceIntervalSeconds: seed.table.raceIntervalSeconds,
+          bettingCloseBeforeStartSeconds:
+            seed.table.bettingCloseBeforeStartSeconds,
           tickIntervalMs: seed.table.tickIntervalMs,
           raceDistanceM: seed.table.raceDistanceM,
           roundEndDelaySeconds: seed.table.roundEndDelaySeconds,

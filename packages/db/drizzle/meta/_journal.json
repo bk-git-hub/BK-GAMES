@@ -36,6 +36,13 @@
       "when": 1781312918211,
       "tag": "0004_same_jean_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781325695814,
+      "tag": "0005_dazzling_namora",
+      "breakpoints": true
     }
   ]
 }

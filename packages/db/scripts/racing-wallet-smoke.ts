@@ -6,17 +6,19 @@ import {
   cancelRacingRace,
   db,
   ensureUserGameAccount,
-  placeRacingWinBet,
+  placeRacingBet,
   pointLedgers,
   pool,
   racingActions,
   racingBets,
+  racingBetSelections,
   racingHorses,
   racingRaceEntries,
   racingRaces,
   racingTables,
   racingTicks,
   settleRacingRace,
+  type SettleRacingBetResult,
   type SettleRacingRaceInput,
   userProfiles,
   wallets,
@@ -50,6 +52,9 @@ async function cleanup() {
     ];
 
     await db.delete(racingActions).where(eq(racingActions.raceId, raceId));
+    await db
+      .delete(racingBetSelections)
+      .where(eq(racingBetSelections.raceId, raceId));
     await db.delete(racingBets).where(eq(racingBets.raceId, raceId));
     await db.delete(racingTicks).where(eq(racingTicks.raceId, raceId));
     await db
@@ -75,6 +80,9 @@ async function createRace(
   horses: Array<typeof racingHorses.$inferSelect>,
   raceNo: number,
 ) {
+  const bettingOpensAt = new Date();
+  const scheduledStartAt = new Date(Date.now() + 180_000);
+  const bettingClosesAt = new Date(scheduledStartAt.getTime() - 30_000);
   const [race] = await db
     .insert(racingRaces)
     .values({
@@ -84,8 +92,9 @@ async function createRace(
       phase: "BETTING",
       distanceM: 1200,
       fieldSize: horses.length,
-      bettingOpensAt: new Date(),
-      bettingClosesAt: new Date(Date.now() + 20_000),
+      scheduledStartAt,
+      bettingOpensAt,
+      bettingClosesAt,
     })
     .returning();
 
@@ -122,6 +131,19 @@ function getErrorCode(error: unknown) {
     : null;
 }
 
+function findSettledBet(
+  bets: SettleRacingBetResult[],
+  betId: string,
+): SettleRacingBetResult {
+  const bet = bets.find((candidate) => candidate.betId === betId);
+
+  if (!bet) {
+    throw new Error(`Missing settled bet ${betId}.`);
+  }
+
+  return bet;
+}
+
 try {
   await cleanup();
 
@@ -142,9 +164,12 @@ try {
       code: tableCode,
       name: "Racing Wallet Smoke Table",
       fieldSize: 6,
-      minBet: 100n,
-      maxBet: 6_000n,
+      minBet: BigInt(100),
+      maxBet: BigInt(6000),
       payoutRateBps: 9_000,
+      bettingTimeoutSeconds: 150,
+      raceIntervalSeconds: 180,
+      bettingCloseBeforeStartSeconds: 30,
     })
     .returning();
 
@@ -172,44 +197,70 @@ try {
     userId,
     category: "ADMIN",
     type: "ADMIN_ADJUST",
-    delta: 10_000n,
+    delta: BigInt(10_000),
     referenceType: "RACING_WALLET_SMOKE",
     referenceId: `grant:${userId}`,
     idempotencyKey: `racing-wallet-smoke:grant:${userId}`,
   });
 
   const firstRace = await createRace(table.id, horses, 1);
-  const firstBetInput = {
+  const [entryOne, entryTwo] = firstRace.entries;
+
+  if (!entryOne || !entryTwo) {
+    throw new Error("Racing smoke requires at least two entries.");
+  }
+
+  const winBetInput = {
     raceId: firstRace.race.id,
-    raceEntryId: firstRace.entries[0]!.id,
     userId,
-    amount: 1_000n,
-    commandId: "command-1",
+    amount: BigInt(1_000),
+    commandId: "command-win",
+    betType: "WIN" as const,
+    selections: [entryOne.id],
   };
-  const firstBet = await placeRacingWinBet(firstBetInput);
-  const firstBetRetry = await placeRacingWinBet(firstBetInput);
+  const winBet = await placeRacingBet(winBetInput);
+  const winBetRetry = await placeRacingBet(winBetInput);
 
   let idempotencyConflictCode: string | null = null;
 
   try {
-    await placeRacingWinBet({
-      ...firstBetInput,
-      amount: 1_100n,
+    await placeRacingBet({
+      ...winBetInput,
+      amount: BigInt(1_100),
     });
   } catch (error) {
     idempotencyConflictCode = getErrorCode(error);
   }
 
-  let alreadyPlacedCode: string | null = null;
-
-  try {
-    await placeRacingWinBet({
-      ...firstBetInput,
-      commandId: "command-2",
-    });
-  } catch (error) {
-    alreadyPlacedCode = getErrorCode(error);
-  }
+  const quinellaBetInput = {
+    raceId: firstRace.race.id,
+    userId,
+    amount: BigInt(100),
+    commandId: "command-quinella",
+    betType: "QUINELLA" as const,
+    selections: [entryTwo.id, entryOne.id],
+  };
+  const quinellaBet = await placeRacingBet(quinellaBetInput);
+  const quinellaBetRetry = await placeRacingBet({
+    ...quinellaBetInput,
+    selections: [entryOne.id, entryTwo.id],
+  });
+  const exactaBet = await placeRacingBet({
+    raceId: firstRace.race.id,
+    userId,
+    amount: BigInt(100),
+    commandId: "command-exacta",
+    betType: "EXACTA",
+    selections: [entryOne.id, entryTwo.id],
+  });
+  const losingExactaBet = await placeRacingBet({
+    raceId: firstRace.race.id,
+    userId,
+    amount: BigInt(100),
+    commandId: "command-exacta-lose",
+    betType: "EXACTA",
+    selections: [entryTwo.id, entryOne.id],
+  });
 
   await db
     .update(racingRaces)
@@ -232,14 +283,26 @@ try {
 
   const settlement = await settleRacingRace(settlementInput);
   const settlementRetry = await settleRacingRace(settlementInput);
+  const settledWinBet = findSettledBet(settlement.bets, winBet.bet.id);
+  const settledQuinellaBet = findSettledBet(
+    settlement.bets,
+    quinellaBet.bet.id,
+  );
+  const settledExactaBet = findSettledBet(settlement.bets, exactaBet.bet.id);
+  const settledLosingExactaBet = findSettledBet(
+    settlement.bets,
+    losingExactaBet.bet.id,
+  );
+  const retriedWinBet = findSettledBet(settlementRetry.bets, winBet.bet.id);
 
   const secondRace = await createRace(table.id, horses, 2);
-  const secondBet = await placeRacingWinBet({
+  const cancelBet = await placeRacingBet({
     raceId: secondRace.race.id,
-    raceEntryId: secondRace.entries[1]!.id,
     userId,
-    amount: 500n,
-    commandId: "command-3",
+    amount: BigInt(500),
+    commandId: "command-cancel-quinella",
+    betType: "QUINELLA",
+    selections: [secondRace.entries[0]!.id, secondRace.entries[1]!.id],
   });
   const cancellation = await cancelRacingRace({
     raceId: secondRace.race.id,
@@ -263,18 +326,26 @@ try {
   const summary = {
     userId,
     tableCode,
-    firstBetBalance: firstBet.walletMutation.wallet.balance.toString(),
-    firstBetRetryIdempotent: firstBetRetry.walletMutation.idempotent,
-    sameBet: firstBet.bet.id === firstBetRetry.bet.id,
+    winBetBalance: winBet.walletMutation.wallet.balance.toString(),
+    winBetRetryIdempotent: winBetRetry.walletMutation.idempotent,
+    sameWinBet: winBet.bet.id === winBetRetry.bet.id,
     idempotencyConflictCode,
-    alreadyPlacedCode,
-    lockedOddsNumerator: firstBet.bet.oddsNumerator,
-    lockedOddsDenominator: firstBet.bet.oddsDenominator,
-    settlementPayout: settlement.bets[0]?.payoutAmount.toString(),
-    settlementNet: settlement.bets[0]?.netAmount.toString(),
-    settlementRetryIdempotent:
-      settlementRetry.bets[0]?.walletMutation?.idempotent,
-    secondBetBalance: secondBet.walletMutation.wallet.balance.toString(),
+    quinellaRetryIdempotent: quinellaBetRetry.walletMutation.idempotent,
+    sameQuinellaBet: quinellaBet.bet.id === quinellaBetRetry.bet.id,
+    winOddsNumerator: winBet.bet.oddsNumerator,
+    quinellaOddsNumerator: quinellaBet.bet.oddsNumerator,
+    exactaOddsNumerator: exactaBet.bet.oddsNumerator,
+    lockedOddsDenominator: winBet.bet.oddsDenominator,
+    winPayout: settledWinBet.payoutAmount.toString(),
+    winNet: settledWinBet.netAmount.toString(),
+    quinellaPayout: settledQuinellaBet.payoutAmount.toString(),
+    quinellaNet: settledQuinellaBet.netAmount.toString(),
+    exactaPayout: settledExactaBet.payoutAmount.toString(),
+    exactaNet: settledExactaBet.netAmount.toString(),
+    losingExactaOutcome: settledLosingExactaBet.outcome,
+    losingExactaPayout: settledLosingExactaBet.payoutAmount.toString(),
+    settlementRetryIdempotent: retriedWinBet.walletMutation?.idempotent,
+    cancelBetBalance: cancelBet.walletMutation.wallet.balance.toString(),
     cancellationRefund: cancellation.bets[0]?.refundAmount.toString(),
     cancellationRetryIdempotent:
       cancellationRetry.bets[0]?.walletMutation.idempotent,
@@ -283,21 +354,30 @@ try {
   };
 
   if (
-    summary.firstBetBalance !== "9000" ||
-    !summary.firstBetRetryIdempotent ||
-    !summary.sameBet ||
+    summary.winBetBalance !== "9000" ||
+    !summary.winBetRetryIdempotent ||
+    !summary.sameWinBet ||
     summary.idempotencyConflictCode !== "IDEMPOTENCY_CONFLICT" ||
-    summary.alreadyPlacedCode !== "BET_ALREADY_PLACED" ||
-    summary.lockedOddsNumerator !== 54_000 ||
+    !summary.quinellaRetryIdempotent ||
+    !summary.sameQuinellaBet ||
+    summary.winOddsNumerator !== 54_000 ||
+    summary.quinellaOddsNumerator !== 135_000 ||
+    summary.exactaOddsNumerator !== 270_000 ||
     summary.lockedOddsDenominator !== 10_000 ||
-    summary.settlementPayout !== "5400" ||
-    summary.settlementNet !== "4400" ||
+    summary.winPayout !== "5400" ||
+    summary.winNet !== "4400" ||
+    summary.quinellaPayout !== "1350" ||
+    summary.quinellaNet !== "1250" ||
+    summary.exactaPayout !== "2700" ||
+    summary.exactaNet !== "2600" ||
+    summary.losingExactaOutcome !== "LOSE" ||
+    summary.losingExactaPayout !== "0" ||
     !summary.settlementRetryIdempotent ||
-    summary.secondBetBalance !== "13900" ||
+    summary.cancelBetBalance !== "17650" ||
     summary.cancellationRefund !== "500" ||
     !summary.cancellationRetryIdempotent ||
-    summary.finalBalance !== "14400" ||
-    summary.ledgerCount !== 5
+    summary.finalBalance !== "18150" ||
+    summary.ledgerCount !== 10
   ) {
     throw new Error(
       `Unexpected racing wallet smoke result: ${JSON.stringify(summary)}`,

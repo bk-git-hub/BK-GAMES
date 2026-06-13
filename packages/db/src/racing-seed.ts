@@ -38,12 +38,29 @@ export type MainRacingSeedResult = {
 };
 
 const mainRacingRules = {
-  betTypes: ["WIN"],
+  betTypes: ["WIN", "QUINELLA", "EXACTA"],
   equalBaseStats: true,
   fixedOdds: true,
   oddsDenominator: 10_000,
+  raceIntervalSeconds: 180,
+  bettingCloseBeforeStartSeconds: 30,
   cancellation: "SERVER_ONLY",
 } satisfies JsonObject;
+
+const mainRacingTableValues = {
+  name: "Main Racing Table",
+  fieldSize: MAIN_RACING_HORSES.length,
+  minBet: BigInt(100),
+  maxBet: BigInt(6000),
+  payoutRateBps: 9_000,
+  bettingTimeoutSeconds: 150,
+  raceIntervalSeconds: 180,
+  bettingCloseBeforeStartSeconds: 30,
+  tickIntervalMs: 100,
+  raceDistanceM: 1200,
+  roundEndDelaySeconds: 8,
+  rules: mainRacingRules,
+};
 
 export async function ensureMainRacingSeed(): Promise<MainRacingSeedResult> {
   return db.transaction(async (tx) => {
@@ -71,23 +88,27 @@ async function ensureMainRacingTable(
     .limit(1);
 
   if (existing) {
-    return existing;
+    const [updated] = await tx
+      .update(racingTables)
+      .set({
+        ...mainRacingTableValues,
+        updatedAt: new Date(),
+      })
+      .where(eq(racingTables.id, existing.id))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Failed to update the main racing table.");
+    }
+
+    return updated;
   }
 
   const [table] = await tx
     .insert(racingTables)
     .values({
       code: MAIN_RACING_TABLE_CODE,
-      name: "Main Racing Table",
-      fieldSize: MAIN_RACING_HORSES.length,
-      minBet: BigInt(100),
-      maxBet: BigInt(6000),
-      payoutRateBps: 9_000,
-      bettingTimeoutSeconds: 20,
-      tickIntervalMs: 100,
-      raceDistanceM: 1200,
-      roundEndDelaySeconds: 8,
-      rules: mainRacingRules,
+      ...mainRacingTableValues,
     })
     .onConflictDoNothing({ target: racingTables.code })
     .returning();

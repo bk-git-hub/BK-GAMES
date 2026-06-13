@@ -1,9 +1,10 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "./client.js";
 import {
   racingActions,
   racingBets,
+  racingBetSelections,
   racingRaceEntries,
   racingRaces,
   type JsonObject,
@@ -15,6 +16,9 @@ import {
   type WalletMutationTransaction,
 } from "./wallet-transactions.js";
 
+export type RacingBetType = "WIN" | "QUINELLA" | "EXACTA";
+
+const racingBetTypes = new Set<RacingBetType>(["WIN", "QUINELLA", "EXACTA"]);
 const zero = BigInt(0);
 const racingOddsDenominator = 10_000;
 
@@ -55,6 +59,15 @@ export class RacingSettlementError extends Error {
   }
 }
 
+export type PlaceRacingBetInput = {
+  raceId: string;
+  userId: string;
+  amount: bigint;
+  commandId: string;
+  betType: RacingBetType;
+  selections: string[];
+};
+
 export type PlaceRacingWinBetInput = {
   raceId: string;
   raceEntryId: string;
@@ -63,12 +76,16 @@ export type PlaceRacingWinBetInput = {
   commandId: string;
 };
 
-export type PlaceRacingWinBetResult = {
+export type PlaceRacingBetResult = {
   race: RacingRaceSnapshot;
   table: RacingTableSnapshot;
-  raceEntry: RacingRaceEntrySnapshot;
   bet: typeof racingBets.$inferSelect;
+  selections: RacingBetSelectionSnapshot[];
   walletMutation: WalletMutationResult;
+};
+
+export type PlaceRacingWinBetResult = PlaceRacingBetResult & {
+  raceEntry: RacingRaceEntrySnapshot;
 };
 
 export type SettleRacingRaceInput = {
@@ -91,8 +108,8 @@ export type SettleRacingRaceResult = {
 export type SettleRacingBetResult = {
   betId: string;
   userId: string;
-  raceEntryId: string;
-  horseId: string;
+  betType: RacingBetType;
+  selections: RacingBetSelectionSnapshot[];
   outcome: "WIN" | "LOSE";
   payoutAmount: bigint;
   netAmount: bigint;
@@ -112,7 +129,8 @@ export type CancelRacingRaceResult = {
 export type CancelRacingBetResult = {
   betId: string;
   userId: string;
-  raceEntryId: string;
+  betType: RacingBetType;
+  selections: RacingBetSelectionSnapshot[];
   refundAmount: bigint;
   walletMutation: WalletMutationResult;
 };
@@ -124,6 +142,9 @@ export type RacingTableSnapshot = {
   minBet: bigint;
   maxBet: bigint;
   payoutRateBps: number;
+  bettingTimeoutSeconds: number;
+  raceIntervalSeconds: number;
+  bettingCloseBeforeStartSeconds: number;
 };
 
 export type RacingRaceSnapshot = {
@@ -132,6 +153,8 @@ export type RacingRaceSnapshot = {
   status: string;
   phase: string;
   fieldSize: number;
+  scheduledStartAt: Date | null;
+  bettingClosesAt: Date | null;
 };
 
 export type RacingRaceEntrySnapshot = {
@@ -141,10 +164,16 @@ export type RacingRaceEntrySnapshot = {
   number: number;
 };
 
+export type RacingBetSelectionSnapshot = {
+  raceEntryId: string;
+  horseId: string;
+  selectionOrder: number;
+  expectedRank: number | null;
+};
+
 type LockedRacingBettingContext = {
   table: RacingTableSnapshot;
   race: RacingRaceSnapshot;
-  raceEntry: RacingRaceEntrySnapshot;
 };
 
 type LockedRacingBettingContextRow = {
@@ -154,13 +183,15 @@ type LockedRacingBettingContextRow = {
   minBet: bigint | string;
   maxBet: bigint | string;
   payoutRateBps: number;
+  bettingTimeoutSeconds: number;
+  raceIntervalSeconds: number;
+  bettingCloseBeforeStartSeconds: number;
   raceId: string;
   raceStatus: string;
   racePhase: string;
   fieldSize: number;
-  raceEntryId: string;
-  horseId: string;
-  number: number;
+  scheduledStartAt: Date | null;
+  bettingClosesAt: Date | null;
 };
 
 type LockedRacingRaceRow = {
@@ -172,45 +203,87 @@ type LockedRacingRaceRow = {
   resultOrder: string[] | null;
 };
 
-export async function placeRacingWinBet(
-  input: PlaceRacingWinBetInput,
-): Promise<PlaceRacingWinBetResult> {
-  const normalizedInput = normalizePlaceRacingWinBetInput(input);
+export async function placeRacingBet(
+  input: PlaceRacingBetInput,
+): Promise<PlaceRacingBetResult> {
+  const normalizedInput = normalizePlaceRacingBetInput(input);
 
   return db.transaction((tx) =>
-    placeRacingWinBetInTransaction(tx, normalizedInput),
+    placeRacingBetInTransaction(tx, normalizedInput),
   );
 }
 
-export async function placeRacingWinBetInTransaction(
-  tx: WalletMutationTransaction,
+export async function placeRacingWinBet(
   input: PlaceRacingWinBetInput,
 ): Promise<PlaceRacingWinBetResult> {
-  const context = await lockRacingBettingContext(
+  const result = await placeRacingBet({
+    raceId: input.raceId,
+    userId: input.userId,
+    amount: input.amount,
+    commandId: input.commandId,
+    betType: "WIN",
+    selections: [input.raceEntryId],
+  });
+  const selection = result.selections[0];
+
+  if (!selection) {
+    throw new RacingBettingError(
+      "INVALID_BET",
+      "Win bet did not return a selected race entry.",
+    );
+  }
+
+  return {
+    ...result,
+    raceEntry: {
+      id: selection.raceEntryId,
+      raceId: result.race.id,
+      horseId: selection.horseId,
+      number: 1,
+    },
+  };
+}
+
+export async function placeRacingBetInTransaction(
+  tx: WalletMutationTransaction,
+  input: PlaceRacingBetInput,
+): Promise<PlaceRacingBetResult> {
+  const context = await lockRacingBettingContext(tx, input.raceId);
+
+  assertRaceAcceptsBets(context, new Date());
+
+  const entries = await findSelectedRaceEntries(
     tx,
-    input.raceId,
-    input.raceEntryId,
+    context.race.id,
+    input.selections,
   );
-
-  assertRaceAcceptsBets(context);
-
-  const existingBet = await findRacingBetByRaceAndUser(
+  const selections = normalizeBetSelections(input.betType, input.selections, entries);
+  const oddsNumerator = calculateOddsNumerator(context, input.betType);
+  const existingBet = await findRacingBetByCommand(
     tx,
     input.raceId,
     input.userId,
+    input.commandId,
   );
 
   if (existingBet) {
-    assertExistingRacingBetMatches(existingBet, context, input);
+    await assertExistingRacingBetMatches(
+      tx,
+      existingBet,
+      input,
+      context,
+      selections,
+      oddsNumerator,
+    );
 
     return {
       race: context.race,
       table: context.table,
-      raceEntry: context.raceEntry,
       bet: existingBet,
+      selections: await findRacingBetSelectionsByBetId(tx, existingBet.id),
       walletMutation: await applyWalletMutationInTransaction(
         tx,
-        buildBetWalletMutationInput(input, context),
+        buildBetWalletMutationInput(input, context, selections, oddsNumerator),
       ),
     };
   }
@@ -235,21 +308,29 @@ export async function placeRacingWinBetInTransaction(
     );
   }
 
-  const oddsNumerator = calculateOddsNumerator(context);
+  const primarySelection = selections[0];
+
+  if (!primarySelection) {
+    throw new RacingBettingError(
+      "INVALID_BET",
+      "At least one racing selection is required.",
+    );
+  }
+
   const walletMutation = await applyWalletMutationInTransaction(
     tx,
-    buildBetWalletMutationInput(input, context),
+    buildBetWalletMutationInput(input, context, selections, oddsNumerator),
   );
   const now = new Date();
-  const [bet] = await tx
+  const [insertedBet] = await tx
     .insert(racingBets)
     .values({
       raceId: context.race.id,
       tableId: context.table.id,
-      raceEntryId: context.raceEntry.id,
-      horseId: context.raceEntry.horseId,
+      raceEntryId: primarySelection.raceEntryId,
+      horseId: primarySelection.horseId,
       userId: input.userId,
-      betType: "WIN",
+      betType: input.betType,
       status: "PLACED",
       amount: input.amount,
       oddsNumerator,
@@ -261,27 +342,66 @@ export async function placeRacingWinBetInTransaction(
       createdAt: now,
       updatedAt: now,
     })
+    .onConflictDoNothing({
+      target: [racingBets.raceId, racingBets.userId, racingBets.commandId],
+    })
     .returning();
 
-  if (!bet) {
-    throw new RacingBettingError(
-      "INVALID_BET",
-      "Failed to insert racing bet.",
+  if (!insertedBet) {
+    const concurrentBet = await findRacingBetByCommand(
+      tx,
+      input.raceId,
+      input.userId,
+      input.commandId,
     );
+
+    if (!concurrentBet) {
+      throw new RacingBettingError(
+        "INVALID_BET",
+        "Failed to insert racing bet.",
+      );
+    }
+
+    await assertExistingRacingBetMatches(
+      tx,
+      concurrentBet,
+      input,
+      context,
+      selections,
+      oddsNumerator,
+    );
+
+    return {
+      race: context.race,
+      table: context.table,
+      bet: concurrentBet,
+      selections: await findRacingBetSelectionsByBetId(tx, concurrentBet.id),
+      walletMutation,
+    };
   }
+
+  await tx.insert(racingBetSelections).values(
+    selections.map((selection) => ({
+      betId: insertedBet.id,
+      raceId: context.race.id,
+      raceEntryId: selection.raceEntryId,
+      horseId: selection.horseId,
+      selectionOrder: selection.selectionOrder,
+      expectedRank: selection.expectedRank,
+    })),
+  );
 
   await insertRacingAction(tx, {
     raceId: context.race.id,
-    betId: bet.id,
+    betId: insertedBet.id,
     userId: input.userId,
     actorType: "PLAYER",
     actionType: "PLACE_BET",
     commandId: input.commandId,
     amount: input.amount,
     payload: {
-      raceEntryId: context.raceEntry.id,
-      horseId: context.raceEntry.horseId,
-      horseNumber: context.raceEntry.number,
+      betType: input.betType,
+      selections,
       oddsNumerator,
       oddsDenominator: racingOddsDenominator,
     },
@@ -290,8 +410,8 @@ export async function placeRacingWinBetInTransaction(
   return {
     race: context.race,
     table: context.table,
-    raceEntry: context.raceEntry,
-    bet,
+    bet: insertedBet,
+    selections,
     walletMutation,
   };
 }
@@ -334,18 +454,8 @@ export async function settleRacingRaceInTransaction(
   assertSettlementEntriesMatchRace(input, entries);
 
   const settledAt = new Date();
-  const resultOrder = input.entries
-    .slice()
-    .sort((left, right) => left.finalRank - right.finalRank)
-    .map((entry) => entry.raceEntryId);
-  const winnerRaceEntryId = resultOrder[0];
-
-  if (!winnerRaceEntryId) {
-    throw new RacingSettlementError(
-      "INVALID_SETTLEMENT",
-      "Settlement result must include a winner.",
-    );
-  }
+  const resultOrder = getResultOrder(input);
+  const rankByRaceEntryId = getRankByRaceEntryId(input);
 
   for (const entryInput of input.entries) {
     await tx
@@ -359,6 +469,10 @@ export async function settleRacingRaceInTransaction(
   }
 
   const bets = await findRacingBetsByRace(tx, input.raceId);
+  const selectionsByBetId = await findRacingBetSelectionsByBetIds(
+    tx,
+    bets.map((bet) => bet.id),
+  );
   const betResults: SettleRacingBetResult[] = [];
 
   for (const bet of bets) {
@@ -369,7 +483,11 @@ export async function settleRacingRaceInTransaction(
       );
     }
 
-    const outcome = bet.raceEntryId === winnerRaceEntryId ? "WIN" : "LOSE";
+    const betType = parseRacingBetType(bet.betType);
+    const selections = selectionsByBetId.get(bet.id) ?? [];
+    const outcome = isWinningBet(betType, selections, rankByRaceEntryId)
+      ? "WIN"
+      : "LOSE";
     const payoutAmount =
       outcome === "WIN" ? calculateBetPayoutAmount(bet) : zero;
     const netAmount = payoutAmount - bet.amount;
@@ -377,7 +495,7 @@ export async function settleRacingRaceInTransaction(
       payoutAmount > zero
         ? await applyWalletMutationInTransaction(
             tx,
-            buildSettlementWalletMutationInput(bet, payoutAmount),
+            buildSettlementWalletMutationInput(bet, payoutAmount, selections),
           )
         : null;
 
@@ -402,8 +520,8 @@ export async function settleRacingRaceInTransaction(
       commandId: `settle:${bet.id}`,
       amount: payoutAmount,
       payload: {
-        raceEntryId: bet.raceEntryId,
-        horseId: bet.horseId,
+        betType,
+        selections,
         outcome,
         payoutAmount: payoutAmount.toString(),
         netAmount: netAmount.toString(),
@@ -413,8 +531,8 @@ export async function settleRacingRaceInTransaction(
     betResults.push({
       betId: bet.id,
       userId: bet.userId,
-      raceEntryId: bet.raceEntryId,
-      horseId: bet.horseId,
+      betType,
+      selections,
       outcome,
       payoutAmount,
       netAmount,
@@ -480,6 +598,10 @@ export async function cancelRacingRaceInTransaction(
 
   const cancelledAt = new Date();
   const bets = await findRacingBetsByRace(tx, input.raceId);
+  const selectionsByBetId = await findRacingBetSelectionsByBetIds(
+    tx,
+    bets.map((bet) => bet.id),
+  );
   const betResults: CancelRacingBetResult[] = [];
 
   for (const bet of bets) {
@@ -490,9 +612,11 @@ export async function cancelRacingRaceInTransaction(
       );
     }
 
+    const betType = parseRacingBetType(bet.betType);
+    const selections = selectionsByBetId.get(bet.id) ?? [];
     const walletMutation = await applyWalletMutationInTransaction(
       tx,
-      buildCancelRefundWalletMutationInput(bet, input.reason),
+      buildCancelRefundWalletMutationInput(bet, input.reason, selections),
     );
 
     await tx
@@ -515,9 +639,9 @@ export async function cancelRacingRaceInTransaction(
       commandId: `cancel:${bet.id}`,
       amount: bet.amount,
       payload: {
+        betType,
         reason: input.reason,
-        raceEntryId: bet.raceEntryId,
-        horseId: bet.horseId,
+        selections,
         refundAmount: bet.amount.toString(),
       },
     });
@@ -525,7 +649,8 @@ export async function cancelRacingRaceInTransaction(
     betResults.push({
       betId: bet.id,
       userId: bet.userId,
-      raceEntryId: bet.raceEntryId,
+      betType,
+      selections,
       refundAmount: bet.amount,
       walletMutation,
     });
@@ -551,7 +676,6 @@ export async function cancelRacingRaceInTransaction(
 async function lockRacingBettingContext(
   tx: WalletMutationTransaction,
   raceId: string,
-  raceEntryId: string,
 ): Promise<LockedRacingBettingContext> {
   const result = await tx.execute(sql<LockedRacingBettingContextRow>`
     select
@@ -561,34 +685,26 @@ async function lockRacingBettingContext(
       rt.min_bet as "minBet",
       rt.max_bet as "maxBet",
       rt.payout_rate_bps as "payoutRateBps",
+      rt.betting_timeout_seconds as "bettingTimeoutSeconds",
+      rt.race_interval_seconds as "raceIntervalSeconds",
+      rt.betting_close_before_start_seconds as "bettingCloseBeforeStartSeconds",
       rr.id as "raceId",
       rr.status as "raceStatus",
       rr.phase as "racePhase",
       rr.field_size as "fieldSize",
-      re.id as "raceEntryId",
-      re.horse_id as "horseId",
-      re.number as "number"
+      rr.scheduled_start_at as "scheduledStartAt",
+      rr.betting_closes_at as "bettingClosesAt"
     from racing_races rr
     inner join racing_tables rt on rt.id = rr.table_id
-    inner join racing_race_entries re on re.race_id = rr.id
     where rr.id = ${raceId}
-      and re.id = ${raceEntryId}
-    for update of rr, rt, re
+    for update of rr, rt
   `);
   const [row] = getRows<LockedRacingBettingContextRow>(result);
 
   if (!row) {
-    const [race] = await tx
-      .select({ id: racingRaces.id })
-      .from(racingRaces)
-      .where(eq(racingRaces.id, raceId))
-      .limit(1);
-
     throw new RacingBettingError(
-      race ? "RACE_ENTRY_NOT_FOUND" : "RACE_NOT_FOUND",
-      race
-        ? `Race entry ${raceEntryId} was not found in race ${raceId}.`
-        : `Race ${raceId} was not found.`,
+      "RACE_NOT_FOUND",
+      `Race ${raceId} was not found.`,
     );
   }
 
@@ -600,6 +716,11 @@ async function lockRacingBettingContext(
       minBet: toBigInt(row.minBet),
       maxBet: toBigInt(row.maxBet),
       payoutRateBps: Number(row.payoutRateBps),
+      bettingTimeoutSeconds: Number(row.bettingTimeoutSeconds),
+      raceIntervalSeconds: Number(row.raceIntervalSeconds),
+      bettingCloseBeforeStartSeconds: Number(
+        row.bettingCloseBeforeStartSeconds,
+      ),
     },
     race: {
       id: row.raceId,
@@ -607,12 +728,8 @@ async function lockRacingBettingContext(
       status: row.raceStatus,
       phase: row.racePhase,
       fieldSize: Number(row.fieldSize),
-    },
-    raceEntry: {
-      id: row.raceEntryId,
-      raceId: row.raceId,
-      horseId: row.horseId,
-      number: Number(row.number),
+      scheduledStartAt: row.scheduledStartAt,
+      bettingClosesAt: row.bettingClosesAt,
     },
   };
 }
@@ -645,15 +762,52 @@ async function lockRacingRace(
   return race;
 }
 
-async function findRacingBetByRaceAndUser(
+async function findSelectedRaceEntries(
+  tx: WalletMutationTransaction,
+  raceId: string,
+  raceEntryIds: string[],
+): Promise<RacingRaceEntrySnapshot[]> {
+  const entries = await tx
+    .select({
+      id: racingRaceEntries.id,
+      raceId: racingRaceEntries.raceId,
+      horseId: racingRaceEntries.horseId,
+      number: racingRaceEntries.number,
+    })
+    .from(racingRaceEntries)
+    .where(
+      and(
+        eq(racingRaceEntries.raceId, raceId),
+        inArray(racingRaceEntries.id, raceEntryIds),
+      ),
+    );
+
+  if (entries.length !== new Set(raceEntryIds).size) {
+    throw new RacingBettingError(
+      "RACE_ENTRY_NOT_FOUND",
+      `One or more race entries were not found in race ${raceId}.`,
+    );
+  }
+
+  return entries;
+}
+
+async function findRacingBetByCommand(
   tx: WalletMutationTransaction,
   raceId: string,
   userId: string,
+  commandId: string,
 ) {
   const [bet] = await tx
     .select()
     .from(racingBets)
-    .where(and(eq(racingBets.raceId, raceId), eq(racingBets.userId, userId)))
+    .where(
+      and(
+        eq(racingBets.raceId, raceId),
+        eq(racingBets.userId, userId),
+        eq(racingBets.commandId, commandId),
+      ),
+    )
     .limit(1);
 
   return bet ?? null;
@@ -679,6 +833,44 @@ async function findRacingRaceEntries(
     .where(eq(racingRaceEntries.raceId, raceId));
 }
 
+async function findRacingBetSelectionsByBetId(
+  tx: WalletMutationTransaction,
+  betId: string,
+): Promise<RacingBetSelectionSnapshot[]> {
+  const selections = await tx
+    .select()
+    .from(racingBetSelections)
+    .where(eq(racingBetSelections.betId, betId))
+    .orderBy(racingBetSelections.selectionOrder);
+
+  return selections.map(toBetSelectionSnapshot);
+}
+
+async function findRacingBetSelectionsByBetIds(
+  tx: WalletMutationTransaction,
+  betIds: string[],
+) {
+  const map = new Map<string, RacingBetSelectionSnapshot[]>();
+
+  if (betIds.length === 0) {
+    return map;
+  }
+
+  const selections = await tx
+    .select()
+    .from(racingBetSelections)
+    .where(inArray(racingBetSelections.betId, betIds))
+    .orderBy(racingBetSelections.betId, racingBetSelections.selectionOrder);
+
+  for (const selection of selections) {
+    const list = map.get(selection.betId) ?? [];
+    list.push(toBetSelectionSnapshot(selection));
+    map.set(selection.betId, list);
+  }
+
+  return map;
+}
+
 async function readSettledRacingRaceResult(
   tx: WalletMutationTransaction,
   input: SettleRacingRaceInput,
@@ -688,7 +880,9 @@ async function readSettledRacingRaceResult(
   assertSettlementEntriesMatchRace(input, entries);
 
   for (const entryInput of input.entries) {
-    const entry = entries.find((candidate) => candidate.id === entryInput.raceEntryId);
+    const entry = entries.find(
+      (candidate) => candidate.id === entryInput.raceEntryId,
+    );
 
     if (
       entry?.finalRank !== entryInput.finalRank ||
@@ -701,16 +895,21 @@ async function readSettledRacingRaceResult(
     }
   }
 
-  const resultOrder = input.entries
-    .slice()
-    .sort((left, right) => left.finalRank - right.finalRank)
-    .map((entry) => entry.raceEntryId);
-  const winnerRaceEntryId = resultOrder[0];
+  const resultOrder = getResultOrder(input);
+  const rankByRaceEntryId = getRankByRaceEntryId(input);
   const bets = await findRacingBetsByRace(tx, input.raceId);
+  const selectionsByBetId = await findRacingBetSelectionsByBetIds(
+    tx,
+    bets.map((bet) => bet.id),
+  );
   const betResults: SettleRacingBetResult[] = [];
 
   for (const bet of bets) {
-    const outcome = bet.raceEntryId === winnerRaceEntryId ? "WIN" : "LOSE";
+    const betType = parseRacingBetType(bet.betType);
+    const selections = selectionsByBetId.get(bet.id) ?? [];
+    const outcome = isWinningBet(betType, selections, rankByRaceEntryId)
+      ? "WIN"
+      : "LOSE";
 
     if (
       (outcome === "WIN" && bet.status !== "WON") ||
@@ -729,15 +928,15 @@ async function readSettledRacingRaceResult(
       payoutAmount > zero
         ? await applyWalletMutationInTransaction(
             tx,
-            buildSettlementWalletMutationInput(bet, payoutAmount),
+            buildSettlementWalletMutationInput(bet, payoutAmount, selections),
           )
         : null;
 
     betResults.push({
       betId: bet.id,
       userId: bet.userId,
-      raceEntryId: bet.raceEntryId,
-      horseId: bet.horseId,
+      betType,
+      selections,
       outcome,
       payoutAmount,
       netAmount,
@@ -757,6 +956,10 @@ async function readCancelledRacingRaceResult(
   input: CancelRacingRaceInput,
 ): Promise<CancelRacingRaceResult> {
   const bets = await findRacingBetsByRace(tx, input.raceId);
+  const selectionsByBetId = await findRacingBetSelectionsByBetIds(
+    tx,
+    bets.map((bet) => bet.id),
+  );
   const betResults: CancelRacingBetResult[] = [];
 
   for (const bet of bets) {
@@ -767,14 +970,18 @@ async function readCancelledRacingRaceResult(
       );
     }
 
+    const betType = parseRacingBetType(bet.betType);
+    const selections = selectionsByBetId.get(bet.id) ?? [];
+
     betResults.push({
       betId: bet.id,
       userId: bet.userId,
-      raceEntryId: bet.raceEntryId,
+      betType,
+      selections,
       refundAmount: bet.amount,
       walletMutation: await applyWalletMutationInTransaction(
         tx,
-        buildCancelRefundWalletMutationInput(bet, input.reason),
+        buildCancelRefundWalletMutationInput(bet, input.reason, selections),
       ),
     });
   }
@@ -785,7 +992,10 @@ async function readCancelledRacingRaceResult(
   };
 }
 
-function assertRaceAcceptsBets(context: LockedRacingBettingContext) {
+function assertRaceAcceptsBets(
+  context: LockedRacingBettingContext,
+  now: Date,
+) {
   if (context.table.status !== "OPEN") {
     throw new RacingBettingError(
       "TABLE_NOT_OPEN",
@@ -799,30 +1009,35 @@ function assertRaceAcceptsBets(context: LockedRacingBettingContext) {
       `Race ${context.race.id} is not accepting bets.`,
     );
   }
-}
 
-function assertExistingRacingBetMatches(
-  bet: typeof racingBets.$inferSelect,
-  context: LockedRacingBettingContext,
-  input: PlaceRacingWinBetInput,
-) {
-  if (bet.commandId !== input.commandId) {
+  const bettingClosesAt = getBettingClosesAt(context);
+
+  if (bettingClosesAt && now >= bettingClosesAt) {
     throw new RacingBettingError(
-      "BET_ALREADY_PLACED",
-      `User ${input.userId} already placed a bet for race ${input.raceId}.`,
+      "BETTING_CLOSED",
+      `Race ${context.race.id} betting closed at ${bettingClosesAt.toISOString()}.`,
     );
   }
+}
 
+async function assertExistingRacingBetMatches(
+  tx: WalletMutationTransaction,
+  bet: typeof racingBets.$inferSelect,
+  input: PlaceRacingBetInput,
+  context: LockedRacingBettingContext,
+  selections: RacingBetSelectionSnapshot[],
+  oddsNumerator: number,
+) {
+  const existingSelections = await findRacingBetSelectionsByBetId(tx, bet.id);
   const mismatched =
-    bet.betType !== "WIN" ||
+    bet.betType !== input.betType ||
     bet.userId !== input.userId ||
     bet.raceId !== context.race.id ||
     bet.tableId !== context.table.id ||
-    bet.raceEntryId !== context.raceEntry.id ||
-    bet.horseId !== context.raceEntry.horseId ||
     bet.amount !== input.amount ||
-    bet.oddsNumerator !== calculateOddsNumerator(context) ||
-    bet.oddsDenominator !== racingOddsDenominator;
+    bet.oddsNumerator !== oddsNumerator ||
+    bet.oddsDenominator !== racingOddsDenominator ||
+    !selectionsMatch(existingSelections, selections);
 
   if (mismatched) {
     throw new RacingBettingError(
@@ -883,8 +1098,98 @@ function assertSettlementEntriesMatchRace(
   }
 }
 
-function calculateOddsNumerator(context: LockedRacingBettingContext) {
-  return context.race.fieldSize * context.table.payoutRateBps;
+function normalizeBetSelections(
+  betType: RacingBetType,
+  selectionIds: string[],
+  entries: RacingRaceEntrySnapshot[],
+): RacingBetSelectionSnapshot[] {
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
+  const orderedEntries = selectionIds.map((selectionId) => {
+    const entry = entriesById.get(selectionId);
+
+    if (!entry) {
+      throw new RacingBettingError(
+        "RACE_ENTRY_NOT_FOUND",
+        `Race entry ${selectionId} was not found.`,
+      );
+    }
+
+    return entry;
+  });
+  const normalizedEntries =
+    betType === "QUINELLA"
+      ? orderedEntries
+          .slice()
+          .sort((left, right) => left.number - right.number)
+      : orderedEntries;
+
+  return normalizedEntries.map((entry, index) => ({
+    raceEntryId: entry.id,
+    horseId: entry.horseId,
+    selectionOrder: index + 1,
+    expectedRank: getExpectedRank(betType, index),
+  }));
+}
+
+function getExpectedRank(betType: RacingBetType, index: number) {
+  if (betType === "WIN") {
+    return 1;
+  }
+
+  if (betType === "EXACTA") {
+    return index + 1;
+  }
+
+  return null;
+}
+
+function isWinningBet(
+  betType: RacingBetType,
+  selections: RacingBetSelectionSnapshot[],
+  rankByRaceEntryId: Map<string, number>,
+) {
+  if (betType === "WIN") {
+    return rankByRaceEntryId.get(selections[0]?.raceEntryId ?? "") === 1;
+  }
+
+  if (betType === "QUINELLA") {
+    return (
+      selections.length === 2 &&
+      selections.every(
+        (selection) =>
+          (rankByRaceEntryId.get(selection.raceEntryId) ?? Number.POSITIVE_INFINITY) <=
+          2,
+      )
+    );
+  }
+
+  return (
+    selections.length === 2 &&
+    selections.every(
+      (selection) =>
+        selection.expectedRank === rankByRaceEntryId.get(selection.raceEntryId),
+    )
+  );
+}
+
+function calculateOddsNumerator(
+  context: LockedRacingBettingContext,
+  betType: RacingBetType,
+) {
+  return getCombinationCount(betType, context.race.fieldSize) *
+    context.table.payoutRateBps;
+}
+
+function getCombinationCount(betType: RacingBetType, fieldSize: number) {
+  if (betType === "WIN") {
+    return fieldSize;
+  }
+
+  if (betType === "QUINELLA") {
+    return (fieldSize * (fieldSize - 1)) / 2;
+  }
+
+  return fieldSize * (fieldSize - 1);
 }
 
 function calculateBetPayoutAmount(bet: typeof racingBets.$inferSelect) {
@@ -898,9 +1203,39 @@ function calculateBetPayoutAmount(bet: typeof racingBets.$inferSelect) {
   return (bet.amount * BigInt(bet.oddsNumerator)) / BigInt(bet.oddsDenominator);
 }
 
+function getBettingClosesAt(context: LockedRacingBettingContext) {
+  if (context.race.bettingClosesAt) {
+    return context.race.bettingClosesAt;
+  }
+
+  if (!context.race.scheduledStartAt) {
+    return null;
+  }
+
+  return new Date(
+    context.race.scheduledStartAt.getTime() -
+      context.table.bettingCloseBeforeStartSeconds * 1000,
+  );
+}
+
+function getResultOrder(input: SettleRacingRaceInput) {
+  return input.entries
+    .slice()
+    .sort((left, right) => left.finalRank - right.finalRank)
+    .map((entry) => entry.raceEntryId);
+}
+
+function getRankByRaceEntryId(input: SettleRacingRaceInput) {
+  return new Map(
+    input.entries.map((entry) => [entry.raceEntryId, entry.finalRank]),
+  );
+}
+
 function buildBetWalletMutationInput(
-  input: PlaceRacingWinBetInput,
+  input: PlaceRacingBetInput,
   context: LockedRacingBettingContext,
+  selections: RacingBetSelectionSnapshot[],
+  oddsNumerator: number,
 ) {
   return {
     userId: input.userId,
@@ -911,14 +1246,13 @@ function buildBetWalletMutationInput(
     referenceType: "RACING_RACE",
     referenceId: context.race.id,
     idempotencyKey: `racing:bet:${context.race.id}:${input.userId}:${input.commandId}`,
-    memo: `Racing win bet on entry ${context.raceEntry.number}`,
+    memo: `Racing ${input.betType} bet`,
     metadata: {
       tableCode: context.table.code,
-      raceEntryId: context.raceEntry.id,
-      horseId: context.raceEntry.horseId,
-      horseNumber: context.raceEntry.number,
+      betType: input.betType,
+      selections,
       commandId: input.commandId,
-      oddsNumerator: calculateOddsNumerator(context),
+      oddsNumerator,
       oddsDenominator: racingOddsDenominator,
     } satisfies JsonObject,
   };
@@ -927,6 +1261,7 @@ function buildBetWalletMutationInput(
 function buildSettlementWalletMutationInput(
   bet: typeof racingBets.$inferSelect,
   payoutAmount: bigint,
+  selections: RacingBetSelectionSnapshot[],
 ) {
   return {
     userId: bet.userId,
@@ -937,11 +1272,11 @@ function buildSettlementWalletMutationInput(
     referenceType: "RACING_RACE",
     referenceId: bet.raceId,
     idempotencyKey: `racing:settlement:${bet.raceId}:${bet.id}`,
-    memo: `Racing win payout for bet ${bet.id}`,
+    memo: `Racing ${bet.betType} payout for bet ${bet.id}`,
     metadata: {
       betId: bet.id,
-      raceEntryId: bet.raceEntryId,
-      horseId: bet.horseId,
+      betType: bet.betType,
+      selections,
       payoutAmount: payoutAmount.toString(),
       oddsNumerator: bet.oddsNumerator,
       oddsDenominator: bet.oddsDenominator,
@@ -952,6 +1287,7 @@ function buildSettlementWalletMutationInput(
 function buildCancelRefundWalletMutationInput(
   bet: typeof racingBets.$inferSelect,
   reason: string,
+  selections: RacingBetSelectionSnapshot[],
 ) {
   return {
     userId: bet.userId,
@@ -965,8 +1301,8 @@ function buildCancelRefundWalletMutationInput(
     memo: `Racing cancelled race refund for bet ${bet.id}`,
     metadata: {
       betId: bet.id,
-      raceEntryId: bet.raceEntryId,
-      horseId: bet.horseId,
+      betType: bet.betType,
+      selections,
       reason,
       refundAmount: bet.amount.toString(),
     } satisfies JsonObject,
@@ -1016,18 +1352,20 @@ async function nextActionSequence(
   return Number(row?.actionSequence ?? 1);
 }
 
-function normalizePlaceRacingWinBetInput(
-  input: PlaceRacingWinBetInput,
-): PlaceRacingWinBetInput {
+function normalizePlaceRacingBetInput(
+  input: PlaceRacingBetInput,
+): PlaceRacingBetInput {
   const raceId = input.raceId.trim();
-  const raceEntryId = input.raceEntryId.trim();
   const userId = input.userId.trim();
   const commandId = input.commandId.trim();
+  const betType = parseRacingBetType(input.betType);
+  const selections = input.selections.map((selection) => selection.trim());
+  const selectionSet = new Set(selections);
 
-  if (!raceId || !raceEntryId || !userId || !commandId) {
+  if (!raceId || !userId || !commandId) {
     throw new RacingBettingError(
       "INVALID_BET",
-      "raceId, raceEntryId, userId, and commandId are required.",
+      "raceId, userId, and commandId are required.",
     );
   }
 
@@ -1038,11 +1376,29 @@ function normalizePlaceRacingWinBetInput(
     );
   }
 
+  if (
+    selections.some((selection) => !selection) ||
+    selections.length !== getRequiredSelectionCount(betType)
+  ) {
+    throw new RacingBettingError(
+      "INVALID_BET",
+      `${betType} requires ${getRequiredSelectionCount(betType)} selections.`,
+    );
+  }
+
+  if (selectionSet.size !== selections.length) {
+    throw new RacingBettingError(
+      "INVALID_BET",
+      "Racing bet selections must be distinct.",
+    );
+  }
+
   return {
     raceId,
-    raceEntryId,
     userId,
     commandId,
+    betType,
+    selections,
     amount: input.amount,
   };
 }
@@ -1120,6 +1476,21 @@ function normalizeCancelRacingRaceInput(
   };
 }
 
+function getRequiredSelectionCount(betType: RacingBetType) {
+  return betType === "WIN" ? 1 : 2;
+}
+
+function parseRacingBetType(value: string): RacingBetType {
+  if (racingBetTypes.has(value as RacingBetType)) {
+    return value as RacingBetType;
+  }
+
+  throw new RacingBettingError(
+    "INVALID_BET",
+    `Unsupported racing bet type ${value}.`,
+  );
+}
+
 function parseRacingTableStatus(status: string): RacingTableSnapshot["status"] {
   if (status === "OPEN" || status === "MAINTENANCE" || status === "CLOSED") {
     return status;
@@ -1129,6 +1500,45 @@ function parseRacingTableStatus(status: string): RacingTableSnapshot["status"] {
     "TABLE_NOT_OPEN",
     `Racing table has unsupported status ${status}.`,
   );
+}
+
+function toBetSelectionSnapshot(
+  selection: typeof racingBetSelections.$inferSelect,
+): RacingBetSelectionSnapshot {
+  return {
+    raceEntryId: selection.raceEntryId,
+    horseId: selection.horseId,
+    selectionOrder: selection.selectionOrder,
+    expectedRank: selection.expectedRank,
+  };
+}
+
+function selectionsMatch(
+  left: RacingBetSelectionSnapshot[],
+  right: RacingBetSelectionSnapshot[],
+) {
+  return stableJsonStringify(left) === stableJsonStringify(right);
+}
+
+function stableJsonStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJsonStringify(item)).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(
+      ([leftKey], [rightKey]) => leftKey.localeCompare(rightKey),
+    );
+
+    return `{${entries
+      .map(
+        ([key, entryValue]) =>
+          `${JSON.stringify(key)}:${stableJsonStringify(entryValue)}`,
+      )
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value) ?? "undefined";
 }
 
 function minBigInt(left: bigint, right: bigint) {

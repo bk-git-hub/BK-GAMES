@@ -896,7 +896,13 @@ export const racingTables = pgTable(
     maxBet: pointAmount("max_bet").notNull(),
     payoutRateBps: integer("payout_rate_bps").default(9000).notNull(),
     bettingTimeoutSeconds: integer("betting_timeout_seconds")
-      .default(20)
+      .default(150)
+      .notNull(),
+    raceIntervalSeconds: integer("race_interval_seconds").default(180).notNull(),
+    bettingCloseBeforeStartSeconds: integer(
+      "betting_close_before_start_seconds",
+    )
+      .default(30)
       .notNull(),
     tickIntervalMs: integer("tick_interval_ms").default(100).notNull(),
     raceDistanceM: integer("race_distance_m").default(1200).notNull(),
@@ -937,6 +943,14 @@ export const racingTables = pgTable(
     check(
       "racing_tables_betting_timeout_check",
       sql`${table.bettingTimeoutSeconds} > 0`,
+    ),
+    check(
+      "racing_tables_race_interval_check",
+      sql`${table.raceIntervalSeconds} > 0`,
+    ),
+    check(
+      "racing_tables_betting_close_before_start_check",
+      sql`${table.bettingCloseBeforeStartSeconds} > 0 and ${table.bettingCloseBeforeStartSeconds} < ${table.raceIntervalSeconds}`,
     ),
     check(
       "racing_tables_tick_interval_check",
@@ -990,6 +1004,7 @@ export const racingRaces = pgTable(
     distanceM: integer("distance_m").notNull(),
     fieldSize: integer("field_size").notNull(),
     phase: text("phase").default("BETTING").notNull(),
+    scheduledStartAt: timestamp("scheduled_start_at", { withTimezone: true }),
     bettingOpensAt: timestamp("betting_opens_at", { withTimezone: true }),
     bettingClosesAt: timestamp("betting_closes_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -1011,12 +1026,17 @@ export const racingRaces = pgTable(
       table.tableId,
       table.raceNo,
     ),
+    index("racing_races_table_scheduled_start_idx").on(
+      table.tableId,
+      table.scheduledStartAt,
+    ),
     index("racing_races_table_status_idx").on(table.tableId, table.status),
     index("racing_races_table_phase_idx").on(table.tableId, table.phase),
     check("racing_races_race_no_positive", sql`${table.raceNo} > 0`),
     check(
       "racing_races_status_check",
       sql`${table.status} in (
+        'WAITING',
         'BETTING',
         'LOCKING_BETS',
         'RUNNING',
@@ -1030,6 +1050,7 @@ export const racingRaces = pgTable(
     check(
       "racing_races_phase_check",
       sql`${table.phase} in (
+        'WAITING',
         'BETTING',
         'LOCKING_BETS',
         'RUNNING',
@@ -1052,6 +1073,14 @@ export const racingRaces = pgTable(
       sql`(
         ${table.phase} <> 'BETTING' or
         (${table.seed} is null and ${table.seedLockedAt} is null)
+      )`,
+    ),
+    check(
+      "racing_races_schedule_order_check",
+      sql`(
+        ${table.scheduledStartAt} is null or
+        ${table.bettingClosesAt} is null or
+        ${table.bettingClosesAt} <= ${table.scheduledStartAt}
       )`,
     ),
     check(
@@ -1170,7 +1199,6 @@ export const racingBets = pgTable(
         racingRaceEntries.horseId,
       ],
     }),
-    uniqueIndex("racing_bets_race_user_unique").on(table.raceId, table.userId),
     uniqueIndex("racing_bets_race_user_command_unique").on(
       table.raceId,
       table.userId,
@@ -1187,7 +1215,7 @@ export const racingBets = pgTable(
     check("racing_bets_amount_positive", sql`${table.amount} > 0`),
     check(
       "racing_bets_type_check",
-      sql`${table.betType} in ('WIN')`,
+      sql`${table.betType} in ('WIN', 'QUINELLA', 'EXACTA')`,
     ),
     check(
       "racing_bets_status_check",
@@ -1200,6 +1228,54 @@ export const racingBets = pgTable(
     check(
       "racing_bets_payout_non_negative",
       sql`${table.payoutAmount} >= 0`,
+    ),
+  ],
+);
+
+export const racingBetSelections = pgTable(
+  "racing_bet_selections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    betId: uuid("bet_id")
+      .notNull()
+      .references(() => racingBets.id),
+    raceId: uuid("race_id").notNull(),
+    raceEntryId: uuid("race_entry_id").notNull(),
+    horseId: uuid("horse_id")
+      .notNull()
+      .references(() => racingHorses.id),
+    selectionOrder: integer("selection_order").notNull(),
+    expectedRank: integer("expected_rank"),
+    createdAt: now(),
+  },
+  (table) => [
+    foreignKey({
+      name: "racing_bet_selections_race_entry_fk",
+      columns: [table.raceId, table.raceEntryId, table.horseId],
+      foreignColumns: [
+        racingRaceEntries.raceId,
+        racingRaceEntries.id,
+        racingRaceEntries.horseId,
+      ],
+    }),
+    uniqueIndex("racing_bet_selections_bet_order_unique").on(
+      table.betId,
+      table.selectionOrder,
+    ),
+    uniqueIndex("racing_bet_selections_bet_entry_unique").on(
+      table.betId,
+      table.raceEntryId,
+    ),
+    index("racing_bet_selections_bet_id_idx").on(table.betId),
+    index("racing_bet_selections_race_id_idx").on(table.raceId),
+    index("racing_bet_selections_race_entry_id_idx").on(table.raceEntryId),
+    check(
+      "racing_bet_selections_order_positive",
+      sql`${table.selectionOrder} > 0`,
+    ),
+    check(
+      "racing_bet_selections_expected_rank_positive",
+      sql`${table.expectedRank} is null or ${table.expectedRank} > 0`,
     ),
   ],
 );

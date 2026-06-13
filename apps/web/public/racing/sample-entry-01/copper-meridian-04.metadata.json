@@ -1,0 +1,73 @@
+{
+  "assetId": "sample-entry-01",
+  "type": "horse-racing-entry-sprite",
+  "fictional": true,
+  "horseName": "Copper Meridian",
+  "jockeyName": "Nora Finch",
+  "saddleclothNumber": 4,
+  "silks": {
+    "primary": "#0d8f9d",
+    "secondary": "#f4c857",
+    "saddlecloth": "#153a5f"
+  },
+  "frame": {
+    "width": 512,
+    "height": 256
+  },
+  "sheet": {
+    "columns": 8,
+    "rows": 4,
+    "width": 4096,
+    "height": 1024
+  },
+  "anchor": {
+    "x": 250,
+    "y": 210
+  },
+  "groundY": 210,
+  "facing": "right",
+  "animations": {
+    "gallop": {
+      "row": 0,
+      "y": 0,
+      "frames": 8,
+      "loop": true,
+      "frameDurationMs": 80,
+      "description": "Clean looping gallop cycle for server-tick horizontal movement."
+    },
+    "start": {
+      "row": 1,
+      "y": 256,
+      "frames": 6,
+      "loop": false,
+      "frameDurationMs": 70,
+      "description": "Acceleration out of the gate, begins compressed then stretches into stride."
+    },
+    "fatigue": {
+      "row": 2,
+      "y": 512,
+      "frames": 8,
+      "loop": true,
+      "frameDurationMs": 80,
+      "description": "Slight slowdown variation with lower head and shorter stride."
+    },
+    "finish": {
+      "row": 3,
+      "y": 768,
+      "frames": 4,
+      "loop": false,
+      "frameDurationMs": 90,
+      "description": "Finish-line crossing pose with extended neck and raised jockey posture."
+    }
+  },
+  "usageNotes": [
+    "Move the sprite horizontally in game code using server tick data; gallop/fatigue loops do not include horizontal translation.",
+    "Use anchor.x and groundY for lane alignment so entries can be swapped without vertical jumping.",
+    "Rows with fewer than 8 frames intentionally leave transparent cells at the end."
+  ],
+  "files": {
+    "png": "copper-meridian-04-spritesheet.png",
+    "webp": "copper-meridian-04-spritesheet.webp",
+    "preview": "copper-meridian-04-preview.png"
+  }
+}

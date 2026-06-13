@@ -94,7 +94,7 @@
   background-image:
     linear-gradient(90deg, rgb(3 8 10 / 6%), transparent 24%, transparent 76%, rgb(3 8 10 / 16%)),
     linear-gradient(180deg, rgb(5 10 14 / 8%), transparent 58%, rgb(4 8 9 / 28%)),
-    url("/racing/generated-reference-style/track-straight-start.png");
+    url("/racing/generated-reference-style/track-straight-middle.png");
   background-position: center;
   background-size: cover;
   border: 1px solid rgb(255 255 255 / 12%);
@@ -111,6 +111,79 @@
   inset: 0;
   pointer-events: none;
   position: absolute;
+}
+
+.startGateRig {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgb(226 237 226 / 64%) 0 4px,
+      rgb(8 18 18 / 20%) 4px 18px
+    ),
+    linear-gradient(90deg, rgb(255 255 255 / 10%), rgb(8 18 18 / 28%) 18%, rgb(5 12 13 / 18%) 82%, rgb(255 255 255 / 10%));
+  border: 1px solid rgb(230 239 224 / 46%);
+  border-radius: 6px;
+  bottom: 16%;
+  box-shadow:
+    inset -8px 0 18px rgb(0 0 0 / 20%),
+    10px 14px 28px rgb(0 0 0 / 24%);
+  display: grid;
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  left: 4.2%;
+  overflow: hidden;
+  position: absolute;
+  top: 24%;
+  width: 160px;
+  z-index: 5;
+}
+
+.startGateRig::before {
+  background:
+    linear-gradient(90deg, transparent, rgb(255 255 255 / 28%), transparent),
+    repeating-linear-gradient(
+      90deg,
+      rgb(222 233 222 / 76%) 0 7px,
+      rgb(18 33 31 / 94%) 7px 19px
+    );
+  border-bottom: 1px solid rgb(255 255 255 / 28%);
+  content: "";
+  height: 18px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.startGateRig::after {
+  background: linear-gradient(90deg, transparent, rgb(255 245 178 / 30%), transparent);
+  bottom: 0;
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 18px;
+}
+
+.gateStall {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgb(228 236 222 / 44%) 0 2px,
+      transparent 2px 14px
+    ),
+    linear-gradient(90deg, rgb(5 12 13 / 16%), transparent 42%, rgb(0 0 0 / 14%));
+  border-bottom: 1px solid rgb(255 255 255 / 28%);
+  position: relative;
+}
+
+.gateStall::after {
+  background: rgb(255 255 255 / 36%);
+  bottom: 14%;
+  content: "";
+  position: absolute;
+  right: 18px;
+  top: 14%;
+  width: 2px;
 }
 
 .startLine {
@@ -211,39 +284,79 @@
   position: relative;
 }
 
-.phaseStack,
-.trackPhase {
+.cameraTrack {
+  animation: leadCameraPan var(--camera-duration) linear infinite;
+  animation-delay: var(--camera-offset);
+  background-image:
+    linear-gradient(90deg, rgb(6 12 14 / 16%), transparent 16%, transparent 84%, rgb(6 12 14 / 26%)),
+    linear-gradient(180deg, rgb(5 9 12 / 8%), transparent 56%, rgb(4 9 10 / 26%)),
+    url("/racing/generated-reference-style/track-straight-middle.png");
+  background-position:
+    left center,
+    left center,
+    left center;
+  background-repeat: no-repeat;
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%;
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform: translate3d(0, 0, 0);
+  width: 300%;
+  will-change: transform;
+  z-index: 0;
+}
+
+.cameraStartGate {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 16%), rgb(10 20 20 / 88%) 18%, rgb(9 17 18 / 86%) 82%, rgb(255 255 255 / 18%)),
+    repeating-linear-gradient(
+      90deg,
+      rgb(235 244 232 / 74%) 0 6px,
+      transparent 6px 18px
+    );
+  border: 2px solid rgb(235 244 232 / 46%);
+  border-radius: 6px;
+  bottom: 16%;
+  box-shadow: 14px 18px 32px rgb(0 0 0 / 28%);
+  left: 1.4%;
+  position: absolute;
+  top: 24%;
+  width: 180px;
+}
+
+.cameraStartGate::before {
+  background: repeating-linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0%) 0,
+    rgb(255 255 255 / 0%) calc((100% / 6) - 1px),
+    rgb(255 255 255 / 38%) calc((100% / 6) - 1px),
+    rgb(255 255 255 / 38%) calc(100% / 6)
+  );
+  content: "";
   inset: 0;
   position: absolute;
 }
 
-.phaseStack {
-  z-index: 0;
-}
-
-.trackPhase {
-  animation-duration: 15s;
-  animation-iteration-count: infinite;
-  animation-timing-function: linear;
-  background-image:
-    linear-gradient(90deg, rgb(6 12 14 / 16%), transparent 16%, transparent 84%, rgb(6 12 14 / 26%)),
-    linear-gradient(180deg, rgb(5 9 12 / 8%), transparent 56%, rgb(4 9 10 / 26%)),
-    var(--phase-bg);
-  background-position: center;
-  background-size: cover;
-  opacity: 0;
-}
-
-.phaseStart {
-  animation-name: racePhaseStart;
-}
-
-.phaseMiddle {
-  animation-name: racePhaseMiddle;
-}
-
-.phaseFinish {
-  animation-name: racePhaseFinish;
+.cameraFinishPost {
+  background:
+    linear-gradient(90deg, transparent 0 34%, rgb(255 255 255 / 94%) 34% 66%, transparent 66%),
+    repeating-linear-gradient(
+      180deg,
+      #f7f5e8 0 12px,
+      #26342e 12px 24px
+    );
+  border-left: 3px solid rgb(255 255 255 / 82%);
+  border-right: 3px solid rgb(255 255 255 / 48%);
+  bottom: 10%;
+  box-shadow: 0 0 24px rgb(255 244 180 / 26%);
+  left: 88%;
+  position: absolute;
+  top: 28%;
+  width: 26px;
 }
 
 .straightLaneOverlay {
@@ -308,25 +421,6 @@
   pointer-events: none;
   position: absolute;
   z-index: 25;
-}
-
-.finishLine {
-  background:
-    repeating-linear-gradient(
-      180deg,
-      #f5f5ef 0 9px,
-      #24312a 9px 18px
-    );
-  border-left: 3px solid #f4f0dd;
-  bottom: 17%;
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 15%);
-  opacity: 0;
-  animation: finishLineReveal 15s linear infinite;
-  position: absolute;
-  right: 9%;
-  top: 31%;
-  width: 22px;
-  z-index: 4;
 }
 
 .runner {
@@ -482,56 +576,18 @@
   }
 }
 
-@keyframes racePhaseStart {
+@keyframes leadCameraPan {
   0%,
-  29% {
-    opacity: 1;
+  8% {
+    transform: translate3d(0, 0, 0);
   }
 
-  37%,
+  52% {
+    transform: translate3d(-42%, 0, 0);
+  }
+
   100% {
-    opacity: 0;
-  }
-}
-
-@keyframes racePhaseMiddle {
-  0%,
-  28% {
-    opacity: 0;
-  }
-
-  38%,
-  64% {
-    opacity: 1;
-  }
-
-  72%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes racePhaseFinish {
-  0%,
-  63% {
-    opacity: 0;
-  }
-
-  73%,
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes finishLineReveal {
-  0%,
-  66% {
-    opacity: 0;
-  }
-
-  74%,
-  100% {
-    opacity: 1;
+    transform: translate3d(-66.666%, 0, 0);
   }
 }
 
@@ -595,6 +651,19 @@
     font-size: 18px;
   }
 
+  .startGateRig {
+    left: 3%;
+    width: 106px;
+  }
+
+  .startGateRig::before {
+    height: 14px;
+  }
+
+  .gateStall::after {
+    right: 12px;
+  }
+
   .phaseHud {
     flex-wrap: wrap;
     gap: 6px;
@@ -649,21 +718,8 @@
   .runner,
   .sprite,
   .rowSprite,
-  .finishLine {
+  .cameraTrack {
     animation-duration: 1ms;
     animation-iteration-count: 1;
-  }
-
-  .trackPhase {
-    animation: none;
-  }
-
-  .phaseStart {
-    opacity: 1;
-  }
-
-  .phaseMiddle,
-  .phaseFinish {
-    opacity: 0;
   }
 }

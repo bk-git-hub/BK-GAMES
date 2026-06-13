@@ -1,0 +1,30 @@
+{
+    "assetId":  "entry-04",
+    "type":  "horse-racing-jockey-silk-icon",
+    "sourceReference":  "codex-clipboard-04ed9e3a-96e3-4fe2-9252-d052a9b0bba4.png",
+    "saddleclothNumber":  4,
+    "displayName":  "Yellow Chevron",
+    "style":  "broadcast-betting-card-jockey-silk",
+    "transparentBackground":  true,
+    "canvas":  {
+                   "width":  512,
+                   "height":  512
+               },
+    "palette":  {
+                    "primary":  "#facc15",
+                    "shade":  "#ca8a04",
+                    "accent":  "#111827",
+                    "dark":  "#111827"
+                },
+    "pattern":  "chevron",
+    "files":  {
+                  "svg":  "entry-04-jockey.svg",
+                  "png":  "entry-04-jockey.png",
+                  "webp":  "entry-04-jockey.webp"
+              },
+    "usageNotes":  [
+                       "Transparent isolated jockey silk icon for betting cards, rank rows, and compact race UI.",
+                       "Pattern and color are inspired by the supplied BK Racing reference but generated as project-owned vector/raster assets.",
+                       "No number is baked into the icon; pair with UI number badges for readability."
+                   ]
+}

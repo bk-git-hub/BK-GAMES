@@ -1,0 +1,30 @@
+{
+    "assetId":  "entry-05",
+    "type":  "horse-racing-jockey-silk-icon",
+    "sourceReference":  "codex-clipboard-04ed9e3a-96e3-4fe2-9252-d052a9b0bba4.png",
+    "saddleclothNumber":  5,
+    "displayName":  "Purple Stars",
+    "style":  "broadcast-betting-card-jockey-silk",
+    "transparentBackground":  true,
+    "canvas":  {
+                   "width":  512,
+                   "height":  512
+               },
+    "palette":  {
+                    "primary":  "#8657d9",
+                    "shade":  "#5b35a4",
+                    "accent":  "#f4eefc",
+                    "dark":  "#111827"
+                },
+    "pattern":  "multi-stars",
+    "files":  {
+                  "svg":  "entry-05-jockey.svg",
+                  "png":  "entry-05-jockey.png",
+                  "webp":  "entry-05-jockey.webp"
+              },
+    "usageNotes":  [
+                       "Transparent isolated jockey silk icon for betting cards, rank rows, and compact race UI.",
+                       "Pattern and color are inspired by the supplied BK Racing reference but generated as project-owned vector/raster assets.",
+                       "No number is baked into the icon; pair with UI number badges for readability."
+                   ]
+}

@@ -16,9 +16,12 @@ export class RacingTablesController {
   async listTables(): Promise<RacingTablesResponse> {
     const tables = await Promise.all(
       racingLobbyTableIds.map(async (tableId) => {
-        const config = await this.tableConfigService.getTableConfig(tableId);
+        const [config, race] = await Promise.all([
+          this.tableConfigService.getTableConfig(tableId),
+          this.tableConfigService.getScheduledRace(tableId),
+        ]);
 
-        this.tableService.configureTable({ tableId, config });
+        this.tableService.configureTable({ tableId, config, race });
 
         return this.tableService.getTableSummary(tableId);
       }),

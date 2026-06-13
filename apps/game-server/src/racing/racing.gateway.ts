@@ -1,3 +1,4 @@
+import { OnModuleDestroy } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -25,6 +26,9 @@ import {
   type RacingTableMutationResult,
 } from './racing-table.service';
 
+const racingLobbyTableIds = ['main'] as const;
+const racingScheduleSyncIntervalMs = 5_000;
+
 @WebSocketGateway({
   namespace: RACING_NAMESPACE,
   cors: {
@@ -32,15 +36,31 @@ import {
     credentials: true,
   },
 })
-export class RacingGateway {
+export class RacingGateway implements OnModuleDestroy {
   @WebSocketServer()
   server!: Server;
+
+  private scheduleSyncTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly tableConfigService: RacingTableConfigService,
     private readonly tableService: RacingTableService,
     private readonly gameTokenService: GameTokenService,
   ) {}
+
+  afterInit() {
+    this.scheduleSyncTimer = setInterval(() => {
+      void this.syncLobbyTables();
+    }, racingScheduleSyncIntervalMs);
+    void this.syncLobbyTables();
+  }
+
+  onModuleDestroy() {
+    if (this.scheduleSyncTimer) {
+      clearInterval(this.scheduleSyncTimer);
+      this.scheduleSyncTimer = undefined;
+    }
+  }
 
   handleDisconnect(socket: Socket) {
     const updates = this.tableService.disconnectSocket(socket.id);
@@ -84,9 +104,34 @@ export class RacingGateway {
   }
 
   private async configureRuntimeTable(tableId: string) {
-    const config = await this.tableConfigService.getTableConfig(tableId);
+    const [config, race] = await Promise.all([
+      this.tableConfigService.getTableConfig(tableId),
+      this.tableConfigService.getScheduledRace(tableId),
+    ]);
 
-    this.tableService.configureTable({ tableId, config });
+    return this.tableService.configureTable({ tableId, config, race });
+  }
+
+  private async syncLobbyTables() {
+    await Promise.all(
+      racingLobbyTableIds.map((tableId) => this.syncRuntimeTable(tableId)),
+    );
+  }
+
+  private async syncRuntimeTable(tableId: string) {
+    try {
+      const update = await this.configureRuntimeTable(tableId);
+
+      if (update) {
+        this.emitTableUpdate(update);
+      }
+    } catch (error) {
+      this.emitTableError(
+        tableId,
+        error,
+        'Unexpected racing scheduler error.',
+      );
+    }
   }
 
   private async joinRacingRooms(
@@ -105,6 +150,22 @@ export class RacingGateway {
 
     this.server.to(room).emit(RACING_SERVER_EVENTS.TABLE_STATE, update.state);
     this.server.to(room).emit(RACING_SERVER_EVENTS.TABLE_EVENT, update.event);
+  }
+
+  private emitTableError(
+    tableId: string,
+    error: unknown,
+    fallbackMessage: string,
+  ) {
+    this.server.to(racingTableRoom(tableId)).emit(
+      RACING_SERVER_EVENTS.ERROR,
+      isSocketErrorLike(error)
+        ? { code: error.code, message: error.message }
+        : {
+            code: 'UNKNOWN_ERROR',
+            message: fallbackMessage,
+          },
+    );
   }
 
   private emitError(

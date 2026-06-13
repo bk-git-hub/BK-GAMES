@@ -154,6 +154,7 @@ export type RacingRaceSnapshot = {
   phase: string;
   fieldSize: number;
   scheduledStartAt: Date | null;
+  bettingOpensAt: Date | null;
   bettingClosesAt: Date | null;
 };
 
@@ -191,6 +192,7 @@ type LockedRacingBettingContextRow = {
   racePhase: string;
   fieldSize: number;
   scheduledStartAt: Date | null;
+  bettingOpensAt: Date | null;
   bettingClosesAt: Date | null;
 };
 
@@ -693,6 +695,7 @@ async function lockRacingBettingContext(
       rr.phase as "racePhase",
       rr.field_size as "fieldSize",
       rr.scheduled_start_at as "scheduledStartAt",
+      rr.betting_opens_at as "bettingOpensAt",
       rr.betting_closes_at as "bettingClosesAt"
     from racing_races rr
     inner join racing_tables rt on rt.id = rr.table_id
@@ -729,6 +732,7 @@ async function lockRacingBettingContext(
       phase: row.racePhase,
       fieldSize: Number(row.fieldSize),
       scheduledStartAt: row.scheduledStartAt,
+      bettingOpensAt: row.bettingOpensAt,
       bettingClosesAt: row.bettingClosesAt,
     },
   };
@@ -1011,6 +1015,13 @@ function assertRaceAcceptsBets(
   }
 
   const bettingClosesAt = getBettingClosesAt(context);
+
+  if (context.race.bettingOpensAt && now < context.race.bettingOpensAt) {
+    throw new RacingBettingError(
+      "BETTING_CLOSED",
+      `Race ${context.race.id} betting opens at ${context.race.bettingOpensAt.toISOString()}.`,
+    );
+  }
 
   if (bettingClosesAt && now >= bettingClosesAt) {
     throw new RacingBettingError(

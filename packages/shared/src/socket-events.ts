@@ -351,6 +351,7 @@ export type RacingTablePhase =
   | "FINISHING"
   | "SETTLING"
   | "SETTLED"
+  | "ROUND_END"
   | "CANCELLED";
 
 export type RacingBetType = "WIN" | "QUINELLA" | "EXACTA";
@@ -436,6 +437,8 @@ export type RacingTableSummary = {
   bettingLimits: RacingBettingLimitsSnapshot;
   betTypes: RacingBetType[];
   timing: RacingTimingSnapshot;
+  race: RacingRaceSnapshot | null;
+  timers: RacingTimerSnapshot;
   version: number;
   updatedAt: string;
 };
@@ -444,7 +447,10 @@ export type RacingTablesResponse = {
   tables: RacingTableSummary[];
 };
 
-export type RacingTableEventType = "TABLE_JOINED" | "PLAYER_DISCONNECTED";
+export type RacingTableEventType =
+  | "TABLE_JOINED"
+  | "RACE_SCHEDULED"
+  | "PLAYER_DISCONNECTED";
 
 export type RacingTableEventPayload = {
   tableId: string;

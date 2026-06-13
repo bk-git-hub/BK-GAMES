@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   type RacingBetType,
   type RacingHorseSnapshot,
+  type RacingRaceSnapshot,
   type RacingSocketErrorCode,
   type RacingSocketUser,
   type RacingTableEventPayload,
@@ -30,6 +31,7 @@ export type RacingTableConfig = {
 export type RacingConfigureTableInput = {
   tableId: string;
   config: RacingTableConfig;
+  race?: RacingRaceSnapshot | null;
 };
 
 export type RacingJoinTableInput = {
@@ -47,18 +49,37 @@ export type RacingTableMutationResult = {
 export class RacingTableService {
   private readonly tables = new Map<string, RacingTableRuntime>();
 
-  configureTable(input: RacingConfigureTableInput) {
+  configureTable(
+    input: RacingConfigureTableInput,
+  ): RacingTableMutationResult | null {
     const tableId = normalizeTableId(input.tableId);
     const config = normalizeTableConfig(input.config);
     const existing = this.tables.get(tableId);
 
     if (!existing) {
-      this.tables.set(tableId, this.createRuntimeTable(tableId, config));
-      return;
+      const table = this.createRuntimeTable(tableId, config, input.race ?? null);
+
+      this.tables.set(tableId, table);
+      return {
+        state: this.toState(table),
+        event: this.toEvent(table, 'RACE_SCHEDULED', 'SYSTEM'),
+      };
     }
 
-    this.applyTableConfig(existing, config);
+    const previousKey = buildSyncKey(existing);
+
+    this.applyTableConfig(existing, config, input.race ?? null);
+
+    if (previousKey === buildSyncKey(existing)) {
+      return null;
+    }
+
     this.bump(existing);
+
+    return {
+      state: this.toState(existing),
+      event: this.toEvent(existing, 'RACE_SCHEDULED', 'SYSTEM'),
+    };
   }
 
   joinTable(input: RacingJoinTableInput): RacingTableMutationResult {
@@ -109,6 +130,8 @@ export class RacingTableService {
       bettingLimits: state.bettingLimits,
       betTypes: state.betTypes,
       timing: state.timing,
+      race: state.race,
+      timers: state.timers,
       version: state.version,
       updatedAt: state.updatedAt,
     };
@@ -131,13 +154,15 @@ export class RacingTableService {
   private createRuntimeTable(
     tableId: string,
     config: RacingTableConfig,
+    race: RacingRaceSnapshot | null,
   ): RacingTableRuntime {
     const now = new Date().toISOString();
 
     return {
       tableId,
       ...config,
-      phase: 'WAITING',
+      phase: race?.phase ?? 'WAITING',
+      race,
       connections: new Map(),
       version: 0,
       updatedAt: now,
@@ -147,6 +172,7 @@ export class RacingTableService {
   private applyTableConfig(
     table: RacingTableRuntime,
     config: RacingTableConfig,
+    race: RacingRaceSnapshot | null,
   ) {
     table.status = config.status;
     table.fieldSize = config.fieldSize;
@@ -162,6 +188,8 @@ export class RacingTableService {
     table.roundEndDelaySeconds = config.roundEndDelaySeconds;
     table.betTypes = config.betTypes;
     table.horses = config.horses;
+    table.race = race;
+    table.phase = race?.phase ?? 'WAITING';
   }
 
   private bump(table: RacingTableRuntime) {
@@ -192,10 +220,10 @@ export class RacingTableService {
         roundEndDelaySeconds: table.roundEndDelaySeconds,
       },
       horses: table.horses,
-      race: null,
+      race: table.race,
       timers: {
-        scheduledStartAt: null,
-        bettingClosesAt: null,
+        scheduledStartAt: table.race?.scheduledStartAt ?? null,
+        bettingClosesAt: table.race?.bettingClosesAt ?? null,
       },
       version: table.version,
       updatedAt: table.updatedAt,
@@ -230,6 +258,7 @@ export class RacingTableError extends Error {
 type RacingTableRuntime = RacingTableConfig & {
   tableId: string;
   phase: RacingTablePhase;
+  race: RacingRaceSnapshot | null;
   connections: Map<string, RacingSocketUser>;
   version: number;
   updatedAt: string;
@@ -334,6 +363,37 @@ function countUniqueViewers(table: RacingTableRuntime) {
   return new Set(
     Array.from(table.connections.values()).map((user) => user.userId),
   ).size;
+}
+
+function buildSyncKey(table: RacingTableRuntime) {
+  return JSON.stringify({
+    status: table.status,
+    phase: table.phase,
+    fieldSize: table.fieldSize,
+    minBet: table.minBet.toString(),
+    maxBet: table.maxBet.toString(),
+    payoutRateBps: table.payoutRateBps,
+    bettingTimeoutSeconds: table.bettingTimeoutSeconds,
+    raceIntervalSeconds: table.raceIntervalSeconds,
+    bettingCloseBeforeStartSeconds: table.bettingCloseBeforeStartSeconds,
+    tickIntervalMs: table.tickIntervalMs,
+    raceDistanceM: table.raceDistanceM,
+    roundEndDelaySeconds: table.roundEndDelaySeconds,
+    betTypes: table.betTypes,
+    horses: table.horses.map((horse) => horse.horseId),
+    race: table.race
+      ? {
+          raceId: table.race.raceId,
+          raceNo: table.race.raceNo,
+          status: table.race.status,
+          phase: table.race.phase,
+          scheduledStartAt: table.race.scheduledStartAt,
+          bettingOpensAt: table.race.bettingOpensAt,
+          bettingClosesAt: table.race.bettingClosesAt,
+          entries: table.race.entries.map((entry) => entry.raceEntryId),
+        }
+      : null,
+  });
 }
 
 function calculateRaceAndResultSeconds(table: RacingTableRuntime) {

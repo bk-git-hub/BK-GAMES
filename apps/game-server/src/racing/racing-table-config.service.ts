@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type {
   RacingBetType,
   RacingHorseSnapshot,
+  RacingRaceSnapshot,
   RacingTableStatus,
 } from '@bk-games/shared';
 import {
@@ -40,11 +41,38 @@ export class RacingTableConfigService {
       horses: horses.map(toHorseSnapshot),
     };
   }
+
+  async getScheduledRace(tableId: string): Promise<RacingRaceSnapshot> {
+    const db = (await import(dbPackageName)) as RacingDbModule;
+    const result = await db.ensureScheduledRacingRace({ tableCode: tableId });
+
+    return {
+      raceId: result.race.id,
+      raceNo: result.race.raceNo,
+      status: result.race.status,
+      phase: result.race.phase,
+      scheduledStartAt: toIsoStringOrNull(result.race.scheduledStartAt),
+      bettingOpensAt: toIsoStringOrNull(result.race.bettingOpensAt),
+      bettingClosesAt: toIsoStringOrNull(result.race.bettingClosesAt),
+      entries: result.entries.map((entry) => ({
+        raceEntryId: entry.raceEntryId,
+        horseId: entry.horseId,
+        name: entry.horseName,
+        silkColor: entry.silkColor,
+        number: entry.number,
+        gateNo: entry.gateNo,
+        lane: entry.lane,
+      })),
+    };
+  }
 }
 
 type RacingDbModule = {
   getRacingTableByCode(tableId: string): Promise<RacingDbTable | null>;
   listActiveRacingHorses(limit?: number): Promise<RacingDbHorse[]>;
+  ensureScheduledRacingRace(
+    input: RacingEnsureScheduledRaceInput,
+  ): Promise<RacingScheduledRaceResult>;
 };
 
 type RacingDbTable = {
@@ -65,6 +93,33 @@ type RacingDbTable = {
 type RacingDbHorse = {
   id: string;
   name: string;
+  silkColor: string;
+};
+
+type RacingEnsureScheduledRaceInput = {
+  tableCode: string;
+};
+
+type RacingScheduledRaceResult = {
+  race: {
+    id: string;
+    raceNo: number;
+    status: RacingRaceSnapshot['status'];
+    phase: RacingRaceSnapshot['phase'];
+    scheduledStartAt: Date | null;
+    bettingOpensAt: Date | null;
+    bettingClosesAt: Date | null;
+  };
+  entries: RacingScheduledRaceEntry[];
+};
+
+type RacingScheduledRaceEntry = {
+  raceEntryId: string;
+  horseId: string;
+  number: number;
+  gateNo: number;
+  lane: number;
+  horseName: string;
   silkColor: string;
 };
 
@@ -91,6 +146,10 @@ function toHorseSnapshot(
     silkColor: horse.silkColor,
     number: index + 1,
   };
+}
+
+function toIsoStringOrNull(value: Date | null) {
+  return value ? value.toISOString() : null;
 }
 
 const dbPackageName: string = '@bk-games/db';

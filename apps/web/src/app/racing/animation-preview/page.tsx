@@ -26,7 +26,7 @@ const horses: HorseEntry[] = [
     offset: "-7.6s",
     rank: "1st",
     startLaneTop: "31%",
-    startX: "8%",
+    startX: "10.5%",
   },
   {
     color: "orange",
@@ -50,7 +50,7 @@ const horses: HorseEntry[] = [
     offset: "-4.9s",
     rank: "3rd",
     startLaneTop: "48%",
-    startX: "13%",
+    startX: "10.5%",
   },
   {
     color: "yellow",
@@ -62,7 +62,7 @@ const horses: HorseEntry[] = [
     offset: "-3.5s",
     rank: "4th",
     startLaneTop: "56.5%",
-    startX: "15.5%",
+    startX: "10.5%",
   },
   {
     color: "purple",
@@ -74,7 +74,7 @@ const horses: HorseEntry[] = [
     offset: "-2.2s",
     rank: "5th",
     startLaneTop: "65%",
-    startX: "18%",
+    startX: "10.5%",
   },
   {
     color: "green",
@@ -86,7 +86,7 @@ const horses: HorseEntry[] = [
     offset: "-0.9s",
     rank: "6th",
     startLaneTop: "73.5%",
-    startX: "20.5%",
+    startX: "10.5%",
   },
 ];
 
@@ -111,6 +111,7 @@ export default function RacingAnimationPreviewPage() {
 
         <section className={styles.startFrame} aria-label="Pre-race start state preview">
           <div className={styles.startTrack}>
+            <div className={styles.startLine} aria-hidden="true" />
             <div className={styles.startHud} aria-label="Start state">
               <span>GATE READY</span>
               <strong>00:03</strong>

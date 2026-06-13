@@ -113,6 +113,25 @@
   position: absolute;
 }
 
+.startLine {
+  background:
+    linear-gradient(90deg, rgb(11 19 18 / 62%), rgb(255 246 198 / 96%) 48%, rgb(11 19 18 / 62%)),
+    repeating-linear-gradient(
+      180deg,
+      rgb(255 246 198 / 98%) 0 11px,
+      rgb(21 34 28 / 92%) 11px 22px
+    );
+  border-left: 2px solid rgb(255 255 255 / 74%);
+  border-right: 2px solid rgb(255 255 255 / 42%);
+  bottom: 17%;
+  box-shadow: 0 0 18px rgb(255 241 174 / 24%);
+  left: calc(10.5% + 116px);
+  position: absolute;
+  top: 27%;
+  width: 16px;
+  z-index: 12;
+}
+
 .startHud {
   align-items: center;
   background: rgb(5 12 14 / 68%);
@@ -159,7 +178,7 @@
   filter: drop-shadow(0 12px 7px rgb(0 0 0 / 38%));
   height: 181px;
   transform: scale(0.58);
-  transform-origin: center bottom;
+  transform-origin: left bottom;
   width: 206px;
 }
 
@@ -433,6 +452,11 @@
 
   .startHud strong {
     font-size: 18px;
+  }
+
+  .startLine {
+    left: calc(10.5% + 86px);
+    width: 12px;
   }
 
   .sprite {

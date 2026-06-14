@@ -40,6 +40,20 @@ export type RacingJoinTableInput = {
   user: RacingSocketUser;
 };
 
+export type RacingCurrentRaceInput = {
+  tableId: string;
+  raceId: string;
+};
+
+export type RacingRecordBetPlacedInput = {
+  tableId: string;
+  user: RacingSocketUser;
+  raceId: string;
+  betId: string;
+  betType: RacingBetType;
+  raceEntryIds: string[];
+};
+
 export type RacingTableMutationResult = {
   state: RacingTableState;
   event: RacingTableEventPayload;
@@ -92,6 +106,48 @@ export class RacingTableService {
     return {
       state: this.toState(table),
       event: this.toEvent(table, 'TABLE_JOINED', user.userId),
+    };
+  }
+
+  requireCurrentRace(input: RacingCurrentRaceInput): RacingRaceSnapshot {
+    const table = this.getTable(input.tableId);
+    const raceId = input.raceId.trim();
+
+    if (!raceId) {
+      throw new RacingTableError('RACE_NOT_FOUND', 'raceId is required.');
+    }
+
+    if (!table.race || table.race.raceId !== raceId) {
+      throw new RacingTableError(
+        'RACE_NOT_FOUND',
+        `Racing race ${raceId} is not the current race for table ${table.tableId}.`,
+      );
+    }
+
+    if (table.phase !== 'BETTING') {
+      throw new RacingTableError(
+        'BETTING_CLOSED',
+        `Racing table ${table.tableId} is not accepting bets.`,
+      );
+    }
+
+    return table.race;
+  }
+
+  recordBetPlaced(input: RacingRecordBetPlacedInput): RacingTableMutationResult {
+    const table = this.getTable(input.tableId);
+    const user = normalizeSocketUser(input.user);
+
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(table, 'BET_PLACED', user.userId, {
+        raceId: input.raceId,
+        betId: input.betId,
+        betType: input.betType,
+        raceEntryIds: input.raceEntryIds,
+      }),
     };
   }
 
@@ -234,11 +290,13 @@ export class RacingTableService {
     table: RacingTableRuntime,
     type: RacingTableEventPayload['type'],
     actorUserId: string,
+    metadata: RacingTableEventMetadata = {},
   ): RacingTableEventPayload {
     return {
       tableId: table.tableId,
       type,
       actorUserId,
+      ...metadata,
       stateVersion: table.version,
       createdAt: table.updatedAt,
     };
@@ -263,6 +321,11 @@ type RacingTableRuntime = RacingTableConfig & {
   version: number;
   updatedAt: string;
 };
+
+type RacingTableEventMetadata = Pick<
+  RacingTableEventPayload,
+  'raceId' | 'betId' | 'betType' | 'raceEntryIds'
+>;
 
 function normalizeTableId(tableId: string) {
   const normalizedTableId = tableId.trim();

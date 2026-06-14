@@ -12,13 +12,17 @@ import {
   RACING_SERVER_EVENTS,
   racingTableRoom,
   racingUserRoom,
+  type RacingBetType,
   type RacingClientEvent,
   type RacingJoinTablePayload,
+  type RacingPlaceBetPayload,
   type RacingSocketErrorPayload,
   type RacingSocketUser,
+  type RacingWalletUpdatedPayload,
 } from '@bk-games/shared';
 import { Server, Socket } from 'socket.io';
 import { GameTokenService } from '../auth/game-token.service';
+import { WalletService } from '../wallet/wallet.service';
 import { RacingTableConfigService } from './racing-table-config.service';
 import {
   RacingTableError,
@@ -46,6 +50,7 @@ export class RacingGateway implements OnModuleDestroy {
     private readonly tableConfigService: RacingTableConfigService,
     private readonly tableService: RacingTableService,
     private readonly gameTokenService: GameTokenService,
+    private readonly walletService: WalletService,
   ) {}
 
   afterInit() {
@@ -86,6 +91,62 @@ export class RacingGateway implements OnModuleDestroy {
 
       await this.joinRacingRooms(socket, update.state.tableId, user.userId);
       this.emitTableUpdate(update);
+    });
+  }
+
+  @SubscribeMessage(RACING_CLIENT_EVENTS.BET_PLACE)
+  handleBetPlace(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: RacingPlaceBetPayload,
+  ) {
+    this.handleCommand(socket, RACING_CLIENT_EVENTS.BET_PLACE, async () => {
+      const payload = body as Partial<RacingPlaceBetPayload> | undefined;
+      const tableId = readRequiredTableId(payload?.tableId);
+      const raceId = readRequiredRaceId(payload?.raceId);
+      const syncUpdate = await this.configureRuntimeTable(tableId);
+
+      if (syncUpdate) {
+        this.emitTableUpdate(syncUpdate);
+      }
+
+      const user = this.resolveSocketUser(socket);
+      const race = this.tableService.requireCurrentRace({
+        tableId,
+        raceId,
+      });
+      const amount = parsePointAmount(payload?.amount);
+      const commandId = readRequiredCommandId(payload?.commandId);
+      const betType = parseRacingBetType(payload?.betType);
+      const raceEntryIds = parseRaceEntryIds(payload?.raceEntryIds);
+      const betResult = await this.walletService.placeRacingBet({
+        raceId: race.raceId,
+        userId: user.userId,
+        amount,
+        commandId,
+        betType,
+        raceEntryIds,
+      });
+
+      await this.joinRacingRooms(socket, tableId, user.userId);
+
+      const update = this.tableService.recordBetPlaced({
+        tableId,
+        user,
+        raceId: betResult.race.id,
+        betId: betResult.bet.id,
+        betType: betResult.bet.betType,
+        raceEntryIds: betResult.selections.map(
+          (selection) => selection.raceEntryId,
+        ),
+      });
+
+      this.emitTableUpdate(update);
+      this.emitWalletUpdated(user.userId, {
+        balance: betResult.walletMutation.wallet.balance.toString(),
+        delta: betResult.walletMutation.ledger.delta.toString(),
+        reason: 'BET_PLACED',
+        ledgerId: betResult.walletMutation.ledger.id,
+      });
     });
   }
 
@@ -150,6 +211,15 @@ export class RacingGateway implements OnModuleDestroy {
 
     this.server.to(room).emit(RACING_SERVER_EVENTS.TABLE_STATE, update.state);
     this.server.to(room).emit(RACING_SERVER_EVENTS.TABLE_EVENT, update.event);
+  }
+
+  private emitWalletUpdated(
+    userId: string,
+    payload: RacingWalletUpdatedPayload,
+  ) {
+    this.server
+      .to(racingUserRoom(userId))
+      .emit(RACING_SERVER_EVENTS.WALLET_UPDATED, payload);
   }
 
   private emitTableError(
@@ -300,5 +370,89 @@ const socketErrorCodes = new Set<string>([
   'TABLE_NOT_FOUND',
   'TABLE_NOT_OPEN',
   'INVALID_TABLE_ID',
+  'INVALID_COMMAND_ID',
+  'INVALID_BET_AMOUNT',
+  'INVALID_BET',
   'INVALID_SOCKET_USER',
+  'RACE_NOT_FOUND',
+  'RACE_ENTRY_NOT_FOUND',
+  'BETTING_CLOSED',
+  'BET_TOO_LOW',
+  'BET_TOO_HIGH',
+  'BET_ALREADY_PLACED',
+  'WALLET_NOT_FOUND',
+  'WALLET_NOT_ACTIVE',
+  'INSUFFICIENT_BALANCE',
+  'IDEMPOTENCY_CONFLICT',
 ]);
+
+function parsePointAmount(amount: unknown) {
+  if (typeof amount !== 'string' || !/^[1-9]\d*$/.test(amount.trim())) {
+    throw new RacingGatewayError(
+      'INVALID_BET_AMOUNT',
+      'Bet amount must be a positive integer string.',
+    );
+  }
+
+  return BigInt(amount.trim());
+}
+
+function readRequiredTableId(tableId: unknown) {
+  if (typeof tableId !== 'string' || !tableId.trim()) {
+    throw new RacingGatewayError('INVALID_TABLE_ID', 'tableId is required.');
+  }
+
+  return tableId.trim();
+}
+
+function readRequiredRaceId(raceId: unknown) {
+  if (typeof raceId !== 'string' || !raceId.trim()) {
+    throw new RacingGatewayError('RACE_NOT_FOUND', 'raceId is required.');
+  }
+
+  return raceId.trim();
+}
+
+function readRequiredCommandId(commandId: unknown) {
+  if (typeof commandId !== 'string' || !commandId.trim()) {
+    throw new RacingGatewayError(
+      'INVALID_COMMAND_ID',
+      'commandId is required for racing bets.',
+    );
+  }
+
+  return commandId.trim();
+}
+
+function parseRacingBetType(value: unknown): RacingBetType {
+  if (value === 'WIN' || value === 'QUINELLA' || value === 'EXACTA') {
+    return value;
+  }
+
+  throw new RacingGatewayError(
+    'INVALID_BET',
+    `Unsupported racing bet type ${String(value)}.`,
+  );
+}
+
+function parseRaceEntryIds(value: unknown) {
+  if (!Array.isArray(value)) {
+    throw new RacingGatewayError(
+      'INVALID_BET',
+      'raceEntryIds must be an array.',
+    );
+  }
+
+  const raceEntryIds = value.map((entryId) =>
+    typeof entryId === 'string' ? entryId.trim() : '',
+  );
+
+  if (raceEntryIds.some((entryId) => !entryId)) {
+    throw new RacingGatewayError(
+      'INVALID_BET',
+      'raceEntryIds must contain non-empty strings.',
+    );
+  }
+
+  return raceEntryIds;
+}

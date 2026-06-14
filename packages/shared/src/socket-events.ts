@@ -326,6 +326,7 @@ export const RACING_NAMESPACE = "/racing";
 
 export const RACING_CLIENT_EVENTS = {
   TABLE_JOIN: "table:join",
+  BET_PLACE: "bet:place",
 } as const;
 
 export const RACING_SERVER_EVENTS = {
@@ -365,6 +366,15 @@ export type RacingSocketUser = {
 export type RacingJoinTablePayload = {
   tableId: string;
   nickname?: string;
+};
+
+export type RacingPlaceBetPayload = {
+  commandId: string;
+  tableId: string;
+  raceId: string;
+  betType: RacingBetType;
+  amount: string;
+  raceEntryIds: string[];
 };
 
 export type RacingBettingLimitsSnapshot = {
@@ -450,12 +460,17 @@ export type RacingTablesResponse = {
 export type RacingTableEventType =
   | "TABLE_JOINED"
   | "RACE_SCHEDULED"
+  | "BET_PLACED"
   | "PLAYER_DISCONNECTED";
 
 export type RacingTableEventPayload = {
   tableId: string;
   type: RacingTableEventType;
   actorUserId: string;
+  raceId?: string;
+  betId?: string;
+  betType?: RacingBetType;
+  raceEntryIds?: string[];
   stateVersion: number;
   createdAt: string;
 };
@@ -465,7 +480,20 @@ export type RacingSocketErrorCode =
   | "TABLE_NOT_FOUND"
   | "TABLE_NOT_OPEN"
   | "INVALID_TABLE_ID"
+  | "INVALID_COMMAND_ID"
+  | "INVALID_BET_AMOUNT"
+  | "INVALID_BET"
   | "INVALID_SOCKET_USER"
+  | "RACE_NOT_FOUND"
+  | "RACE_ENTRY_NOT_FOUND"
+  | "BETTING_CLOSED"
+  | "BET_TOO_LOW"
+  | "BET_TOO_HIGH"
+  | "BET_ALREADY_PLACED"
+  | "WALLET_NOT_FOUND"
+  | "WALLET_NOT_ACTIVE"
+  | "INSUFFICIENT_BALANCE"
+  | "IDEMPOTENCY_CONFLICT"
   | "UNKNOWN_ERROR";
 
 export type RacingSocketErrorPayload = {

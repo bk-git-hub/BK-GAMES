@@ -16,14 +16,17 @@ import {
   type RacingClientEvent,
   type RacingJoinTablePayload,
   type RacingPlaceBetPayload,
+  type RacingRaceTickSnapshot,
   type RacingSocketErrorPayload,
   type RacingSocketUser,
+  type RacingTableState,
   type RacingWalletUpdatedPayload,
 } from '@bk-games/shared';
 import { Server, Socket } from 'socket.io';
 import { GameTokenService } from '../auth/game-token.service';
 import { WalletService } from '../wallet/wallet.service';
 import { RacingTableConfigService } from './racing-table-config.service';
+import type { RacingSettlementResult } from './racing-table-config.service';
 import {
   RacingTableError,
   RacingTableService,
@@ -181,11 +184,20 @@ export class RacingGateway implements OnModuleDestroy {
 
   private async syncRuntimeTable(tableId: string) {
     try {
+      const lifecycle = await this.tableConfigService.advanceRaceLifecycle(
+        tableId,
+      );
+      this.emitSettlementWalletUpdates(lifecycle.settled);
+
       const update = await this.configureRuntimeTable(tableId);
 
       if (update) {
         this.emitTableUpdate(update);
       }
+
+      this.emitRaceTickIfRunning(
+        update?.state ?? this.tableService.getTableState(tableId),
+      );
     } catch (error) {
       this.emitTableError(
         tableId,
@@ -220,6 +232,41 @@ export class RacingGateway implements OnModuleDestroy {
     this.server
       .to(racingUserRoom(userId))
       .emit(RACING_SERVER_EVENTS.WALLET_UPDATED, payload);
+  }
+
+  private emitSettlementWalletUpdates(
+    settlement: RacingSettlementResult | null,
+  ) {
+    if (!settlement) {
+      return;
+    }
+
+    for (const bet of settlement.bets) {
+      if (!bet.walletMutation) {
+        continue;
+      }
+
+      this.emitWalletUpdated(bet.userId, {
+        balance: bet.walletMutation.wallet.balance.toString(),
+        delta: bet.walletMutation.ledger.delta.toString(),
+        reason: 'PAYOUT',
+        ledgerId: bet.walletMutation.ledger.id,
+      });
+    }
+  }
+
+  private emitRaceTickIfRunning(state: RacingTableState) {
+    if (state.phase !== 'RUNNING' || !state.race) {
+      return;
+    }
+
+    const tick = buildRaceTick(state);
+    const update = this.tableService.recordRaceTick({
+      tableId: state.tableId,
+      tick,
+    });
+
+    this.emitTableUpdate(update);
   }
 
   private emitTableError(
@@ -384,6 +431,8 @@ const socketErrorCodes = new Set<string>([
   'WALLET_NOT_ACTIVE',
   'INSUFFICIENT_BALANCE',
   'IDEMPOTENCY_CONFLICT',
+  'INVALID_SETTLEMENT',
+  'SETTLEMENT_CONFLICT',
 ]);
 
 function parsePointAmount(amount: unknown) {
@@ -455,4 +504,61 @@ function parseRaceEntryIds(value: unknown) {
   }
 
   return raceEntryIds;
+}
+
+function buildRaceTick(state: RacingTableState): RacingRaceTickSnapshot {
+  const race = state.race;
+
+  if (!race) {
+    throw new RacingGatewayError('RACE_NOT_FOUND', 'No active race.');
+  }
+
+  const raceRunDurationMs = Math.max(
+    1_000,
+    (state.timing.raceAndResultSeconds - state.timing.roundEndDelaySeconds) *
+      1000,
+  );
+  const startAt =
+    Date.parse(race.startedAt ?? '') ||
+    Date.parse(race.scheduledStartAt ?? '') ||
+    Date.now();
+  const elapsedMs = Math.max(0, Math.min(Date.now() - startAt, raceRunDurationMs));
+  const elapsedRatio = elapsedMs / raceRunDurationMs;
+  const positions = race.entries
+    .map((entry) => {
+      const speed = deterministicUnitScore(`${race.raceId}:${entry.raceEntryId}`);
+      const progress = Math.min(
+        0.995,
+        Math.max(0, elapsedRatio * (0.82 + speed * 0.28)),
+      );
+
+      return {
+        raceEntryId: entry.raceEntryId,
+        progress,
+        speed,
+      };
+    })
+    .sort((left, right) => right.progress - left.progress)
+    .map((position, index) => ({
+      raceEntryId: position.raceEntryId,
+      progress: Number(position.progress.toFixed(4)),
+      rank: index + 1,
+    }));
+
+  return {
+    raceId: race.raceId,
+    elapsedMs,
+    positions,
+  };
+}
+
+function deterministicUnitScore(seed: string) {
+  let hash = 2_166_136_261;
+
+  for (const character of seed) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16_777_619);
+  }
+
+  return (hash >>> 0) / 0xffffffff;
 }

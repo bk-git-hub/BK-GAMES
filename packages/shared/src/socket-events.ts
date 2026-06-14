@@ -403,6 +403,8 @@ export type RacingRaceEntrySnapshot = RacingHorseSnapshot & {
   raceEntryId: string;
   gateNo: number;
   lane: number;
+  finalRank: number | null;
+  finishedAtMs: number | null;
 };
 
 export type RacingRaceSnapshot = {
@@ -413,12 +415,26 @@ export type RacingRaceSnapshot = {
   scheduledStartAt: string | null;
   bettingOpensAt: string | null;
   bettingClosesAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  settledAt: string | null;
+  resultOrder: string[];
   entries: RacingRaceEntrySnapshot[];
 };
 
 export type RacingTimerSnapshot = {
   scheduledStartAt: string | null;
   bettingClosesAt: string | null;
+};
+
+export type RacingRaceTickSnapshot = {
+  raceId: string;
+  elapsedMs: number;
+  positions: Array<{
+    raceEntryId: string;
+    progress: number;
+    rank: number;
+  }>;
 };
 
 export type RacingTableState = {
@@ -461,6 +477,9 @@ export type RacingTableEventType =
   | "TABLE_JOINED"
   | "RACE_SCHEDULED"
   | "BET_PLACED"
+  | "RACE_STARTED"
+  | "RACE_TICK"
+  | "RACE_SETTLED"
   | "PLAYER_DISCONNECTED";
 
 export type RacingTableEventPayload = {
@@ -471,6 +490,8 @@ export type RacingTableEventPayload = {
   betId?: string;
   betType?: RacingBetType;
   raceEntryIds?: string[];
+  resultOrder?: string[];
+  tick?: RacingRaceTickSnapshot;
   stateVersion: number;
   createdAt: string;
 };
@@ -494,6 +515,8 @@ export type RacingSocketErrorCode =
   | "WALLET_NOT_ACTIVE"
   | "INSUFFICIENT_BALANCE"
   | "IDEMPOTENCY_CONFLICT"
+  | "INVALID_SETTLEMENT"
+  | "SETTLEMENT_CONFLICT"
   | "UNKNOWN_ERROR";
 
 export type RacingSocketErrorPayload = {

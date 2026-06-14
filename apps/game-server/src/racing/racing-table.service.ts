@@ -3,6 +3,7 @@ import {
   type RacingBetType,
   type RacingHorseSnapshot,
   type RacingRaceSnapshot,
+  type RacingRaceTickSnapshot,
   type RacingSocketErrorCode,
   type RacingSocketUser,
   type RacingTableEventPayload,
@@ -54,6 +55,11 @@ export type RacingRecordBetPlacedInput = {
   raceEntryIds: string[];
 };
 
+export type RacingRecordRaceTickInput = {
+  tableId: string;
+  tick: RacingRaceTickSnapshot;
+};
+
 export type RacingTableMutationResult = {
   state: RacingTableState;
   event: RacingTableEventPayload;
@@ -89,10 +95,14 @@ export class RacingTableService {
     }
 
     this.bump(existing);
+    const eventType = getSyncEventType(previousKey, existing);
 
     return {
       state: this.toState(existing),
-      event: this.toEvent(existing, 'RACE_SCHEDULED', 'SYSTEM'),
+      event: this.toEvent(existing, eventType, 'SYSTEM', {
+        raceId: existing.race?.raceId,
+        resultOrder: existing.race?.resultOrder,
+      }),
     };
   }
 
@@ -151,6 +161,34 @@ export class RacingTableService {
     };
   }
 
+  recordRaceTick(input: RacingRecordRaceTickInput): RacingTableMutationResult {
+    const table = this.getTable(input.tableId);
+
+    if (!table.race || table.race.raceId !== input.tick.raceId) {
+      throw new RacingTableError(
+        'RACE_NOT_FOUND',
+        `Racing race ${input.tick.raceId} is not active.`,
+      );
+    }
+
+    if (table.phase !== 'RUNNING') {
+      throw new RacingTableError(
+        'BETTING_CLOSED',
+        `Racing table ${table.tableId} is not running a race.`,
+      );
+    }
+
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(table, 'RACE_TICK', 'SYSTEM', {
+        raceId: input.tick.raceId,
+        tick: input.tick,
+      }),
+    };
+  }
+
   disconnectSocket(socketId: string): RacingTableMutationResult[] {
     const updates: RacingTableMutationResult[] = [];
 
@@ -170,6 +208,10 @@ export class RacingTableService {
     }
 
     return updates;
+  }
+
+  getTableState(tableId: string): RacingTableState {
+    return this.toState(this.getTable(tableId));
   }
 
   getTableSummary(tableId: string): RacingTableSummary {
@@ -324,7 +366,7 @@ type RacingTableRuntime = RacingTableConfig & {
 
 type RacingTableEventMetadata = Pick<
   RacingTableEventPayload,
-  'raceId' | 'betId' | 'betType' | 'raceEntryIds'
+  'raceId' | 'betId' | 'betType' | 'raceEntryIds' | 'resultOrder' | 'tick'
 >;
 
 function normalizeTableId(tableId: string) {
@@ -453,10 +495,44 @@ function buildSyncKey(table: RacingTableRuntime) {
           scheduledStartAt: table.race.scheduledStartAt,
           bettingOpensAt: table.race.bettingOpensAt,
           bettingClosesAt: table.race.bettingClosesAt,
+          startedAt: table.race.startedAt,
+          finishedAt: table.race.finishedAt,
+          settledAt: table.race.settledAt,
+          resultOrder: table.race.resultOrder,
           entries: table.race.entries.map((entry) => entry.raceEntryId),
         }
       : null,
   });
+}
+
+function getSyncEventType(
+  previousKey: string,
+  table: RacingTableRuntime,
+): RacingTableEventPayload['type'] {
+  const previous = JSON.parse(previousKey) as {
+    race?: {
+      raceId?: string;
+      phase?: RacingTablePhase;
+    } | null;
+  };
+  const previousRace = previous.race;
+  const nextRace = table.race;
+
+  if (!previousRace || !nextRace || previousRace.raceId !== nextRace.raceId) {
+    return 'RACE_SCHEDULED';
+  }
+
+  if (previousRace.phase !== nextRace.phase) {
+    if (nextRace.phase === 'RUNNING') {
+      return 'RACE_STARTED';
+    }
+
+    if (nextRace.phase === 'SETTLED') {
+      return 'RACE_SETTLED';
+    }
+  }
+
+  return 'RACE_SCHEDULED';
 }
 
 function calculateRaceAndResultSeconds(table: RacingTableRuntime) {

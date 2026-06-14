@@ -44,7 +44,9 @@ export class RacingTableConfigService {
 
   async getScheduledRace(tableId: string): Promise<RacingRaceSnapshot> {
     const db = (await import(dbPackageName)) as RacingDbModule;
-    const result = await db.ensureScheduledRacingRace({ tableCode: tableId });
+    const result =
+      (await db.getActiveRacingRaceForTable({ tableCode: tableId })) ??
+      (await db.ensureScheduledRacingRace({ tableCode: tableId }));
 
     return {
       raceId: result.race.id,
@@ -54,6 +56,12 @@ export class RacingTableConfigService {
       scheduledStartAt: toIsoStringOrNull(result.race.scheduledStartAt),
       bettingOpensAt: toIsoStringOrNull(result.race.bettingOpensAt),
       bettingClosesAt: toIsoStringOrNull(result.race.bettingClosesAt),
+      startedAt: toIsoStringOrNull(result.race.startedAt),
+      finishedAt: toIsoStringOrNull(result.race.finishedAt),
+      settledAt: toIsoStringOrNull(result.race.settledAt),
+      resultOrder: Array.isArray(result.race.resultOrder)
+        ? result.race.resultOrder
+        : [],
       entries: result.entries.map((entry) => ({
         raceEntryId: entry.raceEntryId,
         horseId: entry.horseId,
@@ -62,8 +70,16 @@ export class RacingTableConfigService {
         number: entry.number,
         gateNo: entry.gateNo,
         lane: entry.lane,
+        finalRank: entry.finalRank,
+        finishedAtMs: entry.finishedAtMs,
       })),
     };
+  }
+
+  async advanceRaceLifecycle(tableId: string) {
+    const db = (await import(dbPackageName)) as RacingDbModule;
+
+    return db.advanceRacingRaceLifecycle({ tableCode: tableId });
   }
 }
 
@@ -73,6 +89,12 @@ type RacingDbModule = {
   ensureScheduledRacingRace(
     input: RacingEnsureScheduledRaceInput,
   ): Promise<RacingScheduledRaceResult>;
+  getActiveRacingRaceForTable(
+    input: RacingEnsureScheduledRaceInput,
+  ): Promise<RacingScheduledRaceResult | null>;
+  advanceRacingRaceLifecycle(
+    input: RacingEnsureScheduledRaceInput,
+  ): Promise<RacingLifecycleAdvanceResult>;
 };
 
 type RacingDbTable = {
@@ -109,6 +131,10 @@ type RacingScheduledRaceResult = {
     scheduledStartAt: Date | null;
     bettingOpensAt: Date | null;
     bettingClosesAt: Date | null;
+    startedAt: Date | null;
+    finishedAt: Date | null;
+    settledAt: Date | null;
+    resultOrder: string[] | null;
   };
   entries: RacingScheduledRaceEntry[];
 };
@@ -119,8 +145,39 @@ type RacingScheduledRaceEntry = {
   number: number;
   gateNo: number;
   lane: number;
+  finalRank: number | null;
+  finishedAtMs: number | null;
   horseName: string;
   silkColor: string;
+};
+
+type RacingLifecycleAdvanceResult = {
+  started: unknown;
+  settled: RacingSettlementResult | null;
+  roundEnded: unknown;
+};
+
+export type RacingSettlementResult = {
+  raceId: string;
+  resultOrder: string[];
+  bets: RacingSettlementBetResult[];
+};
+
+export type RacingSettlementBetResult = {
+  betId: string;
+  userId: string;
+  betType: RacingBetType;
+  outcome: 'WIN' | 'LOSE';
+  payoutAmount: bigint | string;
+  netAmount: bigint | string;
+  walletMutation: {
+    wallet: { balance: bigint | string };
+    ledger: {
+      id: string;
+      delta: bigint | string;
+      type?: 'PAYOUT';
+    };
+  } | null;
 };
 
 function readBetTypes(rules: Record<string, unknown>): RacingBetType[] {

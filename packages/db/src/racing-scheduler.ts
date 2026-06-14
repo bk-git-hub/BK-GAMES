@@ -28,6 +28,8 @@ export type ScheduledRacingRaceEntry = {
   number: number;
   gateNo: number;
   lane: number;
+  finalRank: number | null;
+  finishedAtMs: number | null;
   horseName: string;
   silkColor: string;
 };
@@ -119,6 +121,31 @@ export async function ensureScheduledRacingRace(
   });
 }
 
+export async function getActiveRacingRaceForTable(
+  input: EnsureScheduledRacingRaceInput,
+): Promise<EnsureScheduledRacingRaceResult | null> {
+  const normalizedInput = normalizeEnsureScheduledRaceInput(input);
+
+  return db.transaction(async (tx) => {
+    const table = await lockRacingTableByCode(
+      tx,
+      normalizedInput.tableCode,
+    );
+    const race = await findActiveDisplayRace(tx, table.id);
+
+    if (!race) {
+      return null;
+    }
+
+    return {
+      table,
+      race,
+      entries: await findScheduledRaceEntries(tx, race.id),
+      created: false,
+    };
+  });
+}
+
 async function lockRacingTableByCode(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   tableCode: string,
@@ -175,6 +202,25 @@ async function findRaceByScheduledStart(
     .limit(1);
 
   return race ?? null;
+}
+
+async function findActiveDisplayRace(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tableId: string,
+) {
+  const rows = await tx
+    .select()
+    .from(racingRaces)
+    .where(
+      and(
+        eq(racingRaces.tableId, tableId),
+        sql`${racingRaces.phase} in ('RUNNING', 'FINISHING', 'SETTLING', 'SETTLED')`,
+      ),
+    )
+    .orderBy(sql`${racingRaces.scheduledStartAt} desc nulls last`)
+    .limit(1);
+
+  return rows[0] ?? null;
 }
 
 async function updateRaceSchedulePhaseIfNeeded(
@@ -247,6 +293,8 @@ async function findScheduledRaceEntries(
       number: racingRaceEntries.number,
       gateNo: racingRaceEntries.gateNo,
       lane: racingRaceEntries.lane,
+      finalRank: racingRaceEntries.finalRank,
+      finishedAtMs: racingRaceEntries.finishedAtMs,
       horseName: racingHorses.name,
       silkColor: racingHorses.silkColor,
     })

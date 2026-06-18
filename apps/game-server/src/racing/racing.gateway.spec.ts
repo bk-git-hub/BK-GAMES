@@ -1,7 +1,4 @@
-import type {
-  RacingRaceEntrySnapshot,
-  RacingTableState,
-} from '@bk-games/shared';
+import type { RacingTableState } from '@bk-games/shared';
 import { buildRaceTick } from './racing-race-tick';
 
 describe('buildRaceTick', () => {
@@ -9,41 +6,30 @@ describe('buildRaceTick', () => {
     jest.restoreAllMocks();
   });
 
-  it('orders tick ranks with the same deterministic seed as race settlement', () => {
-    const now = Date.parse('2026-06-18T12:00:26.000Z');
-    jest.spyOn(Date, 'now').mockReturnValue(now);
-
+  it('allows race ranks to change across simulation ticks', () => {
     const state = createRunningState({
       startedAt: '2026-06-18T12:00:00.000Z',
     });
-    const tick = buildRaceTick(state);
-    const expectedOrder = expectedSettlementOrder(
-      state.race!.raceId,
-      state.race!.raceNo,
-      state.race!.entries,
+    const orders = [6_000, 18_000, 34_000, 48_000].map((elapsedMs) =>
+      buildTickOrderAtElapsedMs(state, elapsedMs),
     );
+    const uniqueOrders = new Set(orders.map((order) => order.join(',')));
 
-    expect(tick.positions.map((position) => position.raceEntryId)).toEqual(
-      expectedOrder,
+    expect(uniqueOrders.size).toBeGreaterThan(1);
+  });
+
+  it('marks every runner as finished by the final race tick', () => {
+    const state = createRunningState({
+      startedAt: '2026-06-18T12:00:00.000Z',
+    });
+    const tick = buildTickAtElapsedMs(state, 52_000);
+
+    expect(tick.positions.every((position) => position.progress === 1)).toBe(
+      true,
     );
     expect(tick.positions.map((position) => position.rank)).toEqual([
       1, 2, 3, 4, 5, 6,
     ]);
-  });
-
-  it('keeps higher ranked entries ahead in progress during the race', () => {
-    const now = Date.parse('2026-06-18T12:00:26.000Z');
-    jest.spyOn(Date, 'now').mockReturnValue(now);
-
-    const tick = buildRaceTick(
-      createRunningState({
-        startedAt: '2026-06-18T12:00:00.000Z',
-      }),
-    );
-
-    expect(tick.positions).toEqual(
-      [...tick.positions].sort((left, right) => right.progress - left.progress),
-    );
   });
 });
 
@@ -115,29 +101,16 @@ function createRunningState(input: { startedAt: string }): RacingTableState {
   };
 }
 
-function expectedSettlementOrder(
-  raceId: string,
-  raceNo: number,
-  entries: RacingRaceEntrySnapshot[],
-) {
-  return entries
-    .map((entry) => ({
-      raceEntryId: entry.raceEntryId,
-      score: deterministicScore(
-        `${raceId}:${raceNo}:${entry.raceEntryId}:${entry.number}`,
-      ),
-    }))
-    .sort((left, right) => right.score - left.score)
-    .map((entry) => entry.raceEntryId);
+function buildTickOrderAtElapsedMs(state: RacingTableState, elapsedMs: number) {
+  return buildTickAtElapsedMs(state, elapsedMs).positions.map(
+    (position) => position.raceEntryId,
+  );
 }
 
-function deterministicScore(seed: string) {
-  let hash = 2_166_136_261;
+function buildTickAtElapsedMs(state: RacingTableState, elapsedMs: number) {
+  const startedAt = Date.parse(state.race!.startedAt!);
 
-  for (const character of seed) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16_777_619);
-  }
+  jest.spyOn(Date, 'now').mockReturnValue(startedAt + elapsedMs);
 
-  return hash >>> 0;
+  return buildRaceTick(state);
 }

@@ -1,4 +1,8 @@
 import { asc, eq, sql } from "drizzle-orm";
+import {
+  buildRacingSimulationFinal,
+  buildRacingSimulationSeed,
+} from "@bk-games/shared";
 
 import { db } from "./client.js";
 import {
@@ -68,11 +72,17 @@ async function startDueRacingRace(
     }
 
     const now = input.now;
+    const seed = buildRacingSimulationSeed({
+      raceId,
+      raceNo: await findRacingRaceNoById(tx, raceId),
+    });
     const [race] = await tx
       .update(racingRaces)
       .set({
         status: "RUNNING",
         phase: "RUNNING",
+        seed,
+        seedLockedAt: now,
         startedAt: now,
         updatedAt: now,
       })
@@ -93,6 +103,7 @@ async function startDueRacingRace(
       payload: {
         scheduledStartAt: race.scheduledStartAt?.toISOString() ?? null,
         startedAt: now.toISOString(),
+        seedLockedAt: now.toISOString(),
       },
     });
 
@@ -114,7 +125,7 @@ async function settleDueRunningRace(
 
   return settleRacingRace({
     raceId: dueRace.id,
-    entries: buildDeterministicResult(dueRace),
+    entries: buildSimulationResult(dueRace),
   });
 }
 
@@ -123,11 +134,7 @@ async function endDueSettledRace(
 ) {
   return db.transaction(async (tx) => {
     const table = await lockRacingTableByCode(tx, input.tableCode);
-    const raceId = await findDueSettledRaceIdForRoundEnd(
-      tx,
-      table,
-      input.now,
-    );
+    const raceId = await findDueSettledRaceIdForRoundEnd(tx, table, input.now);
 
     if (!raceId) {
       return null;
@@ -275,7 +282,9 @@ async function findDueSettledRaceIdForRoundEnd(
   table: RacingRunnerTable,
   now: Date,
 ) {
-  const roundEndAt = new Date(now.getTime() - getRaceAndResultDurationMs(table));
+  const roundEndAt = new Date(
+    now.getTime() - getRaceAndResultDurationMs(table),
+  );
   const result = await tx.execute(sql<RaceIdRow>`
     select id
     from racing_races
@@ -304,6 +313,26 @@ async function findRacingRaceById(
     .limit(1);
 
   return race ?? null;
+}
+
+async function findRacingRaceNoById(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  raceId: string,
+) {
+  const [race] = await tx
+    .select({ raceNo: racingRaces.raceNo })
+    .from(racingRaces)
+    .where(eq(racingRaces.id, raceId))
+    .limit(1);
+
+  if (!race) {
+    throw new RacingRunnerError(
+      "RACE_NOT_FOUND",
+      `Race ${raceId} disappeared before seed lock.`,
+    );
+  }
+
+  return race.raceNo;
 }
 
 async function findRacingRaceEntries(
@@ -353,36 +382,33 @@ async function nextActionSequence(
   return Number(row?.actionSequence ?? 1);
 }
 
-function buildDeterministicResult(
+function buildSimulationResult(
   race: RacingLifecycleRace & { table: RacingRunnerTable },
 ) {
-  const entries = race.entries.map((entry) => ({
-    raceEntryId: entry.id,
-    score: deterministicScore(
-      `${race.id}:${race.raceNo}:${entry.id}:${entry.number}`,
-    ),
-  }));
-  const runDurationMs = getRaceRunDurationMs(race.table);
-  const finishSpreadMs = Math.min(6_000, Math.max(1_000, runDurationMs / 5));
-  const baseFinishMs = Math.max(1_000, runDurationMs - finishSpreadMs);
-
-  return entries
-    .sort((left, right) => right.score - left.score)
-    .map((entry, index) => ({
-      raceEntryId: entry.raceEntryId,
-      finalRank: index + 1,
-      finishedAtMs: Math.round(
-        baseFinishMs + (finishSpreadMs / entries.length) * index,
-      ),
-    }));
+  return buildRacingSimulationFinal({
+    seed:
+      race.seed ??
+      buildRacingSimulationSeed({
+        raceId: race.id,
+        raceNo: race.raceNo,
+      }),
+    distanceM: race.distanceM,
+    runDurationMs: getRaceRunDurationMs(race.table),
+    tickIntervalMs: race.table.tickIntervalMs,
+    entries: race.entries.map((entry) => ({
+      raceEntryId: entry.id,
+      number: entry.number,
+    })),
+  });
 }
 
 function getRaceAndResultDurationMs(table: RacingRunnerTable) {
   return (
-    table.raceIntervalSeconds -
-    table.bettingTimeoutSeconds -
-    table.bettingCloseBeforeStartSeconds
-  ) * 1000;
+    (table.raceIntervalSeconds -
+      table.bettingTimeoutSeconds -
+      table.bettingCloseBeforeStartSeconds) *
+    1000
+  );
 }
 
 function getRaceRunDurationMs(table: RacingRunnerTable) {
@@ -390,17 +416,6 @@ function getRaceRunDurationMs(table: RacingRunnerTable) {
     1_000,
     getRaceAndResultDurationMs(table) - table.roundEndDelaySeconds * 1000,
   );
-}
-
-function deterministicScore(seed: string) {
-  let hash = 2_166_136_261;
-
-  for (const character of seed) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16_777_619);
-  }
-
-  return hash >>> 0;
 }
 
 function normalizeAdvanceInput(
@@ -430,9 +445,7 @@ function getRows<T>(result: unknown): T[] {
   return [];
 }
 
-export type RacingRunnerErrorCode =
-  | "TABLE_NOT_FOUND"
-  | "RACE_NOT_FOUND";
+export type RacingRunnerErrorCode = "TABLE_NOT_FOUND" | "RACE_NOT_FOUND";
 
 export class RacingRunnerError extends Error {
   readonly code: RacingRunnerErrorCode;

@@ -1,12 +1,37 @@
-import type {
-  RacingRaceEntrySnapshot,
-  RacingRaceTickSnapshot,
-  RacingTableState,
-} from '@bk-games/shared';
-
-type RacingSimulationState = {
+export type RacingSimulationEntryInput = {
   raceEntryId: string;
   number: number;
+};
+
+export type BuildRacingSimulationInput = {
+  seed: string;
+  distanceM: number;
+  runDurationMs: number;
+  tickIntervalMs: number;
+  elapsedMs: number;
+  entries: RacingSimulationEntryInput[];
+};
+
+export type RacingSimulationPosition = {
+  raceEntryId: string;
+  progress: number;
+  rank: number;
+  distanceM: number;
+  finishedAtMs: number | null;
+};
+
+export type RacingSimulationTick = {
+  elapsedMs: number;
+  positions: RacingSimulationPosition[];
+};
+
+export type RacingSimulationFinalEntry = {
+  raceEntryId: string;
+  finalRank: number;
+  finishedAtMs: number;
+};
+
+type RacingSimulationState = RacingSimulationEntryInput & {
   distanceM: number;
   finishedAtMs: number | null;
 };
@@ -14,79 +39,73 @@ type RacingSimulationState = {
 const minimumRaceRunDurationMs = 1_000;
 const minimumTickIntervalMs = 10;
 
-export function buildRaceTick(state: RacingTableState): RacingRaceTickSnapshot {
-  const race = state.race;
-
-  if (!race) {
-    throw new Error('No active race.');
-  }
-
-  const raceRunDurationMs = Math.max(
-    minimumRaceRunDurationMs,
-    (state.timing.raceAndResultSeconds - state.timing.roundEndDelaySeconds) *
-      1000,
-  );
-  const startAt =
-    Date.parse(race.startedAt ?? '') ||
-    Date.parse(race.scheduledStartAt ?? '') ||
-    Date.now();
-  const elapsedMs = Math.max(
-    0,
-    Math.min(Date.now() - startAt, raceRunDurationMs),
-  );
-  const positions = simulateRaceTick({
-    seed: buildSimulationSeed({
-      raceId: race.raceId,
-      raceNo: race.raceNo,
-    }),
-    distanceM: state.timing.raceDistanceM,
-    runDurationMs: raceRunDurationMs,
-    tickIntervalMs: state.timing.tickIntervalMs,
-    elapsedMs,
-    entries: race.entries,
-  });
-
-  return {
-    raceId: race.raceId,
-    elapsedMs,
-    positions: positions.map((position) => ({
-      raceEntryId: position.raceEntryId,
-      progress: position.progress,
-      rank: position.rank,
-    })),
-  };
-}
-
-function buildSimulationSeed(input: { raceId: string; raceNo: number }) {
+export function buildRacingSimulationSeed(input: {
+  raceId: string;
+  raceNo: number;
+}) {
   return `${input.raceId}:${input.raceNo}`;
 }
 
-function simulateRaceTick(input: {
-  seed: string;
-  distanceM: number;
-  runDurationMs: number;
-  tickIntervalMs: number;
-  elapsedMs: number;
-  entries: RacingRaceEntrySnapshot[];
-}) {
-  const distanceM = input.distanceM;
-  const runDurationMs = Math.max(minimumRaceRunDurationMs, input.runDurationMs);
-  const tickIntervalMs = Math.max(minimumTickIntervalMs, input.tickIntervalMs);
-  const elapsedMs = Math.max(0, Math.min(input.elapsedMs, runDurationMs));
+export function buildRacingSimulationTick(
+  input: BuildRacingSimulationInput,
+): RacingSimulationTick {
+  return simulateRacingPositions(input);
+}
+
+export function buildRacingSimulationFinal(
+  input: Omit<BuildRacingSimulationInput, "elapsedMs">,
+): RacingSimulationFinalEntry[] {
+  const simulation = simulateRacingPositions({
+    ...input,
+    elapsedMs: input.runDurationMs,
+  });
+
+  return simulation.positions.map((position, index) => ({
+    raceEntryId: position.raceEntryId,
+    finalRank: index + 1,
+    finishedAtMs: position.finishedAtMs ?? input.runDurationMs,
+  }));
+}
+
+function simulateRacingPositions(
+  input: BuildRacingSimulationInput,
+): RacingSimulationTick {
+  const seed = input.seed.trim();
+  const distanceM = normalizePositiveNumber(input.distanceM, "distanceM");
+  const runDurationMs = Math.max(
+    minimumRaceRunDurationMs,
+    normalizePositiveNumber(input.runDurationMs, "runDurationMs"),
+  );
+  const tickIntervalMs = Math.max(
+    minimumTickIntervalMs,
+    normalizePositiveNumber(input.tickIntervalMs, "tickIntervalMs"),
+  );
+  const elapsedMs = clamp(
+    Math.floor(normalizeNonNegativeNumber(input.elapsedMs, "elapsedMs")),
+    0,
+    runDurationMs,
+  );
   const states = input.entries.map((entry) => ({
-    raceEntryId: entry.raceEntryId,
-    number: entry.number,
+    ...entry,
     distanceM: 0,
     finishedAtMs: null,
   }));
   let previousStepMs = 0;
+
+  if (!seed) {
+    throw new Error("Racing simulation seed is required.");
+  }
+
+  if (states.length === 0) {
+    throw new Error("Racing simulation requires at least one entry.");
+  }
 
   for (let step = 1; previousStepMs < elapsedMs; step += 1) {
     const stepEndMs = Math.min(step * tickIntervalMs, elapsedMs);
     const deltaMs = stepEndMs - previousStepMs;
 
     advanceSimulationStep({
-      seed: input.seed,
+      seed,
       states,
       step,
       stepStartMs: previousStepMs,
@@ -99,11 +118,19 @@ function simulateRaceTick(input: {
     previousStepMs = stepEndMs;
   }
 
-  return rankSimulationStates(states, distanceM).map((state, index) => ({
-    raceEntryId: state.raceEntryId,
-    progress: Number((state.distanceM / distanceM).toFixed(4)),
-    rank: index + 1,
-  }));
+  const rankedStates = rankSimulationStates(states, distanceM);
+
+  return {
+    elapsedMs,
+    positions: rankedStates.map((state, index) => ({
+      raceEntryId: state.raceEntryId,
+      progress: Number((state.distanceM / distanceM).toFixed(4)),
+      rank: index + 1,
+      distanceM: Number(state.distanceM.toFixed(3)),
+      finishedAtMs:
+        state.finishedAtMs === null ? null : Math.round(state.finishedAtMs),
+    })),
+  };
 }
 
 function advanceSimulationStep(input: {
@@ -187,6 +214,7 @@ function calculateStepSpeed(input: {
     input.baseSpeedMPerMs *
     Math.max(0.28, phasePace + tickNoise + burst + stumble) *
     fatigue;
+
   const remainingMs = Math.max(1, input.runDurationMs - input.stepEndMs);
   const remainingM = Math.max(0, input.distanceM - input.state.distanceM);
 
@@ -267,4 +295,20 @@ function smoothStep(ratio: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizePositiveNumber(value: number, label: string) {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${label} must be a positive number.`);
+  }
+
+  return value;
+}
+
+function normalizeNonNegativeNumber(value: number, label: string) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative number.`);
+  }
+
+  return value;
 }

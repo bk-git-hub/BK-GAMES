@@ -476,6 +476,39 @@
   line-height: 1;
 }
 
+.bgmButton {
+  background: rgb(255 255 255 / 8%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 6px;
+  color: #dbe6df;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+  height: 28px;
+  letter-spacing: 0;
+  line-height: 1;
+  min-width: 42px;
+  padding: 0 9px;
+  pointer-events: auto;
+}
+
+.bgmButton:hover {
+  background: rgb(255 255 255 / 14%);
+  border-color: rgb(255 255 255 / 28%);
+}
+
+.bgmButtonActive {
+  background: rgb(102 239 155 / 18%);
+  border-color: rgb(102 239 155 / 42%);
+  color: #66ef9b;
+}
+
+.bgmButtonBlocked {
+  border-color: rgb(255 244 196 / 46%);
+  box-shadow: 0 0 18px rgb(255 244 196 / 18%);
+  color: #fff4c4;
+}
+
 .gameRanks {
   display: flex;
   flex-wrap: wrap;

@@ -115,6 +115,9 @@ const maxUnforcedRaceDurationMultiplier = 2.2;
 const smoothStartDelayThresholdMs = 2_000;
 const startCountdownWindowMs = 5_000;
 const startCountdownHoldMs = 1_400;
+const raceBgmLeadMs = 14_000;
+const raceBgmVolume = 0.58;
+const raceBgmSrc = "/racing/audio/william-tell-overture-remix.mp3";
 const visualRaceSpeedMultiplier = 1.7;
 const worldScale = 7.2;
 const trackStartPercent = 1.2;
@@ -201,6 +204,11 @@ export default function RacingAnimationPreviewPage() {
   const [visualRaceStart, setVisualRaceStart] =
     useState<VisualRaceStart | null>(null);
   const [trackWidthPx, setTrackWidthPx] = useState(0);
+  const [isBgmBlocked, setIsBgmBlocked] = useState(false);
+  const [isBgmPlaying, setIsBgmPlaying] = useState(false);
+  const [isBgmUnlocked, setIsBgmUnlocked] = useState(false);
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const bgmRaceIdRef = useRef<string | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const tableStateRef = useRef<RacingTableViewState | null>(null);
   const visualRaceStartRef = useRef<VisualRaceStart | null>(null);
@@ -275,10 +283,98 @@ export default function RacingAnimationPreviewPage() {
     racing.tableState,
     clockMs,
   );
+  const currentRaceId = racing.tableState?.race?.raceId ?? null;
+  const shouldRaceBgmPlay = shouldPlayRaceBgm(
+    racing.tableState,
+    clockMs,
+    isVisuallyRunning,
+  );
+  const bgmButtonLabel = isBgmPlaying
+    ? "BGM playing"
+    : isBgmBlocked
+      ? "Enable BGM"
+      : isBgmUnlocked
+        ? "BGM ready"
+        : "Prime BGM";
 
   useEffect(() => {
     tableStateRef.current = racing.tableState;
   }, [racing.tableState]);
+
+  useEffect(() => {
+    const audio = bgmRef.current;
+
+    if (!audio) {
+      return;
+    }
+
+    const handlePlay = () => {
+      setIsBgmPlaying(true);
+    };
+    const handlePause = () => {
+      setIsBgmPlaying(false);
+    };
+
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("ended", handlePause);
+
+    return () => {
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
+      audio.removeEventListener("ended", handlePause);
+    };
+  }, []);
+
+  useEffect(() => {
+    const audio = bgmRef.current;
+
+    if (!audio) {
+      return;
+    }
+
+    audio.loop = true;
+    audio.volume = raceBgmVolume;
+
+    if (!shouldRaceBgmPlay || !currentRaceId) {
+      audio.pause();
+      audio.currentTime = 0;
+      bgmRaceIdRef.current = null;
+      return;
+    }
+
+    let isCancelled = false;
+
+    if (bgmRaceIdRef.current !== currentRaceId) {
+      audio.currentTime = 0;
+      bgmRaceIdRef.current = currentRaceId;
+    }
+
+    if (audio.paused) {
+      void audio
+        .play()
+        .then(() => {
+          if (isCancelled) {
+            return;
+          }
+
+          setIsBgmBlocked(false);
+          setIsBgmUnlocked(true);
+        })
+        .catch(() => {
+          if (isCancelled) {
+            return;
+          }
+
+          setIsBgmBlocked(true);
+          setIsBgmPlaying(false);
+        });
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentRaceId, shouldRaceBgmPlay]);
 
   useEffect(() => {
     const trackNode = trackRef.current;
@@ -365,6 +461,43 @@ export default function RacingAnimationPreviewPage() {
     };
   }, []);
 
+  const handleBgmEnable = async () => {
+    const audio = bgmRef.current;
+
+    if (!audio) {
+      return;
+    }
+
+    audio.loop = true;
+    audio.volume = raceBgmVolume;
+
+    try {
+      if (shouldRaceBgmPlay && currentRaceId) {
+        if (bgmRaceIdRef.current !== currentRaceId) {
+          audio.currentTime = 0;
+          bgmRaceIdRef.current = currentRaceId;
+        }
+
+        await audio.play();
+        setIsBgmPlaying(true);
+      } else {
+        audio.muted = true;
+        await audio.play();
+        audio.pause();
+        audio.currentTime = 0;
+        audio.muted = false;
+        setIsBgmPlaying(false);
+      }
+
+      setIsBgmBlocked(false);
+      setIsBgmUnlocked(true);
+    } catch {
+      audio.muted = false;
+      setIsBgmBlocked(true);
+      setIsBgmPlaying(false);
+    }
+  };
+
   return (
     <main className={styles.page}>
       <section className={styles.shell} aria-labelledby="preview-title">
@@ -398,6 +531,7 @@ export default function RacingAnimationPreviewPage() {
               <div className={styles.cameraStartGate} />
               <div className={styles.cameraFinishPost} />
             </div>
+            <audio preload="auto" ref={bgmRef} src={raceBgmSrc} />
             <div className={styles.straightLaneOverlay} aria-hidden="true" />
 
             <div className={styles.gameHud} aria-label="Live race state">
@@ -412,6 +546,19 @@ export default function RacingAnimationPreviewPage() {
                 <em>
                   {isVisuallyRunning ? "LIVE" : getTimerText(racing.tableState)}
                 </em>
+                <button
+                  aria-label={bgmButtonLabel}
+                  aria-pressed={isBgmUnlocked && !isBgmBlocked}
+                  className={`${styles.bgmButton} ${
+                    isBgmPlaying ? styles.bgmButtonActive : ""
+                  } ${isBgmBlocked ? styles.bgmButtonBlocked : ""}`}
+                  onClick={() => {
+                    void handleBgmEnable();
+                  }}
+                  type="button"
+                >
+                  BGM
+                </button>
               </div>
               <ol className={styles.gameRanks} aria-label="Live rank">
                 {rankedHorses.map((horse) => (
@@ -1545,12 +1692,52 @@ function getStartCountdownOverlay(
   };
 }
 
+function shouldPlayRaceBgm(
+  tableState: RacingTableViewState | null,
+  nowMs: number,
+  isVisuallyRunning: boolean,
+) {
+  if (!tableState?.race || isRaceResultPhase(tableState.phase)) {
+    return false;
+  }
+
+  if (isVisuallyRunning) {
+    return true;
+  }
+
+  if (tableState.phase !== "BETTING" && tableState.phase !== "LOCKING_BETS") {
+    return false;
+  }
+
+  const startMs = getRaceStartTargetMs(tableState);
+
+  if (startMs === null) {
+    return false;
+  }
+
+  const remainingMs = startMs - nowMs;
+
+  return remainingMs <= raceBgmLeadMs && remainingMs >= 0;
+}
+
 function getRaceStartTargetTime(tableState: RacingTableViewState) {
   return (
     tableState.timers.scheduledStartAt ??
     tableState.race?.scheduledStartAt ??
     tableState.timers.bettingClosesAt
   );
+}
+
+function getRaceStartTargetMs(tableState: RacingTableViewState) {
+  const targetTime = getRaceStartTargetTime(tableState);
+
+  if (!targetTime) {
+    return null;
+  }
+
+  const startMs = Date.parse(targetTime);
+
+  return Number.isFinite(startMs) ? startMs : null;
 }
 
 function getScheduledRaceStartMs(tableState: RacingTableViewState) {

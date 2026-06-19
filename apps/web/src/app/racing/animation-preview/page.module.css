@@ -278,7 +278,7 @@
 }
 
 .track {
-  --world-width: 460%;
+  --world-width: 720%;
   aspect-ratio: auto;
   background: #081315;
   border: 1px solid rgb(255 255 255 / 12%);
@@ -320,7 +320,7 @@
   position: absolute;
   top: 0;
   transform: translate3d(0, 0, 0);
-  transition: transform 900ms linear;
+  transition: transform 140ms linear;
   width: var(--world-width);
   will-change: transform;
   z-index: 0;
@@ -590,7 +590,7 @@
   position: absolute;
   top: 0;
   transform: translate3d(0, 0, 0);
-  transition: transform 900ms linear;
+  transition: transform 140ms linear;
   width: var(--world-width);
   will-change: transform;
   z-index: 10;
@@ -610,7 +610,7 @@
   left: var(--runner-left, 1.2%);
   position: absolute;
   top: var(--lane-top);
-  transition: left 900ms linear;
+  transition: left 140ms linear;
   width: 206px;
   z-index: 10;
 }
@@ -640,8 +640,16 @@
   width: 206px;
 }
 
+.runningSprite {
+  animation: gallop 0.22s steps(7) infinite;
+}
+
+.pausedSprite {
+  animation: none;
+  background-position: 0 0;
+}
+
 .sprite {
-  animation: gallop 0.4s steps(7) infinite;
   filter: drop-shadow(0 12px 7px rgb(0 0 0 / 35%));
   transform: scale(0.8);
   transform-origin: center bottom;
@@ -798,7 +806,7 @@
   }
 
   100% {
-    transform: translate3d(-78.2609%, 0, 0);
+    transform: translate3d(-86.1111%, 0, 0);
   }
 }
 
@@ -968,7 +976,7 @@
 @media (prefers-reduced-motion: reduce) {
   .previewRunner,
   .previewRunnerLayer,
-  .sprite,
+  .runningSprite,
   .rowSprite,
   .previewCameraTrack {
     animation-duration: 1ms;

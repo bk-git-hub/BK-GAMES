@@ -64,12 +64,13 @@ const tableId = "main";
 const previewGuestUserId = "preview:racing-animation";
 const previewGuestNickname = "Racing Preview";
 const restPollMs = 1_000;
-const localTickMs = 250;
+const localTickMs = 120;
 const minimumRaceRunDurationMs = 1_000;
 const minimumTickIntervalMs = 10;
-const worldScale = 4.6;
+const visualRaceSpeedMultiplier = 1.7;
+const worldScale = 7.2;
 const trackStartPercent = 1.2;
-const trackFinishPercent = 88;
+const trackFinishPercent = 95;
 const maxCameraTranslatePercent = ((worldScale - 1) / worldScale) * 100;
 const leaderViewportAnchorPercent = 50 / worldScale;
 const laneTops = ["14%", "23%", "32%", "41%", "50%", "57%", "64%", "71%"];
@@ -87,40 +88,40 @@ const startLaneTops = [
 const assetHorses: AssetHorse[] = [
   {
     color: "red",
-    duration: "7.4s",
+    duration: "4.2s",
     file: "/racing/generated-reference-style/horse-01-red-gallop-7f.png",
     leader: true,
-    offset: "-4.8s",
+    offset: "-2.7s",
   },
   {
     color: "orange",
-    duration: "7.7s",
+    duration: "4.35s",
     file: "/racing/generated-reference-style/horse-02-orange-gallop-7f.png",
-    offset: "-3.9s",
+    offset: "-2.2s",
   },
   {
     color: "blue",
-    duration: "8s",
+    duration: "4.5s",
     file: "/racing/generated-reference-style/horse-03-blue-gallop-7f.png",
-    offset: "-3.1s",
+    offset: "-1.75s",
   },
   {
     color: "yellow",
-    duration: "8.25s",
+    duration: "4.65s",
     file: "/racing/generated-reference-style/horse-04-yellow-gallop-7f.png",
-    offset: "-2.25s",
+    offset: "-1.25s",
   },
   {
     color: "purple",
-    duration: "8.6s",
+    duration: "4.85s",
     file: "/racing/generated-reference-style/horse-05-purple-gallop-7f.png",
-    offset: "-1.35s",
+    offset: "-0.75s",
   },
   {
     color: "green",
-    duration: "8.95s",
+    duration: "5.05s",
     file: "/racing/generated-reference-style/horse-06-green-gallop-7f.png",
-    offset: "-0.55s",
+    offset: "-0.3s",
   },
 ];
 
@@ -140,6 +141,8 @@ const fallbackHorses: DisplayHorse[] = assetHorses.map((horse, index) => ({
 export default function RacingAnimationPreviewPage() {
   const racing = useRacingTable();
   const usesBackendState = Boolean(racing.tableState?.race);
+  const isRaceRunning =
+    !usesBackendState || racing.tableState?.phase === "RUNNING";
   const [clockMs, setClockMs] = useState(() => Date.now());
   const displayTick = useMemo(
     () => racing.latestTick ?? buildLocalRaceTick(racing.tableState, clockMs),
@@ -206,8 +209,8 @@ export default function RacingAnimationPreviewPage() {
               aria-hidden="true"
               style={
                 {
-                  "--camera-duration": leaderHorse?.duration ?? "7.4s",
-                  "--camera-offset": leaderHorse?.offset ?? "-4.8s",
+                  "--camera-duration": leaderHorse?.duration ?? "4.2s",
+                  "--camera-offset": leaderHorse?.offset ?? "-2.7s",
                   "--camera-x": `-${cameraTranslatePercent}%`,
                 } as CSSProperties
               }
@@ -243,8 +246,8 @@ export default function RacingAnimationPreviewPage() {
               className={runnerLayerClassName}
               style={
                 {
-                  "--camera-duration": leaderHorse?.duration ?? "7.4s",
-                  "--camera-offset": leaderHorse?.offset ?? "-4.8s",
+                  "--camera-duration": leaderHorse?.duration ?? "4.2s",
+                  "--camera-offset": leaderHorse?.offset ?? "-2.7s",
                   "--camera-x": `-${cameraTranslatePercent}%`,
                 } as CSSProperties
               }
@@ -266,8 +269,12 @@ export default function RacingAnimationPreviewPage() {
                   }
                 >
                   <div
-                    aria-label={`${horse.number}번 말 달리기 애니메이션`}
-                    className={styles.sprite}
+                    aria-label={`${horse.number}번 말 ${
+                      isRaceRunning ? "달리기" : "출발 대기"
+                    } 애니메이션`}
+                    className={`${styles.sprite} ${
+                      isRaceRunning ? styles.runningSprite : styles.pausedSprite
+                    }`}
                     style={
                       {
                         "--sprite": `url("${horse.file}")`,
@@ -539,10 +546,14 @@ function buildLocalRaceTick(
     Date.parse(race.startedAt ?? "") ||
     Date.parse(race.scheduledStartAt ?? "") ||
     nowMs;
-  const elapsedMs = clamp(nowMs - startAt, 0, raceRunDurationMs);
+  const visualElapsedMs = clamp(
+    (nowMs - startAt) * visualRaceSpeedMultiplier,
+    0,
+    raceRunDurationMs,
+  );
   const positions = simulateRaceTick({
     distanceM: tableState.timing.raceDistanceM,
-    elapsedMs,
+    elapsedMs: visualElapsedMs,
     entries: race.entries,
     runDurationMs: raceRunDurationMs,
     seed: buildSimulationSeed({
@@ -553,7 +564,7 @@ function buildLocalRaceTick(
   });
 
   return {
-    elapsedMs,
+    elapsedMs: visualElapsedMs,
     positions,
     raceId: race.raceId,
   };

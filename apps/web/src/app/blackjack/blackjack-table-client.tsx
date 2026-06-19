@@ -279,8 +279,8 @@ export function BlackjackTableClient({
   }
 
   return (
-    <main className="min-h-screen bg-[#07130f] text-white">
-      <section className="mx-auto flex min-h-screen w-full max-w-[1500px] flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[#07130f] pb-3 text-white">
+      <section className="mx-auto flex min-h-screen w-full max-w-[1500px] flex-col gap-3 px-3 py-3 sm:px-4 lg:px-6">
         <TableHeader
           balance={table.walletBalance}
           connectionStatus={table.connectionStatus}
@@ -306,8 +306,8 @@ export function BlackjackTableClient({
           </div>
         ) : null}
 
-        <div className="flex flex-1 flex-col gap-4">
-          <div>
+        <div className="grid flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0">
             <CasinoTable
               cardAnimationKeys={cardAnimationKeys}
               canUseSeatCommands={canUseSeatCommands}
@@ -352,40 +352,44 @@ export function BlackjackTableClient({
               seatBetDrafts={seatBetDrafts}
               state={visibleState}
             />
-            <ChipBox
-              canAddChips={canStackChips}
-              canUndo={canUndoChip}
-              selectedAmount={bettingAmount}
-              selectedSeatNo={selectedSeatNo}
-              limits={visibleState?.bettingLimits ?? null}
-              onAddChip={addChipToSelectedSeat}
-              onUndo={undoLastChipForSelectedSeat}
-            />
-            <TableActionBar
-              activeHand={activeHand}
-              activeSeat={activeSeat}
-              actions={availableActions}
-              canJoinTable={canJoinTable}
-              canSendPlayerAction={canSendPlayerAction}
-              onAction={(action) => {
-                if (!activeSeat) {
-                  return;
-                }
+            <div className="sticky bottom-2 z-40 mt-2 rounded-[1.35rem] border border-white/10 bg-[#07130f]/94 p-2 shadow-2xl shadow-black/45 backdrop-blur-xl">
+              <div className="grid gap-2 xl:grid-cols-[minmax(300px,0.72fr)_minmax(0,1fr)]">
+                <ChipBox
+                  canAddChips={canStackChips}
+                  canUndo={canUndoChip}
+                  selectedAmount={bettingAmount}
+                  selectedSeatNo={selectedSeatNo}
+                  limits={visibleState?.bettingLimits ?? null}
+                  onAddChip={addChipToSelectedSeat}
+                  onUndo={undoLastChipForSelectedSeat}
+                />
+                <TableActionBar
+                  activeHand={activeHand}
+                  activeSeat={activeSeat}
+                  actions={availableActions}
+                  canJoinTable={canJoinTable}
+                  canSendPlayerAction={canSendPlayerAction}
+                  onAction={(action) => {
+                    if (!activeSeat) {
+                      return;
+                    }
 
-                table.sendPlayerAction({
-                  action,
-                  handNo: activeHand?.handNo,
-                  seatNo: activeSeat.seatNo,
-                });
-              }}
-              onJoin={table.joinTable}
-              onReconnect={table.reconnect}
-              prompt={prompt}
-              state={visibleState}
-            />
+                    table.sendPlayerAction({
+                      action,
+                      handNo: activeHand?.handNo,
+                      seatNo: activeSeat.seatNo,
+                    });
+                  }}
+                  onJoin={table.joinTable}
+                  onReconnect={table.reconnect}
+                  prompt={prompt}
+                  state={visibleState}
+                />
+              </div>
+            </div>
           </div>
 
-          <aside>
+          <aside className="min-w-0">
             <EventStream events={table.events} />
           </aside>
         </div>
@@ -410,18 +414,18 @@ function TableHeader({
   userName: string;
 }) {
   return (
-    <header className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur md:grid-cols-[1fr_auto] md:items-center">
+    <header className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5 shadow-2xl shadow-black/20 backdrop-blur md:grid-cols-[1fr_auto] md:items-center">
       <div className="flex min-w-0 items-center gap-3">
         <Link
           href="/lobby"
-          className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/15"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/15"
           aria-label="Back to lobby"
         >
           <ArrowLeft className="size-4" />
         </Link>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-normal">
+            <h1 className="text-lg font-semibold tracking-normal sm:text-xl">
               BK Games Blackjack
             </h1>
             <StatusBadge status={connectionStatus} />
@@ -432,8 +436,8 @@ function TableHeader({
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 md:min-w-[390px]">
-        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+      <div className="grid gap-2 sm:grid-cols-2 md:min-w-[370px]">
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-1.5">
           <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/45">
             <Coins className="size-3.5" />
             Wallet
@@ -445,7 +449,7 @@ function TableHeader({
             </p>
           </div>
         </div>
-        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-1.5">
           <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/45">
             <PlugZap className="size-3.5" />
             Connection
@@ -515,10 +519,10 @@ function CasinoTable({
   }, [celebrationKey, dismissedCelebrationKeys]);
 
   return (
-    <section className="relative min-h-[620px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#10251d] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:min-h-[760px]">
+    <section className="relative h-[calc(100svh-19rem)] min-h-[390px] max-h-[660px] overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#10251d] p-3 shadow-2xl shadow-black/30 sm:h-[calc(100svh-18rem)] sm:min-h-[460px] sm:rounded-[2rem] sm:p-4 lg:h-[calc(100svh-16rem)] lg:min-h-[470px]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(46,181,126,0.24),rgba(10,42,31,0)_42%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0))]" />
-      <div className="absolute inset-x-8 bottom-8 top-16 rounded-[48%] border-[18px] border-[#2a1710] bg-[#0f6a4b] shadow-[inset_0_0_80px_rgba(0,0,0,0.35),0_30px_80px_rgba(0,0,0,0.35)] sm:border-[24px]" />
-      <div className="absolute inset-x-16 bottom-16 top-28 rounded-[48%] border border-emerald-100/20" />
+      <div className="absolute inset-x-5 bottom-5 top-12 rounded-[48%] border-[12px] border-[#2a1710] bg-[#0f6a4b] shadow-[inset_0_0_80px_rgba(0,0,0,0.35),0_30px_80px_rgba(0,0,0,0.35)] sm:inset-x-8 sm:bottom-7 sm:top-14 sm:border-[18px] lg:border-[22px]" />
+      <div className="absolute inset-x-10 bottom-10 top-[5.5rem] rounded-[48%] border border-emerald-100/20 sm:inset-x-16 sm:bottom-14 sm:top-24" />
 
       <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -538,7 +542,7 @@ function CasinoTable({
         </div>
       </div>
 
-      <div className="absolute left-1/2 top-[18%] z-10 flex w-[min(76%,520px)] -translate-x-1/2 flex-col items-center gap-3 text-center">
+      <div className="absolute left-1/2 top-[15%] z-10 flex w-[min(76%,500px)] -translate-x-1/2 flex-col items-center gap-2 text-center sm:top-[16%]">
         <div className="text-[11px] font-semibold uppercase tracking-[0.34em] text-emerald-100/75">
           Dealer
         </div>
@@ -564,7 +568,7 @@ function CasinoTable({
           state={roundResultReview.state}
         />
       ) : (
-        <div className="absolute left-1/2 top-[47%] z-10 -translate-x-1/2 text-center">
+        <div className="absolute left-1/2 top-[43%] z-10 -translate-x-1/2 text-center sm:top-[45%]">
           {showBettingTimer ? <BettingTimer countdown={countdown} /> : null}
           <p className="text-3xl font-semibold uppercase tracking-[0.3em] text-emerald-50/20 sm:text-5xl">
             Blackjack
@@ -586,8 +590,8 @@ function CasinoTable({
         />
       ) : null}
 
-      <div className="absolute inset-x-4 bottom-6 z-20 overflow-x-auto pb-1">
-        <div className="grid min-w-[1470px] grid-cols-7 items-end gap-3">
+      <div className="absolute inset-x-3 bottom-3 z-20 overflow-x-auto pb-1 sm:inset-x-4 sm:bottom-4">
+        <div className="grid min-w-[1120px] grid-cols-7 items-end gap-2 sm:min-w-[1260px] lg:min-w-[1365px]">
           {tableSeatNumbers.map((seatNo) => {
             const seat = seatsByNo.get(seatNo) ?? null;
             const draftBetAmount = seatBetDrafts[seatNo] ?? "";
@@ -643,7 +647,7 @@ function CasinoTable({
 function BettingTimer({ countdown }: { countdown: string | null }) {
   return (
     <div
-      className="mx-auto mb-5 inline-flex min-w-48 flex-col items-center rounded-2xl border border-amber-200/55 bg-[#07130f]/78 px-6 py-4 text-amber-50 shadow-2xl shadow-black/35 backdrop-blur-md"
+      className="mx-auto mb-3 inline-flex min-w-40 flex-col items-center rounded-2xl border border-amber-200/55 bg-[#07130f]/78 px-4 py-3 text-amber-50 shadow-2xl shadow-black/35 backdrop-blur-md sm:min-w-48 sm:px-6 sm:py-4"
       role={countdown ? "timer" : "status"}
       aria-label={
         countdown ? `Betting closes in ${countdown}` : "Betting window open"
@@ -653,7 +657,7 @@ function BettingTimer({ countdown }: { countdown: string | null }) {
         <Timer className="size-4" />
         {countdown ? "Betting closes" : "Betting open"}
       </div>
-      <div className="mt-1 font-mono text-5xl font-semibold leading-none tracking-normal text-amber-100 sm:text-6xl">
+      <div className="mt-1 font-mono text-4xl font-semibold leading-none tracking-normal text-amber-100 sm:text-6xl">
         {countdown ?? "Open"}
       </div>
     </div>
@@ -687,7 +691,7 @@ function DeckRemainingMeter({ info }: { info: DeckRemainingInfo }) {
       : deckLabel ?? cardLabel;
 
   return (
-    <div className="absolute right-4 top-24 z-20 w-52 rounded-2xl border border-white/10 bg-[#06150f]/82 p-4 text-emerald-50 shadow-2xl shadow-black/30 backdrop-blur-md sm:right-8 sm:top-28">
+    <div className="absolute right-4 top-20 z-20 hidden w-52 rounded-2xl border border-white/10 bg-[#06150f]/82 p-4 text-emerald-50 shadow-2xl shadow-black/30 backdrop-blur-md sm:right-8 sm:top-24 sm:block">
       <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-100/55">
         Shoe
       </p>
@@ -923,7 +927,7 @@ function SeatSpot({
   return (
     <div
       className={cn(
-        "flex min-w-0 flex-col gap-3 rounded-2xl border bg-[#06150f]/85 p-4 text-left text-white shadow-2xl backdrop-blur-md transition",
+        "flex min-w-0 flex-col gap-2 rounded-2xl border bg-[#06150f]/85 p-3 text-left text-white shadow-2xl backdrop-blur-md transition sm:gap-3",
         isMine ? "border-amber-300/80" : "border-white/15",
         isSelected && "ring-2 ring-emerald-200/80",
         seat.isCurrentTurn && "ring-2 ring-amber-200",
@@ -983,11 +987,11 @@ function SeatSpot({
       </div>
 
       {isMine ? (
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 pt-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
           <Button
             type="button"
             className={cn(
-              "h-10 text-sm font-semibold text-zinc-950",
+              "h-9 text-sm font-semibold text-zinc-950 sm:h-10",
               quickActionLabel
                 ? "bg-amber-300 hover:bg-amber-200"
                 : "bg-white hover:bg-emerald-50",
@@ -1002,7 +1006,7 @@ function SeatSpot({
             type="button"
             size="icon"
             variant="outline"
-            className="h-10 w-10 border-white/15 bg-white/10 text-white hover:bg-white/15"
+            className="h-9 w-9 border-white/15 bg-white/10 text-white hover:bg-white/15 sm:h-10 sm:w-10"
             disabled={!canLeaveSeat}
             onClick={onLeaveSeat}
             aria-label={`Leave seat ${seat.seatNo}`}
@@ -1166,15 +1170,15 @@ function ChipBox({
   const stackAmount = selectedAmount.trim() || "0";
 
   return (
-    <section className="mt-3 rounded-3xl border border-white/10 bg-white/[0.07] px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <section className="rounded-2xl border border-white/10 bg-white/[0.07] px-3 py-2.5 shadow-2xl shadow-black/20 backdrop-blur">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <p className="text-sm font-semibold text-white">Chip box</p>
           <p className="text-xs text-white/50">
             Seat {selectedSeatNo ?? "-"} · Stack {formatBetAmountLabel(stackAmount)} pts
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {quickBetAmounts.map((amount) => {
             const isDisabled =
               !canAddChips ||
@@ -1188,7 +1192,7 @@ function ChipBox({
                 key={amount}
                 onClick={() => onAddChip(amount)}
                 className={cn(
-                  "grid size-16 place-items-center rounded-full border-4 text-sm font-bold shadow-xl transition",
+                  "grid size-12 place-items-center rounded-full border-[3px] text-xs font-bold shadow-xl transition sm:size-14 sm:text-sm",
                   chipColorClass(amount),
                   !isDisabled && "hover:-translate-y-0.5 hover:scale-105",
                   isDisabled && "cursor-not-allowed opacity-40 hover:translate-y-0",
@@ -1201,7 +1205,7 @@ function ChipBox({
           <Button
             type="button"
             variant="outline"
-            className="h-11 border-white/15 bg-white/10 text-white hover:bg-white/15"
+            className="h-10 border-white/15 bg-white/10 text-white hover:bg-white/15"
             disabled={!canUndo}
             onClick={onUndo}
           >
@@ -1238,8 +1242,8 @@ function TableActionBar({
   state: BlackjackTableState | null;
 }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/[0.07] p-4 shadow-2xl shadow-black/25 backdrop-blur">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+    <section className="rounded-2xl border border-white/10 bg-white/[0.07] p-3 shadow-2xl shadow-black/25 backdrop-blur">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
         <div className="min-w-0">
           <p
             className={cn(
@@ -1252,10 +1256,12 @@ function TableActionBar({
           >
             Next move
           </p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-normal">
+          <h2 className="mt-1 text-lg font-semibold tracking-normal sm:text-xl">
             {prompt.title}
           </h2>
-          <p className="mt-1 text-sm leading-6 text-white/62">{prompt.detail}</p>
+          <p className="mt-1 hidden text-sm leading-5 text-white/62 sm:block">
+            {prompt.detail}
+          </p>
           {activeSeat && activeSeat.hands.length > 1 ? (
             <div className="mt-3 max-w-2xl">
               <ActionHandSummary activeSeat={activeSeat} />
@@ -1276,7 +1282,7 @@ function TableActionBar({
                   key={action}
                   type="button"
                   className={cn(
-                    "h-11 min-w-24 font-semibold",
+                    "h-10 min-w-20 px-3 font-semibold sm:h-11 sm:min-w-24",
                     moneyChangingActions.has(action)
                       ? "bg-amber-300 text-zinc-950 hover:bg-amber-200"
                       : "bg-white text-zinc-950 hover:bg-emerald-50",
@@ -1296,7 +1302,7 @@ function TableActionBar({
           <Button
             type="button"
             variant="outline"
-            className="h-11 border-white/15 bg-white/10 text-white hover:bg-white/15"
+            className="h-10 border-white/15 bg-white/10 text-white hover:bg-white/15 sm:h-11"
             disabled={!canJoinTable}
             onClick={onJoin}
           >
@@ -1307,7 +1313,7 @@ function TableActionBar({
             type="button"
             size="icon"
             variant="outline"
-            className="h-11 w-11 border-white/15 bg-white/10 text-white hover:bg-white/15"
+            className="h-10 w-10 border-white/15 bg-white/10 text-white hover:bg-white/15 sm:h-11 sm:w-11"
             onClick={onReconnect}
             aria-label="Reconnect"
           >
@@ -1359,12 +1365,12 @@ function ActionHandSummary({
 
 function EventStream({ events }: { events: BlackjackTableEventPayload[] }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/[0.07] p-4 shadow-2xl shadow-black/20 backdrop-blur">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Table events</h2>
+    <section className="rounded-2xl border border-white/10 bg-white/[0.07] p-3 shadow-2xl shadow-black/20 backdrop-blur">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">Table events</h2>
         <FeltBadge>{events.length}</FeltBadge>
       </div>
-      <div className="flex max-h-[280px] flex-col gap-2 overflow-auto pr-1">
+      <div className="flex max-h-[180px] flex-col gap-2 overflow-auto pr-1 xl:max-h-[calc(100svh-11rem)]">
         {events.length ? (
           events.map((event) => <EventRow event={event} key={eventKey(event)} />)
         ) : (
@@ -1468,7 +1474,9 @@ function CardFan({
       <div
         className={cn(
           "flex items-center justify-center rounded-2xl border border-dashed border-emerald-50/25 bg-emerald-950/25 text-emerald-50/55",
-          size === "lg" ? "h-24 w-48 text-sm" : "h-16 w-full text-xs",
+          size === "lg"
+            ? "h-20 w-40 text-sm sm:h-24 sm:w-48"
+            : "h-14 w-full text-xs sm:h-16",
         )}
       >
         {emptyLabel}
@@ -1480,7 +1488,7 @@ function CardFan({
     <div
       className={cn(
         "flex items-center justify-center",
-        size === "lg" ? "min-h-28 gap-3" : "min-h-14 gap-1.5",
+        size === "lg" ? "min-h-24 gap-2 sm:min-h-28 sm:gap-3" : "min-h-12 gap-1.5 sm:min-h-14",
       )}
     >
       {cards.map((card, index) => (
@@ -1522,8 +1530,8 @@ function PlayingCard({
 }) {
   const cardClass =
     size === "lg"
-      ? "h-[104px] w-[74px] rounded-lg"
-      : "h-[58px] w-[42px] rounded-md";
+      ? "h-[86px] w-[62px] rounded-lg sm:h-[104px] sm:w-[74px]"
+      : "h-[50px] w-[36px] rounded-md sm:h-[58px] sm:w-[42px]";
 
   if (card.hidden) {
     return (

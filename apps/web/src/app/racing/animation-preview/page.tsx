@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   memo,
   useEffect,
   useMemo,
@@ -12,7 +13,9 @@ import {
   RACING_CLIENT_EVENTS,
   RACING_NAMESPACE,
   RACING_SERVER_EVENTS,
+  type RacingBetType,
   type RacingJoinTablePayload,
+  type RacingPlaceBetPayload,
   type RacingRaceEntrySnapshot,
   type RacingRaceTickSnapshot,
   type RacingSocketErrorPayload,
@@ -20,7 +23,9 @@ import {
   type RacingTableSummary,
   type RacingTableState,
   type RacingTablesResponse,
+  type RacingWalletUpdatedPayload,
 } from "@bk-games/shared/src/socket-events";
+import type { GameTokenRole } from "@bk-games/shared/src/types";
 import { io, type Socket } from "socket.io-client";
 
 import styles from "./page.module.css";
@@ -81,7 +86,24 @@ type StartCountdownOverlay = {
   value: string;
 };
 
+type BetFeedback = {
+  detail: string;
+  tone: "pending" | "success" | "error";
+  title: string;
+};
+
+type GameTokenResponse = {
+  expiresInSeconds: number;
+  token: string;
+  user: {
+    id: string;
+    nickname: string;
+    role: GameTokenRole;
+  };
+};
+
 type ConnectionStatus =
+  | "requesting-token"
   | "connecting"
   | "connected"
   | "disconnected"
@@ -102,6 +124,15 @@ type RacingTimeline = {
   maxElapsedMs: number;
   snapshots: DisplayRacePosition[][];
   tickIntervalMs: number;
+};
+
+type RacingBetTypeConfig = {
+  description: string;
+  label: string;
+  ordered: boolean;
+  requiredSelections: number;
+  shortLabel: string;
+  type: RacingBetType;
 };
 
 const tableId = "main";
@@ -138,6 +169,68 @@ const startLaneTops = [
   "73.5%",
   "82%",
   "90.5%",
+];
+const defaultRacingBetType: RacingBetType = "WIN";
+const estimatedRacingPayoutRate = 0.9;
+const quickStakeAmounts = [100, 500, 1_000, 5_000] as const;
+
+const racingBetTypeConfigs: RacingBetTypeConfig[] = [
+  {
+    description: "1착",
+    label: "단승",
+    ordered: true,
+    requiredSelections: 1,
+    shortLabel: "WIN",
+    type: "WIN",
+  },
+  {
+    description: "2착 이내",
+    label: "연승",
+    ordered: false,
+    requiredSelections: 1,
+    shortLabel: "PLC",
+    type: "PLACE",
+  },
+  {
+    description: "1-2착 조합",
+    label: "복승",
+    ordered: false,
+    requiredSelections: 2,
+    shortLabel: "QNL",
+    type: "QUINELLA",
+  },
+  {
+    description: "1-2착 순서",
+    label: "쌍승",
+    ordered: true,
+    requiredSelections: 2,
+    shortLabel: "EXA",
+    type: "EXACTA",
+  },
+  {
+    description: "3착 내 2두",
+    label: "복연승",
+    ordered: false,
+    requiredSelections: 2,
+    shortLabel: "QPL",
+    type: "QUINELLA_PLACE",
+  },
+  {
+    description: "1-3착 조합",
+    label: "삼복승",
+    ordered: false,
+    requiredSelections: 3,
+    shortLabel: "TRI",
+    type: "TRIO",
+  },
+  {
+    description: "1-3착 순서",
+    label: "삼쌍승",
+    ordered: true,
+    requiredSelections: 3,
+    shortLabel: "TRF",
+    type: "TRIFECTA",
+  },
 ];
 
 const assetHorses: AssetHorse[] = [
@@ -207,6 +300,15 @@ export default function RacingAnimationPreviewPage() {
   const [isBgmBlocked, setIsBgmBlocked] = useState(false);
   const [isBgmPlaying, setIsBgmPlaying] = useState(false);
   const [isBgmUnlocked, setIsBgmUnlocked] = useState(false);
+  const [selectedBetType, setSelectedBetType] =
+    useState<RacingBetType>(defaultRacingBetType);
+  const [selectedBetEntryIds, setSelectedBetEntryIds] = useState<string[]>([]);
+  const [betAmount, setBetAmount] = useState("100");
+  const [betFeedback, setBetFeedback] = useState<BetFeedback | null>(null);
+  const [pendingBetRequest, setPendingBetRequest] = useState<{
+    commandId: string;
+    raceId: string;
+  } | null>(null);
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const bgmRaceIdRef = useRef<string | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -248,6 +350,24 @@ export default function RacingAnimationPreviewPage() {
     () => [...displayHorses].sort((left, right) => left.number - right.number),
     [displayHorses],
   );
+  const bettingHorses = progressHorses;
+  const availableBetTypeConfigs = useMemo(
+    () => getAvailableBetTypeConfigs(racing.tableState),
+    [racing.tableState],
+  );
+  const effectiveBetType = availableBetTypeConfigs.some(
+    (config) => config.type === selectedBetType,
+  )
+    ? selectedBetType
+    : (availableBetTypeConfigs[0]?.type ?? defaultRacingBetType);
+  const activeBetTypeConfig = getRacingBetTypeConfig(effectiveBetType);
+  const activeEntryIds = useMemo(
+    () => new Set(bettingHorses.map((horse) => horse.raceEntryId)),
+    [bettingHorses],
+  );
+  const activeSelectedBetEntryIds = selectedBetEntryIds
+    .filter((entryId) => activeEntryIds.has(entryId))
+    .slice(0, activeBetTypeConfig.requiredSelections);
   const statusLabel = getStatusLabel(
     racing.connectionStatus,
     racing.tableState,
@@ -272,6 +392,37 @@ export default function RacingAnimationPreviewPage() {
     clockMs,
   );
   const currentRaceId = racing.tableState?.race?.raceId ?? null;
+  const acceptedBetEvent = getAcceptedBetEvent({
+    event: racing.latestTableEvent,
+    playerId: racing.player?.id ?? null,
+    raceId: currentRaceId,
+  });
+  const betSocketError =
+    pendingBetRequest?.raceId === currentRaceId &&
+    racing.socketError?.event === RACING_CLIENT_EVENTS.BET_PLACE
+      ? racing.socketError
+      : null;
+  const isBetSubmissionPending = Boolean(
+    pendingBetRequest?.raceId === currentRaceId &&
+    !acceptedBetEvent &&
+    !betSocketError,
+  );
+  const visibleBetFeedback = getVisibleBetFeedback({
+    acceptedEvent: pendingBetRequest ? acceptedBetEvent : null,
+    fallback: betFeedback,
+    selectedBetType: effectiveBetType,
+    socketError: betSocketError,
+  });
+  const bettingValidation = getBettingValidation({
+    amountText: betAmount,
+    connectionStatus: racing.connectionStatus,
+    hasAcceptedBet: Boolean(acceptedBetEvent),
+    isPending: isBetSubmissionPending,
+    player: racing.player,
+    selectedCount: activeSelectedBetEntryIds.length,
+    tableState: racing.tableState,
+    typeConfig: activeBetTypeConfig,
+  });
   const shouldRaceBgmPlay = shouldPlayRaceBgm(
     racing.tableState,
     clockMs,
@@ -486,6 +637,95 @@ export default function RacingAnimationPreviewPage() {
     }
   };
 
+  const handleSelectBetType = (nextBetType: RacingBetType) => {
+    setSelectedBetType(nextBetType);
+    setSelectedBetEntryIds([]);
+    setBetFeedback(null);
+  };
+
+  const handleToggleBetEntry = (raceEntryId: string) => {
+    setSelectedBetEntryIds((current) => {
+      if (current.includes(raceEntryId)) {
+        return current.filter((entryId) => entryId !== raceEntryId);
+      }
+
+      if (current.length >= activeBetTypeConfig.requiredSelections) {
+        return [...current.slice(1), raceEntryId];
+      }
+
+      return [...current, raceEntryId];
+    });
+    setBetFeedback(null);
+  };
+
+  const handleClearBetSlip = () => {
+    setSelectedBetEntryIds([]);
+    setBetFeedback(null);
+  };
+
+  const handleSetStake = (amount: number) => {
+    setBetAmount(amount.toString());
+    setBetFeedback(null);
+  };
+
+  const handleAddStake = (amount: number) => {
+    setBetAmount((currentAmount) => {
+      const currentPointAmount = parsePointAmountText(currentAmount) ?? 0;
+      const maxBet = parsePointAmountText(
+        racing.tableState?.bettingLimits.maxBet,
+      );
+      const nextAmount = currentPointAmount + amount;
+
+      return Math.min(nextAmount, maxBet ?? nextAmount).toString();
+    });
+    setBetFeedback(null);
+  };
+
+  const handleBetAmountChange = (nextAmount: string) => {
+    setBetAmount(nextAmount.replace(/[^\d]/g, ""));
+    setBetFeedback(null);
+  };
+
+  const handleSubmitBet = () => {
+    const raceId = racing.tableState?.race?.raceId;
+    const normalizedAmount = parsePointAmountText(betAmount);
+
+    if (!raceId || !normalizedAmount || bettingValidation.reason) {
+      return;
+    }
+
+    const commandId = createRacingCommandId("racing-bet");
+
+    try {
+      racing.placeBet({
+        amount: normalizedAmount.toString(),
+        betType: effectiveBetType,
+        commandId,
+        raceEntryIds: activeSelectedBetEntryIds,
+        raceId,
+        tableId,
+      } satisfies RacingPlaceBetPayload);
+      setPendingBetRequest({
+        commandId,
+        raceId,
+      });
+      setBetFeedback({
+        detail: `${activeBetTypeConfig.label} ${formatPoints(normalizedAmount)}P 발권 요청을 보냈습니다.`,
+        title: "Issuing ticket",
+        tone: "pending",
+      });
+    } catch (error) {
+      setBetFeedback({
+        detail:
+          error instanceof Error
+            ? error.message
+            : "Bet request could not send.",
+        title: "Ticket rejected",
+        tone: "error",
+      });
+    }
+  };
+
   return (
     <main className={styles.page}>
       <section className={styles.shell} aria-labelledby="preview-title">
@@ -609,6 +849,29 @@ export default function RacingAnimationPreviewPage() {
               </div>
             ) : null}
 
+            {!isVisuallyRunning ? (
+              <RacingBettingPanel
+                amount={betAmount}
+                availableBetTypes={availableBetTypeConfigs}
+                entries={bettingHorses}
+                feedback={visibleBetFeedback}
+                isPending={isBetSubmissionPending}
+                onAddStake={handleAddStake}
+                onAmountChange={handleBetAmountChange}
+                onClearSelections={handleClearBetSlip}
+                onSelectBetType={handleSelectBetType}
+                onSetStake={handleSetStake}
+                onSubmit={handleSubmitBet}
+                onToggleEntry={handleToggleBetEntry}
+                playerNickname={racing.player?.nickname ?? null}
+                selectedBetType={effectiveBetType}
+                selectedEntryIds={activeSelectedBetEntryIds}
+                tableState={racing.tableState}
+                validationReason={bettingValidation.reason}
+                walletBalance={racing.walletBalance}
+              />
+            ) : null}
+
             {visibleResultBoard ? (
               <aside className={styles.resultBoard} aria-label="Race result">
                 <div className={styles.resultHeader}>
@@ -687,19 +950,279 @@ const Runner = memo(function Runner({
   );
 });
 
+function RacingBettingPanel({
+  amount,
+  availableBetTypes,
+  entries,
+  feedback,
+  isPending,
+  onAddStake,
+  onAmountChange,
+  onClearSelections,
+  onSelectBetType,
+  onSetStake,
+  onSubmit,
+  onToggleEntry,
+  playerNickname,
+  selectedBetType,
+  selectedEntryIds,
+  tableState,
+  validationReason,
+  walletBalance,
+}: {
+  amount: string;
+  availableBetTypes: RacingBetTypeConfig[];
+  entries: DisplayHorse[];
+  feedback: BetFeedback | null;
+  isPending: boolean;
+  onAddStake: (amount: number) => void;
+  onAmountChange: (amount: string) => void;
+  onClearSelections: () => void;
+  onSelectBetType: (betType: RacingBetType) => void;
+  onSetStake: (amount: number) => void;
+  onSubmit: () => void;
+  onToggleEntry: (raceEntryId: string) => void;
+  playerNickname: string | null;
+  selectedBetType: RacingBetType;
+  selectedEntryIds: string[];
+  tableState: RacingTableViewState | null;
+  validationReason: string | null;
+  walletBalance: string | null;
+}) {
+  const activeConfig = getRacingBetTypeConfig(selectedBetType);
+  const isBettingOpen =
+    tableState?.phase === "BETTING" && Boolean(tableState.race);
+  const amountValue = parsePointAmountText(amount);
+  const estimatedOdds = getEstimatedOddsMultiplier(
+    selectedBetType,
+    tableState?.fieldSize ?? entries.length,
+  );
+  const estimatedReturn =
+    amountValue === null ? null : Math.floor(amountValue * estimatedOdds);
+  const entryById = new Map(entries.map((entry) => [entry.raceEntryId, entry]));
+  const selectedOrderById = new Map(
+    selectedEntryIds.map((entryId, index) => [entryId, index + 1]),
+  );
+  const selectionSlots = Array.from(
+    { length: activeConfig.requiredSelections },
+    (_, index) => selectedEntryIds[index] ?? null,
+  );
+
+  return (
+    <aside
+      aria-label="Racing betting terminal"
+      className={`${styles.bettingPanel} ${
+        isBettingOpen ? "" : styles.bettingPanelLocked
+      }`}
+    >
+      <div className={styles.betPanelHeader}>
+        <div>
+          <span>Betting window</span>
+          <strong>
+            {tableState?.race ? `Race ${tableState.race.raceNo}` : "Race"}
+          </strong>
+        </div>
+        <div className={styles.betPanelMeta}>
+          <span>{getBettingPhaseLabel(tableState)}</span>
+          <strong>{getTimerText(tableState)}</strong>
+        </div>
+      </div>
+
+      <div className={styles.betAccountStrip}>
+        <span>{playerNickname ?? "Login required"}</span>
+        <strong>
+          {walletBalance ? `${formatPointText(walletBalance)}P` : "Wallet"}
+        </strong>
+      </div>
+
+      <div className={styles.betTypeGrid} aria-label="Bet type">
+        {availableBetTypes.map((config) => (
+          <button
+            aria-pressed={config.type === selectedBetType}
+            className={`${styles.betTypeButton} ${
+              config.type === selectedBetType ? styles.betTypeButtonActive : ""
+            }`}
+            key={config.type}
+            onClick={() => onSelectBetType(config.type)}
+            type="button"
+          >
+            <span>{config.shortLabel}</span>
+            <strong>{config.label}</strong>
+          </button>
+        ))}
+      </div>
+
+      <div className={styles.betSlip}>
+        <div className={styles.betSlipTopline}>
+          <span>{activeConfig.ordered ? "ORDER" : "BOX"}</span>
+          <strong>{activeConfig.description}</strong>
+        </div>
+        <div className={styles.betSlots}>
+          {selectionSlots.map((entryId, index) => {
+            const entry = entryId ? entryById.get(entryId) : null;
+
+            return (
+              <button
+                className={`${styles.betSlot} ${
+                  entry ? styles.betSlotFilled : ""
+                }`}
+                key={`${selectedBetType}-${index}`}
+                onClick={() => {
+                  if (entry) {
+                    onToggleEntry(entry.raceEntryId);
+                  }
+                }}
+                type="button"
+              >
+                <span>{getSelectionSlotLabel(activeConfig, index)}</span>
+                <strong>{entry ? entry.number : "-"}</strong>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className={styles.betHorseGrid} aria-label="Race entries">
+        {entries.map((entry) => {
+          const selectedOrder = selectedOrderById.get(entry.raceEntryId);
+
+          return (
+            <button
+              aria-pressed={Boolean(selectedOrder)}
+              className={`${styles.betHorseButton} ${styles[entry.color]} ${
+                selectedOrder ? styles.betHorseSelected : ""
+              }`}
+              disabled={!isBettingOpen || isPending}
+              key={entry.raceEntryId}
+              onClick={() => onToggleEntry(entry.raceEntryId)}
+              type="button"
+            >
+              <span className={styles.betHorseNumber}>{entry.number}</span>
+              <span className={styles.betHorseName}>{entry.name}</span>
+              <span className={styles.betHorseMark}>
+                {selectedOrder ? `${selectedOrder}` : "odds"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <form
+        className={styles.betStakeForm}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+        }}
+      >
+        <label className={styles.betStakeInput}>
+          <span>Stake</span>
+          <input
+            disabled={!isBettingOpen || isPending}
+            inputMode="numeric"
+            onChange={(event) => onAmountChange(event.target.value)}
+            value={amount}
+          />
+        </label>
+        <div className={styles.betChipRack}>
+          {quickStakeAmounts.map((quickAmount) => (
+            <button
+              disabled={!isBettingOpen || isPending}
+              key={quickAmount}
+              onClick={() => onAddStake(quickAmount)}
+              type="button"
+            >
+              +{formatPoints(quickAmount)}
+            </button>
+          ))}
+          <button
+            disabled={!isBettingOpen || isPending}
+            onClick={() =>
+              onSetStake(
+                parsePointAmountText(tableState?.bettingLimits.minBet) ?? 100,
+              )
+            }
+            type="button"
+          >
+            MIN
+          </button>
+        </div>
+        <div className={styles.betSlipFooter}>
+          <span>
+            {formatPointText(tableState?.bettingLimits.minBet)}P-
+            {formatPointText(tableState?.bettingLimits.maxBet)}P
+          </span>
+          <strong>
+            x{estimatedOdds.toFixed(1)} /{" "}
+            {estimatedReturn === null
+              ? "-"
+              : `${formatPoints(estimatedReturn)}P`}
+          </strong>
+        </div>
+        <div className={styles.betActions}>
+          <button
+            disabled={selectedEntryIds.length === 0 || isPending}
+            onClick={onClearSelections}
+            type="button"
+          >
+            Clear
+          </button>
+          <button
+            className={styles.betSubmitButton}
+            disabled={Boolean(validationReason)}
+            type="submit"
+          >
+            {isPending ? "ISSUING" : "ISSUE TICKET"}
+          </button>
+        </div>
+      </form>
+
+      <div
+        className={`${styles.betFeedback} ${
+          feedback?.tone === "success"
+            ? styles.betFeedbackSuccess
+            : feedback?.tone === "error"
+              ? styles.betFeedbackError
+              : feedback?.tone === "pending"
+                ? styles.betFeedbackPending
+                : ""
+        }`}
+      >
+        <strong>{feedback?.title ?? "Ticket status"}</strong>
+        <span>{feedback?.detail ?? validationReason ?? "Ready"}</span>
+      </div>
+    </aside>
+  );
+}
+
 function useRacingTable() {
   const socketRef = useRef<Socket | null>(null);
   const latestTableStateRef = useRef<RacingTableViewState | null>(null);
+  const [player, setPlayer] = useState<GameTokenResponse["user"] | null>(null);
   const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>("connecting");
+    useState<ConnectionStatus>("requesting-token");
+  const [latestTableEvent, setLatestTableEvent] =
+    useState<RacingTableEventPayload | null>(null);
   const [latestTick, setLatestTick] = useState<RacingRaceTickSnapshot | null>(
     null,
   );
+  const [latestWalletEvent, setLatestWalletEvent] =
+    useState<RacingWalletUpdatedPayload | null>(null);
   const [socketError, setSocketError] =
     useState<RacingSocketErrorPayload | null>(null);
   const [tableState, setTableState] = useState<RacingTableViewState | null>(
     null,
   );
+  const [walletBalance, setWalletBalance] = useState<string | null>(null);
+
+  const placeBet = useCallback((payload: RacingPlaceBetPayload) => {
+    const socket = socketRef.current;
+
+    if (!socket?.connected) {
+      throw new Error("Racing socket is not connected.");
+    }
+
+    socket.emit(RACING_CLIENT_EVENTS.BET_PLACE, payload);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -750,16 +1273,50 @@ function useRacingTable() {
       }
     }
 
-    function connectSocket() {
+    async function connectSocket() {
+      setConnectionStatus("requesting-token");
       setConnectionStatus("connecting");
       setSocketError(null);
 
+      let tokenResponse: GameTokenResponse | null = null;
+
+      try {
+        tokenResponse = await requestGameToken(pollController.signal);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        tokenResponse = null;
+        setSocketError(
+          (currentError) =>
+            currentError ??
+            (error instanceof Error &&
+            error.message !== "Authentication required."
+              ? {
+                  code: "UNAUTHORIZED",
+                  message: error.message,
+                }
+              : null),
+        );
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      setPlayer(tokenResponse?.user ?? null);
+
       const socket = io(resolveRacingSocketUrl(), {
-        auth: {
-          nickname: previewGuestNickname,
-          role: "USER",
-          userId: previewGuestUserId,
-        },
+        auth: tokenResponse
+          ? {
+              token: tokenResponse.token,
+            }
+          : {
+              nickname: previewGuestNickname,
+              role: "USER",
+              userId: previewGuestUserId,
+            },
         withCredentials: true,
       });
 
@@ -769,7 +1326,7 @@ function useRacingTable() {
         setConnectionStatus("connected");
         setSocketError(null);
         socket.emit(RACING_CLIENT_EVENTS.TABLE_JOIN, {
-          nickname: previewGuestNickname,
+          nickname: tokenResponse?.user.nickname ?? previewGuestNickname,
           tableId,
         } satisfies RacingJoinTablePayload);
       });
@@ -802,9 +1359,19 @@ function useRacingTable() {
       socket.on(
         RACING_SERVER_EVENTS.TABLE_EVENT,
         (payload: RacingTableEventPayload) => {
+          setLatestTableEvent(payload);
+
           if (payload.type === "RACE_TICK" && payload.tick) {
             setLatestTick(payload.tick);
           }
+        },
+      );
+
+      socket.on(
+        RACING_SERVER_EVENTS.WALLET_UPDATED,
+        (payload: RacingWalletUpdatedPayload) => {
+          setLatestWalletEvent(payload);
+          setWalletBalance(payload.balance);
         },
       );
 
@@ -822,7 +1389,7 @@ function useRacingTable() {
       );
     }
 
-    connectSocket();
+    void connectSocket();
     void pollTableState();
     pollTimer = window.setInterval(() => {
       void pollTableState();
@@ -841,9 +1408,14 @@ function useRacingTable() {
 
   return {
     connectionStatus,
+    latestTableEvent,
     latestTick,
+    latestWalletEvent,
+    placeBet,
+    player,
     socketError,
     tableState,
+    walletBalance,
   };
 }
 
@@ -864,6 +1436,25 @@ async function requestRacingTableState(signal: AbortSignal) {
   }
 
   return table;
+}
+
+async function requestGameToken(signal: AbortSignal) {
+  const response = await fetch("/api/game-token", {
+    method: "POST",
+    signal,
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+
+    throw new Error(
+      body?.error ?? `Game token request failed (${response.status}).`,
+    );
+  }
+
+  return (await response.json()) as GameTokenResponse;
 }
 
 function resolveRacingSocketUrl() {
@@ -922,6 +1513,253 @@ function shouldKeepCurrentRaceState(
     (nextStartMs === null || nextStartMs > nowMs);
 
   return isFutureWaitingRace;
+}
+
+function getAvailableBetTypeConfigs(tableState: RacingTableViewState | null) {
+  const availableTypes = tableState?.betTypes?.length
+    ? new Set(tableState.betTypes)
+    : new Set(racingBetTypeConfigs.map((config) => config.type));
+  const availableConfigs = racingBetTypeConfigs.filter((config) =>
+    availableTypes.has(config.type),
+  );
+
+  return availableConfigs.length > 0 ? availableConfigs : racingBetTypeConfigs;
+}
+
+function getRacingBetTypeConfig(betType: RacingBetType) {
+  return (
+    racingBetTypeConfigs.find((config) => config.type === betType) ??
+    racingBetTypeConfigs[0]
+  );
+}
+
+function getBettingValidation(input: {
+  amountText: string;
+  connectionStatus: ConnectionStatus;
+  hasAcceptedBet: boolean;
+  isPending: boolean;
+  player: GameTokenResponse["user"] | null;
+  selectedCount: number;
+  tableState: RacingTableViewState | null;
+  typeConfig: RacingBetTypeConfig;
+}) {
+  const amount = parsePointAmountText(input.amountText);
+  const minBet = parsePointAmountText(input.tableState?.bettingLimits.minBet);
+  const maxBet = parsePointAmountText(input.tableState?.bettingLimits.maxBet);
+
+  if (input.isPending) {
+    return { amount, reason: "Ticket is issuing." };
+  }
+
+  if (input.hasAcceptedBet) {
+    return { amount, reason: "Ticket already accepted." };
+  }
+
+  if (!input.player) {
+    return { amount, reason: "Login wallet required." };
+  }
+
+  if (input.connectionStatus !== "connected") {
+    return { amount, reason: "Racing socket is not connected." };
+  }
+
+  if (!input.tableState?.race) {
+    return { amount, reason: "Race is not ready." };
+  }
+
+  if (input.tableState.phase !== "BETTING") {
+    return { amount, reason: "Betting is closed." };
+  }
+
+  if (input.selectedCount !== input.typeConfig.requiredSelections) {
+    return {
+      amount,
+      reason: `${input.typeConfig.label} requires ${input.typeConfig.requiredSelections} selection${input.typeConfig.requiredSelections > 1 ? "s" : ""}.`,
+    };
+  }
+
+  if (amount === null) {
+    return { amount, reason: "Enter a valid stake." };
+  }
+
+  if (minBet !== null && amount < minBet) {
+    return { amount, reason: `Minimum stake is ${formatPoints(minBet)}P.` };
+  }
+
+  if (maxBet !== null && amount > maxBet) {
+    return { amount, reason: `Maximum stake is ${formatPoints(maxBet)}P.` };
+  }
+
+  return { amount, reason: null };
+}
+
+function getAcceptedBetEvent(input: {
+  event: RacingTableEventPayload | null;
+  playerId: string | null;
+  raceId: string | null;
+}) {
+  if (
+    !input.event ||
+    input.event.type !== "BET_PLACED" ||
+    !input.playerId ||
+    !input.raceId ||
+    input.event.actorUserId !== input.playerId ||
+    input.event.raceId !== input.raceId
+  ) {
+    return null;
+  }
+
+  return input.event;
+}
+
+function getVisibleBetFeedback(input: {
+  acceptedEvent: RacingTableEventPayload | null;
+  fallback: BetFeedback | null;
+  selectedBetType: RacingBetType;
+  socketError: RacingSocketErrorPayload | null;
+}): BetFeedback | null {
+  if (input.socketError) {
+    return {
+      detail: input.socketError.message,
+      title: input.socketError.code,
+      tone: "error",
+    };
+  }
+
+  if (input.acceptedEvent) {
+    const acceptedConfig = getRacingBetTypeConfig(
+      input.acceptedEvent.betType ?? input.selectedBetType,
+    );
+
+    return {
+      detail: `${acceptedConfig.label} ${input.acceptedEvent.raceEntryIds?.length ?? 0}두 마권이 접수되었습니다.`,
+      title: "Ticket accepted",
+      tone: "success",
+    };
+  }
+
+  return input.fallback;
+}
+
+function parsePointAmountText(value: string | null | undefined) {
+  if (!value || !/^[1-9]\d*$/.test(value.trim())) {
+    return null;
+  }
+
+  const amount = Number(value);
+
+  return Number.isSafeInteger(amount) ? amount : null;
+}
+
+function formatPointText(value: string | null | undefined) {
+  const amount = parsePointAmountText(value);
+
+  return amount === null ? "-" : formatPoints(amount);
+}
+
+function formatPoints(value: number) {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function getEstimatedOddsMultiplier(betType: RacingBetType, fieldSize: number) {
+  const safeFieldSize = Math.max(1, fieldSize);
+
+  if (betType === "WIN") {
+    return safeFieldSize * estimatedRacingPayoutRate;
+  }
+
+  if (betType === "PLACE") {
+    return (
+      (safeFieldSize / getPlaceRank(safeFieldSize)) * estimatedRacingPayoutRate
+    );
+  }
+
+  if (betType === "QUINELLA") {
+    return combination(safeFieldSize, 2) * estimatedRacingPayoutRate;
+  }
+
+  if (betType === "QUINELLA_PLACE") {
+    return (
+      (combination(safeFieldSize, 2) / combination(3, 2)) *
+      estimatedRacingPayoutRate
+    );
+  }
+
+  if (betType === "TRIO") {
+    return combination(safeFieldSize, 3) * estimatedRacingPayoutRate;
+  }
+
+  if (betType === "TRIFECTA") {
+    return permutation(safeFieldSize, 3) * estimatedRacingPayoutRate;
+  }
+
+  return safeFieldSize * (safeFieldSize - 1) * estimatedRacingPayoutRate;
+}
+
+function getSelectionSlotLabel(config: RacingBetTypeConfig, index: number) {
+  if (!config.ordered) {
+    return `SEL ${index + 1}`;
+  }
+
+  return `${index + 1}${index === 0 ? "ST" : index === 1 ? "ND" : "RD"}`;
+}
+
+function getBettingPhaseLabel(tableState: RacingTableViewState | null) {
+  if (!tableState?.race) {
+    return "NO RACE";
+  }
+
+  if (tableState.phase === "BETTING") {
+    return "OPEN";
+  }
+
+  if (tableState.phase === "LOCKING_BETS") {
+    return "LOCKED";
+  }
+
+  return tableState.phase;
+}
+
+function createRacingCommandId(prefix: string) {
+  const randomPart = Math.random().toString(36).slice(2, 10);
+
+  return `${prefix}:${Date.now()}:${randomPart}`;
+}
+
+function getPlaceRank(fieldSize: number) {
+  return fieldSize <= 7 ? 2 : 3;
+}
+
+function combination(total: number, selected: number) {
+  if (selected < 0 || selected > total) {
+    return 0;
+  }
+
+  return permutation(total, selected) / factorial(selected);
+}
+
+function permutation(total: number, selected: number) {
+  if (selected < 0 || selected > total) {
+    return 0;
+  }
+
+  let result = 1;
+
+  for (let offset = 0; offset < selected; offset += 1) {
+    result *= total - offset;
+  }
+
+  return result;
+}
+
+function factorial(value: number) {
+  let result = 1;
+
+  for (let number = 2; number <= value; number += 1) {
+    result *= number;
+  }
+
+  return result;
 }
 
 function buildDisplayHorses(

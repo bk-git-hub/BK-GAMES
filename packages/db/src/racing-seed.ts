@@ -59,7 +59,7 @@ const mainRacingTableValues = {
   bettingCloseBeforeStartSeconds: 30,
   tickIntervalMs: 100,
   raceDistanceM: 1200,
-  roundEndDelaySeconds: 8,
+  roundEndDelaySeconds: 17,
   rules: mainRacingRules,
 };
 

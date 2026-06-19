@@ -168,21 +168,21 @@ function calculateStepSpeed(input: {
 }) {
   const ratio = input.stepEndMs / input.runDurationMs;
   const entrySeed = `${input.seed}:${input.state.raceEntryId}:${input.state.number}`;
-  const earlyPace = lerp(0.78, 1.22, unitRandom(`${entrySeed}:early`));
-  const latePace = lerp(0.82, 1.28, unitRandom(`${entrySeed}:late`));
-  const stamina = lerp(0.72, 0.96, unitRandom(`${entrySeed}:stamina`));
+  const earlyPace = lerp(0.88, 1.14, unitRandom(`${entrySeed}:early`));
+  const latePace = lerp(0.9, 1.18, unitRandom(`${entrySeed}:late`));
+  const stamina = lerp(0.78, 0.94, unitRandom(`${entrySeed}:stamina`));
   const phasePace = lerp(earlyPace, latePace, smoothStep(ratio));
   const tickNoise = lerp(
-    -0.26,
-    0.26,
+    -0.18,
+    0.18,
     unitRandom(`${entrySeed}:tick:${input.step}`),
   );
   const burstRoll = unitRandom(`${entrySeed}:burst:${input.step}`);
   const stumbleRoll = unitRandom(`${entrySeed}:stumble:${input.step}`);
-  const burst = burstRoll > 0.88 ? lerp(0.08, 0.34, burstRoll) : 0;
-  const stumble = stumbleRoll < 0.08 ? -lerp(0.08, 0.3, 1 - stumbleRoll) : 0;
+  const burst = burstRoll > 0.91 ? lerp(0.05, 0.22, burstRoll) : 0;
+  const stumble = stumbleRoll < 0.055 ? -lerp(0.05, 0.18, 1 - stumbleRoll) : 0;
   const fatigue =
-    ratio <= stamina ? 1 : Math.max(0.84, 1 - (ratio - stamina) * 0.46);
+    ratio <= stamina ? 1 : Math.max(0.88, 1 - (ratio - stamina) * 0.34);
   let speedMPerMs =
     input.baseSpeedMPerMs *
     Math.max(0.28, phasePace + tickNoise + burst + stumble) *
@@ -193,8 +193,8 @@ function calculateStepSpeed(input: {
   if (ratio >= 0.72 || remainingMs <= 8_000) {
     const requiredSpeedMPerMs = remainingM / remainingMs;
     const closingPush = lerp(
-      1.01,
-      1.08,
+      1.005,
+      1.04,
       unitRandom(`${entrySeed}:close:${input.step}`),
     );
 

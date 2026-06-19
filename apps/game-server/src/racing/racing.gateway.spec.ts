@@ -10,7 +10,7 @@ describe('buildRaceTick', () => {
     const state = createRunningState({
       startedAt: '2026-06-18T12:00:00.000Z',
     });
-    const orders = [6_000, 18_000, 34_000, 48_000].map((elapsedMs) =>
+    const orders = [5_000, 15_000, 28_000, 40_000].map((elapsedMs) =>
       buildTickOrderAtElapsedMs(state, elapsedMs),
     );
     const uniqueOrders = new Set(orders.map((order) => order.join(',')));
@@ -22,7 +22,7 @@ describe('buildRaceTick', () => {
     const state = createRunningState({
       startedAt: '2026-06-18T12:00:00.000Z',
     });
-    const tick = buildTickAtElapsedMs(state, 52_000);
+    const tick = buildTickAtElapsedMs(state, 43_000);
 
     expect(tick.positions.every((position) => position.progress === 1)).toBe(
       true,
@@ -70,7 +70,7 @@ function createRunningState(input: { startedAt: string }): RacingTableState {
       bettingCloseBeforeStartSeconds: 30,
       tickIntervalMs: 100,
       raceDistanceM: 1200,
-      roundEndDelaySeconds: 8,
+      roundEndDelaySeconds: 17,
     },
     horses: entries.map((entry) => ({
       horseId: entry.horseId,

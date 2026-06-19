@@ -110,7 +110,8 @@ const startCountdownHoldMs = 1_400;
 const visualRaceSpeedMultiplier = 1.7;
 const worldScale = 7.2;
 const trackStartPercent = 1.2;
-const trackFinishPercent = 95;
+const trackFinishPercent = 91.5;
+const runnerFinishNoseOffsetPx = 185;
 const maxCameraTranslatePercent = ((worldScale - 1) / worldScale) * 100;
 const leaderViewportAnchorPercent = 50 / worldScale;
 const laneTops = ["14%", "23%", "32%", "41%", "50%", "57%", "64%", "71%"];
@@ -398,7 +399,7 @@ export default function RacingAnimationPreviewPage() {
                       "--duration": horse.duration,
                       "--lane-top": horse.laneTop,
                       "--offset": horse.offset,
-                      "--runner-left": `${getRunnerLeftPercent(horse.progress)}%`,
+                      "--runner-left": getRunnerLeftStyle(horse.progress),
                       zIndex: 30 + horse.lane,
                     } as CSSProperties
                   }
@@ -701,18 +702,23 @@ function buildRaceResultBoard(
     .map((entry, index) => {
       const position = positionByEntryId.get(entry.raceEntryId);
       const asset = assetHorses[index % assetHorses.length];
+      const localFinishedAtMs = position?.finishedAtMs ?? null;
+      const serverFinishedAtMs = entry.finishedAtMs ?? null;
+      const localRank = position?.rank ?? null;
+      const serverRank =
+        entry.finalRank ?? resultRankByEntryId.get(entry.raceEntryId) ?? null;
 
       return {
         color: asset.color,
-        finishedAtMs: entry.finishedAtMs ?? position?.finishedAtMs ?? null,
+        finishedAtMs: hasLocalFinishTime
+          ? localFinishedAtMs
+          : serverFinishedAtMs ?? localFinishedAtMs,
         name: entry.name,
         number: entry.number,
         raceEntryId: entry.raceEntryId,
-        rank:
-          entry.finalRank ??
-          resultRankByEntryId.get(entry.raceEntryId) ??
-          position?.rank ??
-          null,
+        rank: hasLocalFinishTime
+          ? localRank ?? serverRank
+          : serverRank ?? localRank,
       } satisfies RaceResultEntry;
     })
     .sort(
@@ -1034,6 +1040,14 @@ function getRunnerLeftPercent(progress: number) {
     trackStartPercent +
     clamp(progress, 0, 1) * (trackFinishPercent - trackStartPercent)
   );
+}
+
+function getRunnerLeftStyle(progress: number) {
+  const progressValue = clamp(progress, 0, 1);
+  const leftPercent = getRunnerLeftPercent(progressValue);
+  const noseOffsetPx = runnerFinishNoseOffsetPx * progressValue;
+
+  return `calc(${leftPercent}% - ${noseOffsetPx}px)`;
 }
 
 function getCameraTranslatePercent(leaderProgress: number) {

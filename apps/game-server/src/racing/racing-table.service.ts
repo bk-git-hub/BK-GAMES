@@ -77,7 +77,11 @@ export class RacingTableService {
     const existing = this.tables.get(tableId);
 
     if (!existing) {
-      const table = this.createRuntimeTable(tableId, config, input.race ?? null);
+      const table = this.createRuntimeTable(
+        tableId,
+        config,
+        input.race ?? null,
+      );
 
       this.tables.set(tableId, table);
       return {
@@ -144,7 +148,9 @@ export class RacingTableService {
     return table.race;
   }
 
-  recordBetPlaced(input: RacingRecordBetPlacedInput): RacingTableMutationResult {
+  recordBetPlaced(
+    input: RacingRecordBetPlacedInput,
+  ): RacingTableMutationResult {
     const table = this.getTable(input.tableId);
     const user = normalizeSocketUser(input.user);
 
@@ -311,8 +317,7 @@ export class RacingTableService {
         bettingTimeoutSeconds: table.bettingTimeoutSeconds,
         raceIntervalSeconds: table.raceIntervalSeconds,
         raceAndResultSeconds: calculateRaceAndResultSeconds(table),
-        bettingCloseBeforeStartSeconds:
-          table.bettingCloseBeforeStartSeconds,
+        bettingCloseBeforeStartSeconds: table.bettingCloseBeforeStartSeconds,
         tickIntervalMs: table.tickIntervalMs,
         raceDistanceM: table.raceDistanceM,
         roundEndDelaySeconds: table.roundEndDelaySeconds,
@@ -543,4 +548,12 @@ function calculateRaceAndResultSeconds(table: RacingTableRuntime) {
   );
 }
 
-const racingBetTypes = new Set<RacingBetType>(['WIN', 'QUINELLA', 'EXACTA']);
+const racingBetTypes = new Set<RacingBetType>([
+  'WIN',
+  'PLACE',
+  'QUINELLA',
+  'EXACTA',
+  'QUINELLA_PLACE',
+  'TRIO',
+  'TRIFECTA',
+]);

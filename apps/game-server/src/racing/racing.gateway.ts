@@ -462,7 +462,15 @@ function readRequiredCommandId(commandId: unknown) {
 }
 
 function parseRacingBetType(value: unknown): RacingBetType {
-  if (value === 'WIN' || value === 'QUINELLA' || value === 'EXACTA') {
+  if (
+    value === 'WIN' ||
+    value === 'PLACE' ||
+    value === 'QUINELLA' ||
+    value === 'EXACTA' ||
+    value === 'QUINELLA_PLACE' ||
+    value === 'TRIO' ||
+    value === 'TRIFECTA'
+  ) {
     return value;
   }
 

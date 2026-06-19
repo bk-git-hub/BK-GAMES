@@ -1,0 +1,2 @@
+ALTER TABLE "racing_bets" DROP CONSTRAINT "racing_bets_type_check";--> statement-breakpoint
+ALTER TABLE "racing_bets" ADD CONSTRAINT "racing_bets_type_check" CHECK ("racing_bets"."bet_type" in ('WIN', 'PLACE', 'QUINELLA', 'EXACTA', 'QUINELLA_PLACE', 'TRIO', 'TRIFECTA'));

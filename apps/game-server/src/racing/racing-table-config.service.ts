@@ -186,11 +186,27 @@ function readBetTypes(rules: Record<string, unknown>): RacingBetType[] {
 
   return normalizedBetTypes.length > 0
     ? normalizedBetTypes
-    : ['WIN', 'QUINELLA', 'EXACTA'];
+    : [
+        'WIN',
+        'PLACE',
+        'QUINELLA',
+        'EXACTA',
+        'QUINELLA_PLACE',
+        'TRIO',
+        'TRIFECTA',
+      ];
 }
 
 function isRacingBetType(value: unknown): value is RacingBetType {
-  return value === 'WIN' || value === 'QUINELLA' || value === 'EXACTA';
+  return (
+    value === 'WIN' ||
+    value === 'PLACE' ||
+    value === 'QUINELLA' ||
+    value === 'EXACTA' ||
+    value === 'QUINELLA_PLACE' ||
+    value === 'TRIO' ||
+    value === 'TRIFECTA'
+  );
 }
 
 function toHorseSnapshot(

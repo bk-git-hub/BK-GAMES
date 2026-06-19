@@ -16,9 +16,29 @@ import {
   type WalletMutationTransaction,
 } from "./wallet-transactions.js";
 
-export type RacingBetType = "WIN" | "QUINELLA" | "EXACTA";
+export type RacingBetType =
+  | "WIN"
+  | "PLACE"
+  | "QUINELLA"
+  | "EXACTA"
+  | "QUINELLA_PLACE"
+  | "TRIO"
+  | "TRIFECTA";
 
-const racingBetTypes = new Set<RacingBetType>(["WIN", "QUINELLA", "EXACTA"]);
+const racingBetTypes = new Set<RacingBetType>([
+  "WIN",
+  "PLACE",
+  "QUINELLA",
+  "EXACTA",
+  "QUINELLA_PLACE",
+  "TRIO",
+  "TRIFECTA",
+]);
+const unorderedRacingBetTypes = new Set<RacingBetType>([
+  "QUINELLA",
+  "QUINELLA_PLACE",
+  "TRIO",
+]);
 const zero = BigInt(0);
 const racingOddsDenominator = 10_000;
 
@@ -259,7 +279,11 @@ export async function placeRacingBetInTransaction(
     context.race.id,
     input.selections,
   );
-  const selections = normalizeBetSelections(input.betType, input.selections, entries);
+  const selections = normalizeBetSelections(
+    input.betType,
+    input.selections,
+    entries,
+  );
   const oddsNumerator = calculateOddsNumerator(context, input.betType);
   const existingBet = await findRacingBetByCommand(
     tx,
@@ -487,7 +511,12 @@ export async function settleRacingRaceInTransaction(
 
     const betType = parseRacingBetType(bet.betType);
     const selections = selectionsByBetId.get(bet.id) ?? [];
-    const outcome = isWinningBet(betType, selections, rankByRaceEntryId)
+    const outcome = isWinningBet(
+      betType,
+      selections,
+      rankByRaceEntryId,
+      race.fieldSize,
+    )
       ? "WIN"
       : "LOSE";
     const payoutAmount =
@@ -821,10 +850,7 @@ async function findRacingBetsByRace(
   tx: WalletMutationTransaction,
   raceId: string,
 ) {
-  return tx
-    .select()
-    .from(racingBets)
-    .where(eq(racingBets.raceId, raceId));
+  return tx.select().from(racingBets).where(eq(racingBets.raceId, raceId));
 }
 
 async function findRacingRaceEntries(
@@ -911,7 +937,12 @@ async function readSettledRacingRaceResult(
   for (const bet of bets) {
     const betType = parseRacingBetType(bet.betType);
     const selections = selectionsByBetId.get(bet.id) ?? [];
-    const outcome = isWinningBet(betType, selections, rankByRaceEntryId)
+    const outcome = isWinningBet(
+      betType,
+      selections,
+      rankByRaceEntryId,
+      entries.length,
+    )
       ? "WIN"
       : "LOSE";
 
@@ -996,10 +1027,7 @@ async function readCancelledRacingRaceResult(
   };
 }
 
-function assertRaceAcceptsBets(
-  context: LockedRacingBettingContext,
-  now: Date,
-) {
+function assertRaceAcceptsBets(context: LockedRacingBettingContext, now: Date) {
   if (context.table.status !== "OPEN") {
     throw new RacingBettingError(
       "TABLE_NOT_OPEN",
@@ -1127,12 +1155,9 @@ function normalizeBetSelections(
 
     return entry;
   });
-  const normalizedEntries =
-    betType === "QUINELLA"
-      ? orderedEntries
-          .slice()
-          .sort((left, right) => left.number - right.number)
-      : orderedEntries;
+  const normalizedEntries = unorderedRacingBetTypes.has(betType)
+    ? orderedEntries.slice().sort((left, right) => left.number - right.number)
+    : orderedEntries;
 
   return normalizedEntries.map((entry, index) => ({
     raceEntryId: entry.id,
@@ -1147,7 +1172,7 @@ function getExpectedRank(betType: RacingBetType, index: number) {
     return 1;
   }
 
-  if (betType === "EXACTA") {
+  if (betType === "EXACTA" || betType === "TRIFECTA") {
     return index + 1;
   }
 
@@ -1158,9 +1183,18 @@ function isWinningBet(
   betType: RacingBetType,
   selections: RacingBetSelectionSnapshot[],
   rankByRaceEntryId: Map<string, number>,
+  fieldSize: number,
 ) {
   if (betType === "WIN") {
     return rankByRaceEntryId.get(selections[0]?.raceEntryId ?? "") === 1;
+  }
+
+  if (betType === "PLACE") {
+    return (
+      selections.length === 1 &&
+      (rankByRaceEntryId.get(selections[0]?.raceEntryId ?? "") ??
+        Number.POSITIVE_INFINITY) <= getPlaceRank(fieldSize)
+    );
   }
 
   if (betType === "QUINELLA") {
@@ -1168,17 +1202,41 @@ function isWinningBet(
       selections.length === 2 &&
       selections.every(
         (selection) =>
-          (rankByRaceEntryId.get(selection.raceEntryId) ?? Number.POSITIVE_INFINITY) <=
-          2,
+          (rankByRaceEntryId.get(selection.raceEntryId) ??
+            Number.POSITIVE_INFINITY) <= 2,
       )
     );
   }
 
+  if (betType === "QUINELLA_PLACE") {
+    return areAllSelectionsWithinRank(selections, rankByRaceEntryId, 3, 2);
+  }
+
+  if (betType === "TRIO") {
+    return areAllSelectionsWithinRank(selections, rankByRaceEntryId, 3, 3);
+  }
+
   return (
-    selections.length === 2 &&
+    selections.length === getRequiredSelectionCount(betType) &&
     selections.every(
       (selection) =>
         selection.expectedRank === rankByRaceEntryId.get(selection.raceEntryId),
+    )
+  );
+}
+
+function areAllSelectionsWithinRank(
+  selections: RacingBetSelectionSnapshot[],
+  rankByRaceEntryId: Map<string, number>,
+  maxRank: number,
+  expectedSelectionCount: number,
+) {
+  return (
+    selections.length === expectedSelectionCount &&
+    selections.every(
+      (selection) =>
+        (rankByRaceEntryId.get(selection.raceEntryId) ??
+          Number.POSITIVE_INFINITY) <= maxRank,
     )
   );
 }
@@ -1187,8 +1245,10 @@ function calculateOddsNumerator(
   context: LockedRacingBettingContext,
   betType: RacingBetType,
 ) {
-  return getCombinationCount(betType, context.race.fieldSize) *
-    context.table.payoutRateBps;
+  return Math.floor(
+    getCombinationCount(betType, context.race.fieldSize) *
+      context.table.payoutRateBps,
+  );
 }
 
 function getCombinationCount(betType: RacingBetType, fieldSize: number) {
@@ -1196,11 +1256,63 @@ function getCombinationCount(betType: RacingBetType, fieldSize: number) {
     return fieldSize;
   }
 
+  if (betType === "PLACE") {
+    return fieldSize / getPlaceRank(fieldSize);
+  }
+
   if (betType === "QUINELLA") {
-    return (fieldSize * (fieldSize - 1)) / 2;
+    return combination(fieldSize, 2);
+  }
+
+  if (betType === "QUINELLA_PLACE") {
+    return combination(fieldSize, 2) / combination(3, 2);
+  }
+
+  if (betType === "TRIO") {
+    return combination(fieldSize, 3);
+  }
+
+  if (betType === "TRIFECTA") {
+    return permutation(fieldSize, 3);
   }
 
   return fieldSize * (fieldSize - 1);
+}
+
+function getPlaceRank(fieldSize: number) {
+  return fieldSize <= 7 ? 2 : 3;
+}
+
+function combination(total: number, selected: number) {
+  if (selected < 0 || selected > total) {
+    return 0;
+  }
+
+  return permutation(total, selected) / factorial(selected);
+}
+
+function permutation(total: number, selected: number) {
+  if (selected < 0 || selected > total) {
+    return 0;
+  }
+
+  let result = 1;
+
+  for (let offset = 0; offset < selected; offset += 1) {
+    result *= total - offset;
+  }
+
+  return result;
+}
+
+function factorial(value: number) {
+  let result = 1;
+
+  for (let number = 2; number <= value; number += 1) {
+    result *= number;
+  }
+
+  return result;
 }
 
 function calculateBetPayoutAmount(bet: typeof racingBets.$inferSelect) {
@@ -1381,10 +1493,7 @@ function normalizePlaceRacingBetInput(
   }
 
   if (input.amount <= zero) {
-    throw new RacingBettingError(
-      "INVALID_BET",
-      "Bet amount must be positive.",
-    );
+    throw new RacingBettingError("INVALID_BET", "Bet amount must be positive.");
   }
 
   if (
@@ -1488,7 +1597,15 @@ function normalizeCancelRacingRaceInput(
 }
 
 function getRequiredSelectionCount(betType: RacingBetType) {
-  return betType === "WIN" ? 1 : 2;
+  if (betType === "WIN" || betType === "PLACE") {
+    return 1;
+  }
+
+  if (betType === "TRIO" || betType === "TRIFECTA") {
+    return 3;
+  }
+
+  return 2;
 }
 
 function parseRacingBetType(value: string): RacingBetType {

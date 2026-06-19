@@ -62,7 +62,15 @@ function createRunningState(input: { startedAt: string }): RacingTableState {
       minBet: '100',
       maxBet: '6000',
     },
-    betTypes: ['WIN', 'QUINELLA', 'EXACTA'],
+    betTypes: [
+      'WIN',
+      'PLACE',
+      'QUINELLA',
+      'EXACTA',
+      'QUINELLA_PLACE',
+      'TRIO',
+      'TRIFECTA',
+    ],
     timing: {
       bettingTimeoutSeconds: 150,
       raceIntervalSeconds: 240,

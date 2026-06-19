@@ -54,7 +54,15 @@ const developmentMainRacingTiming = {
 const activeMainRacingTiming = developmentMainRacingTiming;
 
 const mainRacingRules = {
-  betTypes: ["WIN", "QUINELLA", "EXACTA"],
+  betTypes: [
+    "WIN",
+    "PLACE",
+    "QUINELLA",
+    "EXACTA",
+    "QUINELLA_PLACE",
+    "TRIO",
+    "TRIFECTA",
+  ],
   equalBaseStats: true,
   fixedOdds: true,
   oddsDenominator: 10_000,

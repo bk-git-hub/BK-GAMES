@@ -355,7 +355,14 @@ export type RacingTablePhase =
   | "ROUND_END"
   | "CANCELLED";
 
-export type RacingBetType = "WIN" | "QUINELLA" | "EXACTA";
+export type RacingBetType =
+  | "WIN"
+  | "PLACE"
+  | "QUINELLA"
+  | "EXACTA"
+  | "QUINELLA_PLACE"
+  | "TRIO"
+  | "TRIFECTA";
 
 export type RacingSocketUser = {
   userId: string;

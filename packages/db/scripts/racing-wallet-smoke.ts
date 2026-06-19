@@ -204,10 +204,10 @@ try {
   });
 
   const firstRace = await createRace(table.id, horses, 1);
-  const [entryOne, entryTwo] = firstRace.entries;
+  const [entryOne, entryTwo, entryThree] = firstRace.entries;
 
-  if (!entryOne || !entryTwo) {
-    throw new Error("Racing smoke requires at least two entries.");
+  if (!entryOne || !entryTwo || !entryThree) {
+    throw new Error("Racing smoke requires at least three entries.");
   }
 
   const winBetInput = {
@@ -261,6 +261,43 @@ try {
     betType: "EXACTA",
     selections: [entryTwo.id, entryOne.id],
   });
+  const placeBet = await placeRacingBet({
+    raceId: firstRace.race.id,
+    userId,
+    amount: BigInt(100),
+    commandId: "command-place",
+    betType: "PLACE",
+    selections: [entryTwo.id],
+  });
+  const quinellaPlaceBet = await placeRacingBet({
+    raceId: firstRace.race.id,
+    userId,
+    amount: BigInt(100),
+    commandId: "command-quinella-place",
+    betType: "QUINELLA_PLACE",
+    selections: [entryThree.id, entryOne.id],
+  });
+  const trioBetInput = {
+    raceId: firstRace.race.id,
+    userId,
+    amount: BigInt(100),
+    commandId: "command-trio",
+    betType: "TRIO" as const,
+    selections: [entryThree.id, entryOne.id, entryTwo.id],
+  };
+  const trioBet = await placeRacingBet(trioBetInput);
+  const trioBetRetry = await placeRacingBet({
+    ...trioBetInput,
+    selections: [entryOne.id, entryTwo.id, entryThree.id],
+  });
+  const trifectaBet = await placeRacingBet({
+    raceId: firstRace.race.id,
+    userId,
+    amount: BigInt(100),
+    commandId: "command-trifecta",
+    betType: "TRIFECTA",
+    selections: [entryOne.id, entryTwo.id, entryThree.id],
+  });
 
   await db
     .update(racingRaces)
@@ -292,6 +329,16 @@ try {
   const settledLosingExactaBet = findSettledBet(
     settlement.bets,
     losingExactaBet.bet.id,
+  );
+  const settledPlaceBet = findSettledBet(settlement.bets, placeBet.bet.id);
+  const settledQuinellaPlaceBet = findSettledBet(
+    settlement.bets,
+    quinellaPlaceBet.bet.id,
+  );
+  const settledTrioBet = findSettledBet(settlement.bets, trioBet.bet.id);
+  const settledTrifectaBet = findSettledBet(
+    settlement.bets,
+    trifectaBet.bet.id,
   );
   const retriedWinBet = findSettledBet(settlementRetry.bets, winBet.bet.id);
 
@@ -335,7 +382,13 @@ try {
     winOddsNumerator: winBet.bet.oddsNumerator,
     quinellaOddsNumerator: quinellaBet.bet.oddsNumerator,
     exactaOddsNumerator: exactaBet.bet.oddsNumerator,
+    placeOddsNumerator: placeBet.bet.oddsNumerator,
+    quinellaPlaceOddsNumerator: quinellaPlaceBet.bet.oddsNumerator,
+    trioOddsNumerator: trioBet.bet.oddsNumerator,
+    trifectaOddsNumerator: trifectaBet.bet.oddsNumerator,
     lockedOddsDenominator: winBet.bet.oddsDenominator,
+    trioRetryIdempotent: trioBetRetry.walletMutation.idempotent,
+    sameTrioBet: trioBet.bet.id === trioBetRetry.bet.id,
     winPayout: settledWinBet.payoutAmount.toString(),
     winNet: settledWinBet.netAmount.toString(),
     quinellaPayout: settledQuinellaBet.payoutAmount.toString(),
@@ -344,6 +397,14 @@ try {
     exactaNet: settledExactaBet.netAmount.toString(),
     losingExactaOutcome: settledLosingExactaBet.outcome,
     losingExactaPayout: settledLosingExactaBet.payoutAmount.toString(),
+    placePayout: settledPlaceBet.payoutAmount.toString(),
+    placeNet: settledPlaceBet.netAmount.toString(),
+    quinellaPlacePayout: settledQuinellaPlaceBet.payoutAmount.toString(),
+    quinellaPlaceNet: settledQuinellaPlaceBet.netAmount.toString(),
+    trioPayout: settledTrioBet.payoutAmount.toString(),
+    trioNet: settledTrioBet.netAmount.toString(),
+    trifectaPayout: settledTrifectaBet.payoutAmount.toString(),
+    trifectaNet: settledTrifectaBet.netAmount.toString(),
     settlementRetryIdempotent: retriedWinBet.walletMutation?.idempotent,
     cancelBetBalance: cancelBet.walletMutation.wallet.balance.toString(),
     cancellationRefund: cancellation.bets[0]?.refundAmount.toString(),
@@ -363,7 +424,13 @@ try {
     summary.winOddsNumerator !== 54_000 ||
     summary.quinellaOddsNumerator !== 135_000 ||
     summary.exactaOddsNumerator !== 270_000 ||
+    summary.placeOddsNumerator !== 27_000 ||
+    summary.quinellaPlaceOddsNumerator !== 45_000 ||
+    summary.trioOddsNumerator !== 180_000 ||
+    summary.trifectaOddsNumerator !== 1_080_000 ||
     summary.lockedOddsDenominator !== 10_000 ||
+    !summary.trioRetryIdempotent ||
+    !summary.sameTrioBet ||
     summary.winPayout !== "5400" ||
     summary.winNet !== "4400" ||
     summary.quinellaPayout !== "1350" ||
@@ -372,12 +439,20 @@ try {
     summary.exactaNet !== "2600" ||
     summary.losingExactaOutcome !== "LOSE" ||
     summary.losingExactaPayout !== "0" ||
+    summary.placePayout !== "270" ||
+    summary.placeNet !== "170" ||
+    summary.quinellaPlacePayout !== "450" ||
+    summary.quinellaPlaceNet !== "350" ||
+    summary.trioPayout !== "1800" ||
+    summary.trioNet !== "1700" ||
+    summary.trifectaPayout !== "10800" ||
+    summary.trifectaNet !== "10700" ||
     !summary.settlementRetryIdempotent ||
-    summary.cancelBetBalance !== "17650" ||
+    summary.cancelBetBalance !== "30570" ||
     summary.cancellationRefund !== "500" ||
     !summary.cancellationRetryIdempotent ||
-    summary.finalBalance !== "18150" ||
-    summary.ledgerCount !== 10
+    summary.finalBalance !== "31070" ||
+    summary.ledgerCount !== 18
   ) {
     throw new Error(
       `Unexpected racing wallet smoke result: ${JSON.stringify(summary)}`,

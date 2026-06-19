@@ -1215,7 +1215,7 @@ export const racingBets = pgTable(
     check("racing_bets_amount_positive", sql`${table.amount} > 0`),
     check(
       "racing_bets_type_check",
-      sql`${table.betType} in ('WIN', 'QUINELLA', 'EXACTA')`,
+      sql`${table.betType} in ('WIN', 'PLACE', 'QUINELLA', 'EXACTA', 'QUINELLA_PLACE', 'TRIO', 'TRIFECTA')`,
     ),
     check(
       "racing_bets_status_check",

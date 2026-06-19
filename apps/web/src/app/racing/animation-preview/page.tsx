@@ -119,6 +119,9 @@ const worldScale = 7.2;
 const trackStartPercent = 1.2;
 const trackFinishPercent = 91.5;
 const runnerFinishNoseOffsetPx = 185;
+const postFinishCoastMs = 1_600;
+const postFinishTrackOvershootRatio = 0.075;
+const maxVisualRaceProgress = 1 + postFinishTrackOvershootRatio;
 const maxRaceTimelineCacheEntries = 8;
 const maxCameraTranslatePercent = ((worldScale - 1) / worldScale) * 100;
 const leaderViewportAnchorPercent = 50 / worldScale;
@@ -393,7 +396,6 @@ export default function RacingAnimationPreviewPage() {
               }
             >
               <div className={styles.cameraStartGate} />
-              <div className={styles.cameraDistanceBoards} />
               <div className={styles.cameraFinishPost} />
             </div>
             <div className={styles.straightLaneOverlay} aria-hidden="true" />
@@ -815,7 +817,7 @@ function buildDisplayHorses(
       laneTop: laneTops[laneIndex] ?? laneTops[laneTops.length - 1],
       name: entry.name,
       number: entry.number,
-      progress: clamp(progress, 0, 1),
+      progress: clamp(progress, 0, maxVisualRaceProgress),
       raceEntryId: entry.raceEntryId,
       rank,
       startLaneTop:
@@ -1121,7 +1123,11 @@ function advanceSimulationStep(input: {
 
   for (const state of input.states) {
     if (state.finishedAtMs !== null) {
-      state.distanceM = input.distanceM;
+      state.distanceM = getPostFinishDistance({
+        distanceM: input.distanceM,
+        finishedAtMs: state.finishedAtMs,
+        stepEndMs: input.stepEndMs,
+      });
       continue;
     }
 
@@ -1154,8 +1160,27 @@ function advanceSimulationStep(input: {
         input.stepStartMs + clamp(crossingRatio, 0, 1) * input.deltaMs;
     }
 
-    state.distanceM = nextDistanceM;
+    state.distanceM =
+      state.finishedAtMs === null
+        ? nextDistanceM
+        : getPostFinishDistance({
+            distanceM: input.distanceM,
+            finishedAtMs: state.finishedAtMs,
+            stepEndMs: input.stepEndMs,
+          });
   }
+}
+
+function getPostFinishDistance(input: {
+  distanceM: number;
+  finishedAtMs: number;
+  stepEndMs: number;
+}) {
+  const coastRatio = smoothStep(
+    clamp((input.stepEndMs - input.finishedAtMs) / postFinishCoastMs, 0, 1),
+  );
+
+  return input.distanceM * (1 + postFinishTrackOvershootRatio * coastRatio);
 }
 
 function calculateStepSpeed(input: {
@@ -1196,6 +1221,8 @@ function rankSimulationStates(
   states: RacingSimulationState[],
   distanceM: number,
 ) {
+  const maxVisualDistanceM = distanceM * maxVisualRaceProgress;
+
   return [...states]
     .sort((left, right) => {
       if (left.finishedAtMs !== null || right.finishedAtMs !== null) {
@@ -1224,7 +1251,7 @@ function rankSimulationStates(
     })
     .map((state) => ({
       ...state,
-      distanceM: Math.min(distanceM, state.distanceM),
+      distanceM: Math.min(maxVisualDistanceM, state.distanceM),
     }));
 }
 
@@ -1266,12 +1293,13 @@ function getLeaderHorse(horses: DisplayHorse[]) {
 function getRunnerLeftPercent(progress: number) {
   return (
     trackStartPercent +
-    clamp(progress, 0, 1) * (trackFinishPercent - trackStartPercent)
+    clamp(progress, 0, maxVisualRaceProgress) *
+      (trackFinishPercent - trackStartPercent)
   );
 }
 
 function getRunnerLeftStyle(progress: number) {
-  const progressValue = clamp(progress, 0, 1);
+  const progressValue = clamp(progress, 0, maxVisualRaceProgress);
   const leftPercent = getRunnerLeftPercent(progressValue);
   const noseOffsetPx = runnerFinishNoseOffsetPx * progressValue;
 
@@ -1279,7 +1307,7 @@ function getRunnerLeftStyle(progress: number) {
 }
 
 function getRunnerPositionStyle(progress: number, trackWidthPx: number) {
-  const progressValue = clamp(progress, 0, 1);
+  const progressValue = clamp(progress, 0, maxVisualRaceProgress);
 
   if (trackWidthPx <= 0) {
     return {

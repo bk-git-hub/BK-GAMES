@@ -44,11 +44,6 @@ type DisplayHorse = AssetHorse & {
   startX: string;
 };
 
-type TrackPhase = {
-  label: string;
-  window: string;
-};
-
 type ConnectionStatus =
   | "connecting"
   | "connected"
@@ -142,21 +137,6 @@ const fallbackHorses: DisplayHorse[] = assetHorses.map((horse, index) => ({
   startX: "10.5%",
 }));
 
-const trackPhases: TrackPhase[] = [
-  {
-    label: "Start",
-    window: "Gate to break",
-  },
-  {
-    label: "Middle",
-    window: "Open straight",
-  },
-  {
-    label: "Finish",
-    window: "Final line",
-  },
-];
-
 export default function RacingAnimationPreviewPage() {
   const racing = useRacingTable();
   const usesBackendState = Boolean(racing.tableState?.race);
@@ -185,6 +165,10 @@ export default function RacingAnimationPreviewPage() {
   );
   const statusLabel = getStatusLabel(racing.connectionStatus, racing.tableState);
   const statusDetail = getStatusDetail(racing.tableState, displayTick);
+  const socketErrorMessage =
+    racing.socketError?.message === "Server polling active."
+      ? null
+      : racing.socketError?.message;
   const cameraClassName = `${styles.cameraTrack} ${
     usesBackendState ? styles.liveCameraTrack : styles.previewCameraTrack
   }`;
@@ -213,73 +197,10 @@ export default function RacingAnimationPreviewPage() {
               <p>{usesBackendState ? "Backend linked" : "Asset path preview"}</p>
             </div>
           </div>
-          <div className={styles.statusBar} aria-label="Preview status">
-            <span className={styles.liveDot} />
-            <span>{statusLabel}</span>
-            <strong>{statusDetail}</strong>
-          </div>
         </header>
 
-        <section
-          className={styles.startFrame}
-          aria-label="Pre-race start state preview"
-        >
-          <div className={styles.startTrack}>
-            <div className={styles.startGateRig} aria-hidden="true">
-              {displayHorses.map((horse) => (
-                <div className={styles.gateStall} key={horse.raceEntryId} />
-              ))}
-            </div>
-            <div className={styles.startLine} aria-hidden="true" />
-            <div className={styles.startHud} aria-label="Start state">
-              <span>{racing.tableState?.phase ?? "GATE READY"}</span>
-              <strong>{getTimerText(racing.tableState)}</strong>
-            </div>
-            {displayHorses.map((horse) => (
-              <div
-                className={styles.starter}
-                key={horse.raceEntryId}
-                style={
-                  {
-                    "--start-lane-top": horse.startLaneTop,
-                    "--start-x": horse.startX,
-                    zIndex: 20 + horse.lane,
-                  } as CSSProperties
-                }
-              >
-                <div
-                  aria-label={`${horse.number}번 말 출발 대기 상태`}
-                  className={styles.staticSprite}
-                  style={
-                    {
-                      "--sprite": `url("${horse.file}")`,
-                    } as CSSProperties
-                  }
-                />
-                <span className={`${styles.startBadge} ${styles[horse.color]}`}>
-                  {horse.number}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <aside className={styles.startPanel} aria-label="Start lane status">
-            <h2>Start Gate</h2>
-            <ol>
-              {displayHorses.map((horse) => (
-                <li key={horse.raceEntryId}>
-                  <span className={`${styles.badge} ${styles[horse.color]}`}>
-                    {horse.number}
-                  </span>
-                  <span>Lane {horse.lane}</span>
-                </li>
-              ))}
-            </ol>
-          </aside>
-        </section>
-
         <div className={styles.raceFrame}>
-          <div className={styles.track} aria-label="Animated horse race preview">
+          <div className={styles.track} aria-label="Live racing game">
             <div
               className={cameraClassName}
               aria-hidden="true"
@@ -296,17 +217,28 @@ export default function RacingAnimationPreviewPage() {
               <div className={styles.cameraFinishPost} />
             </div>
             <div className={styles.straightLaneOverlay} aria-hidden="true" />
-            <div
-              className={styles.phaseHud}
-              aria-label="Race background phase sequence"
-            >
-              {trackPhases.map((phase) => (
-                <span className={styles.phasePill} key={phase.label}>
-                  <strong>{phase.label}</strong>
-                  <span>{phase.window}</span>
-                </span>
-              ))}
+
+            <div className={styles.gameHud} aria-label="Live race state">
+              <div className={styles.gameStatus}>
+                <span>{statusLabel}</span>
+                <strong>{statusDetail}</strong>
+                <em>{getTimerText(racing.tableState)}</em>
+              </div>
+              <ol className={styles.gameRanks} aria-label="Live rank">
+                {rankedHorses.map((horse) => (
+                  <li key={horse.raceEntryId}>
+                    <span className={`${styles.badge} ${styles[horse.color]}`}>
+                      {horse.number}
+                    </span>
+                    <span>{formatRank(horse.rank)}</span>
+                  </li>
+                ))}
+              </ol>
+              {socketErrorMessage ? (
+                <p className={styles.socketError}>{socketErrorMessage}</p>
+              ) : null}
             </div>
+
             <div
               className={runnerLayerClassName}
               style={
@@ -346,49 +278,7 @@ export default function RacingAnimationPreviewPage() {
               ))}
             </div>
           </div>
-
-          <aside className={styles.rankPanel} aria-label="Live rank preview">
-            <h2>Live Rank</h2>
-            <ol>
-              {rankedHorses.map((horse) => (
-                <li key={horse.raceEntryId}>
-                  <span className={`${styles.badge} ${styles[horse.color]}`}>
-                    {horse.number}
-                  </span>
-                  <span>{formatRank(horse.rank)}</span>
-                </li>
-              ))}
-            </ol>
-            {racing.socketError ? (
-              <p className={styles.socketError}>{racing.socketError.message}</p>
-            ) : null}
-          </aside>
         </div>
-
-        <section
-          className={styles.spriteRows}
-          aria-label="Individual spritesheet rows"
-        >
-          {displayHorses.map((horse) => (
-            <article className={styles.spriteCard} key={horse.raceEntryId}>
-              <div className={styles.cardTop}>
-                <span className={`${styles.badge} ${styles[horse.color]}`}>
-                  {horse.number}
-                </span>
-                <span>{horse.name}</span>
-              </div>
-              <div
-                aria-label={`${horse.number}번 말 개별 spritesheet preview`}
-                className={styles.rowSprite}
-                style={
-                  {
-                    "--sprite": `url("${horse.file}")`,
-                  } as CSSProperties
-                }
-              />
-            </article>
-          ))}
-        </section>
       </section>
     </main>
   );

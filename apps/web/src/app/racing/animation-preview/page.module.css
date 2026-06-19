@@ -89,6 +89,10 @@
   grid-template-columns: minmax(0, 1fr) 190px;
 }
 
+.raceFrame {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .startTrack {
   aspect-ratio: 16 / 9;
   background-image:
@@ -275,11 +279,12 @@
 
 .track {
   --world-width: 460%;
-  aspect-ratio: 1672 / 941;
+  aspect-ratio: auto;
   background: #081315;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 8px;
   box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
+  height: clamp(430px, calc(100vh - 150px), 760px);
   min-height: 430px;
   overflow: hidden;
   position: relative;
@@ -438,6 +443,98 @@
   pointer-events: none;
   position: absolute;
   z-index: 2;
+}
+
+.gameHud {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  left: 18px;
+  pointer-events: none;
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  z-index: 70;
+}
+
+.gameStatus,
+.gameRanks {
+  background: rgb(5 12 14 / 72%);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 8px;
+  box-shadow: 0 16px 42px rgb(0 0 0 / 30%);
+}
+
+.gameStatus {
+  align-items: center;
+  color: #f5f8f5;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 14px;
+}
+
+.gameStatus span {
+  color: #66ef9b;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.gameStatus strong {
+  color: #f5f8f5;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.gameStatus em {
+  color: #fff4c4;
+  font-size: 22px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.gameRanks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  list-style: none;
+  margin: 0;
+  max-width: 510px;
+  padding: 8px;
+}
+
+.gameRanks li {
+  align-items: center;
+  background: rgb(255 255 255 / 8%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 6px;
+  color: #dbe6df;
+  display: flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 6px;
+  min-height: 32px;
+  padding: 3px 7px 3px 3px;
+}
+
+.gameRanks .badge {
+  font-size: 14px;
+  height: 26px;
+  min-width: 26px;
+}
+
+.gameHud .socketError {
+  background: rgb(5 12 14 / 72%);
+  border: 1px solid rgb(255 182 168 / 28%);
+  border-radius: 8px;
+  margin: 0;
+  max-width: 220px;
+  padding: 9px 10px;
 }
 
 .phaseHud {
@@ -752,6 +849,7 @@
   .startTrack,
   .track {
     aspect-ratio: 4 / 3;
+    height: clamp(360px, 70vh, 560px);
     min-height: unset;
   }
 
@@ -798,6 +896,45 @@
 
   .phasePill span {
     font-size: 10px;
+  }
+
+  .gameHud {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    left: 10px;
+    right: 10px;
+    top: 10px;
+  }
+
+  .gameStatus {
+    justify-content: space-between;
+    min-height: 40px;
+    padding: 0 10px;
+  }
+
+  .gameStatus strong {
+    font-size: 13px;
+  }
+
+  .gameStatus em {
+    font-size: 18px;
+  }
+
+  .gameRanks {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .gameRanks li {
+    font-size: 11px;
+    min-height: 28px;
+  }
+
+  .gameRanks .badge {
+    font-size: 12px;
+    height: 22px;
+    min-width: 22px;
   }
 
   .startLine {

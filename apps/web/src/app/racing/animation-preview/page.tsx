@@ -93,6 +93,7 @@ type RacingSimulationState = {
   number: number;
   distanceM: number;
   finishedAtMs: number | null;
+  finishSpeedMPerMs: number | null;
 };
 
 type RacingTableViewState = RacingTableState | RacingTableSummary;
@@ -119,7 +120,6 @@ const worldScale = 7.2;
 const trackStartPercent = 1.2;
 const trackFinishPercent = 91.5;
 const runnerFinishNoseOffsetPx = 185;
-const postFinishCoastMs = 1_600;
 const postFinishTrackOvershootRatio = 0.075;
 const maxVisualRaceProgress = 1 + postFinishTrackOvershootRatio;
 const maxRaceTimelineCacheEntries = 8;
@@ -800,6 +800,10 @@ function buildDisplayHorses(
   const resultRankByEntryId = new Map(
     race.resultOrder.map((raceEntryId, index) => [raceEntryId, index + 1]),
   );
+  const shouldHoldPostFinishPosition = tableState
+    ? isRaceResultPhase(tableState.phase)
+    : false;
+
   return race.entries.map((entry, index) => {
     const asset = assetHorses[index % assetHorses.length];
     const position = positionByEntryId.get(entry.raceEntryId);
@@ -808,7 +812,16 @@ function buildDisplayHorses(
       entry.finalRank ??
       resultRankByEntryId.get(entry.raceEntryId) ??
       null;
-    const progress = position?.progress ?? (entry.finishedAtMs !== null ? 1 : 0);
+    const fallbackProgress =
+      entry.finishedAtMs !== null
+        ? shouldHoldPostFinishPosition
+          ? maxVisualRaceProgress
+          : 1
+        : 0;
+    const progress =
+      shouldHoldPostFinishPosition && entry.finishedAtMs !== null
+        ? Math.max(position?.progress ?? fallbackProgress, fallbackProgress)
+        : position?.progress ?? fallbackProgress;
     const laneIndex = Math.max(0, entry.lane - 1);
 
     return {
@@ -1046,6 +1059,7 @@ function buildRaceTimeline(input: {
   const states = input.entries.map((entry) => ({
     distanceM: 0,
     finishedAtMs: null,
+    finishSpeedMPerMs: null,
     number: entry.number,
     raceEntryId: entry.raceEntryId,
   }));
@@ -1126,6 +1140,7 @@ function advanceSimulationStep(input: {
       state.distanceM = getPostFinishDistance({
         distanceM: input.distanceM,
         finishedAtMs: state.finishedAtMs,
+        finishSpeedMPerMs: state.finishSpeedMPerMs ?? baseSpeedMPerMs,
         stepEndMs: input.stepEndMs,
       });
       continue;
@@ -1158,6 +1173,7 @@ function advanceSimulationStep(input: {
 
       state.finishedAtMs =
         input.stepStartMs + clamp(crossingRatio, 0, 1) * input.deltaMs;
+      state.finishSpeedMPerMs = speedMPerMs;
     }
 
     state.distanceM =
@@ -1166,6 +1182,7 @@ function advanceSimulationStep(input: {
         : getPostFinishDistance({
             distanceM: input.distanceM,
             finishedAtMs: state.finishedAtMs,
+            finishSpeedMPerMs: state.finishSpeedMPerMs ?? speedMPerMs,
             stepEndMs: input.stepEndMs,
           });
   }
@@ -1174,13 +1191,18 @@ function advanceSimulationStep(input: {
 function getPostFinishDistance(input: {
   distanceM: number;
   finishedAtMs: number;
+  finishSpeedMPerMs: number;
   stepEndMs: number;
 }) {
-  const coastRatio = smoothStep(
-    clamp((input.stepEndMs - input.finishedAtMs) / postFinishCoastMs, 0, 1),
+  const postFinishElapsedMs = Math.max(0, input.stepEndMs - input.finishedAtMs);
+  const maxPostFinishDistanceM =
+    input.distanceM * postFinishTrackOvershootRatio;
+  const postFinishDistanceM = Math.min(
+    maxPostFinishDistanceM,
+    input.finishSpeedMPerMs * postFinishElapsedMs,
   );
 
-  return input.distanceM * (1 + postFinishTrackOvershootRatio * coastRatio);
+  return input.distanceM + postFinishDistanceM;
 }
 
 function calculateStepSpeed(input: {

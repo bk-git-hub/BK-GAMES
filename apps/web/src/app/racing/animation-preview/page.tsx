@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useEffect,
   useMemo,
   useRef,
@@ -96,11 +97,17 @@ type RacingSimulationState = {
 
 type RacingTableViewState = RacingTableState | RacingTableSummary;
 
+type RacingTimeline = {
+  maxElapsedMs: number;
+  snapshots: DisplayRacePosition[][];
+  tickIntervalMs: number;
+};
+
 const tableId = "main";
 const previewGuestUserId = "preview:racing-animation";
 const previewGuestNickname = "Racing Preview";
 const restPollMs = 1_000;
-const localTickMs = 120;
+const localTickMs = 160;
 const minimumRaceRunDurationMs = 1_000;
 const minimumTickIntervalMs = 10;
 const maxUnforcedRaceDurationMultiplier = 2.2;
@@ -112,6 +119,7 @@ const worldScale = 7.2;
 const trackStartPercent = 1.2;
 const trackFinishPercent = 91.5;
 const runnerFinishNoseOffsetPx = 185;
+const maxRaceTimelineCacheEntries = 8;
 const maxCameraTranslatePercent = ((worldScale - 1) / worldScale) * 100;
 const leaderViewportAnchorPercent = 50 / worldScale;
 const laneTops = ["14%", "23%", "32%", "41%", "50%", "57%", "64%", "71%"];
@@ -166,6 +174,8 @@ const assetHorses: AssetHorse[] = [
   },
 ];
 
+const raceTimelineCache = new Map<string, RacingTimeline>();
+
 const fallbackHorses: DisplayHorse[] = assetHorses.map((horse, index) => ({
   ...horse,
   lane: index + 1,
@@ -187,6 +197,8 @@ export default function RacingAnimationPreviewPage() {
     useState<RaceResultBoard | null>(null);
   const [visualRaceStart, setVisualRaceStart] =
     useState<VisualRaceStart | null>(null);
+  const [trackWidthPx, setTrackWidthPx] = useState(0);
+  const trackRef = useRef<HTMLDivElement | null>(null);
   const tableStateRef = useRef<RacingTableViewState | null>(null);
   const visualRaceStartRef = useRef<VisualRaceStart | null>(null);
   const isVisuallyRunning = isRaceVisuallyRunning(
@@ -266,6 +278,31 @@ export default function RacingAnimationPreviewPage() {
   }, [racing.tableState]);
 
   useEffect(() => {
+    const trackNode = trackRef.current;
+
+    if (!trackNode) {
+      return;
+    }
+
+    const updateTrackWidth = () => {
+      setTrackWidthPx(Math.round(trackNode.getBoundingClientRect().width));
+    };
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateTrackWidth);
+
+    updateTrackWidth();
+    resizeObserver?.observe(trackNode);
+    window.addEventListener("resize", updateTrackWidth);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateTrackWidth);
+    };
+  }, []);
+
+  useEffect(() => {
     const tableState = racing.tableState;
     const race = tableState?.race;
     const currentStart = visualRaceStartRef.current;
@@ -339,7 +376,11 @@ export default function RacingAnimationPreviewPage() {
         </header>
 
         <div className={styles.raceFrame}>
-          <div className={styles.track} aria-label="Live racing game">
+          <div
+            className={styles.track}
+            aria-label="Live racing game"
+            ref={trackRef}
+          >
             <div
               className={cameraClassName}
               aria-hidden="true"
@@ -412,35 +453,14 @@ export default function RacingAnimationPreviewPage() {
               }
             >
               {displayHorses.map((horse) => (
-                <div
-                  className={`${styles.runner} ${
-                    !usesBackendState ? styles.previewRunner : styles.liveRunner
-                  } ${leaderHorse?.raceEntryId === horse.raceEntryId ? styles.leaderRunner : ""}`}
+                <Runner
+                  horse={horse}
+                  isLeader={leaderHorse?.raceEntryId === horse.raceEntryId}
+                  isRaceRunning={isRaceRunning}
                   key={horse.raceEntryId}
-                  style={
-                    {
-                      "--duration": horse.duration,
-                      "--lane-top": horse.laneTop,
-                      "--offset": horse.offset,
-                      "--runner-left": getRunnerLeftStyle(horse.progress),
-                      zIndex: 30 + horse.lane,
-                    } as CSSProperties
-                  }
-                >
-                  <div
-                    aria-label={`${horse.number}번 말 ${
-                      isRaceRunning ? "달리기" : "출발 대기"
-                    } 애니메이션`}
-                    className={`${styles.sprite} ${
-                      isRaceRunning ? styles.runningSprite : styles.pausedSprite
-                    }`}
-                    style={
-                      {
-                        "--sprite": `url("${horse.file}")`,
-                      } as CSSProperties
-                    }
-                  />
-                </div>
+                  trackWidthPx={trackWidthPx}
+                  usesBackendState={usesBackendState}
+                />
               ))}
             </div>
 
@@ -471,6 +491,57 @@ export default function RacingAnimationPreviewPage() {
     </main>
   );
 }
+
+const Runner = memo(function Runner({
+  horse,
+  isLeader,
+  isRaceRunning,
+  trackWidthPx,
+  usesBackendState,
+}: {
+  horse: DisplayHorse;
+  isLeader: boolean;
+  isRaceRunning: boolean;
+  trackWidthPx: number;
+  usesBackendState: boolean;
+}) {
+  const runnerPosition = getRunnerPositionStyle(
+    horse.progress,
+    trackWidthPx,
+  );
+
+  return (
+    <div
+      className={`${styles.runner} ${
+        !usesBackendState ? styles.previewRunner : styles.liveRunner
+      } ${isLeader ? styles.leaderRunner : ""}`}
+      style={
+        {
+          "--duration": horse.duration,
+          "--lane-top": horse.laneTop,
+          "--offset": horse.offset,
+          "--runner-left": runnerPosition.left,
+          "--runner-x": runnerPosition.x,
+          zIndex: 30 + horse.lane,
+        } as CSSProperties
+      }
+    >
+      <div
+        aria-label={`${horse.number}번 말 ${
+          isRaceRunning ? "달리기" : "출발 대기"
+        } 애니메이션`}
+        className={`${styles.sprite} ${
+          isRaceRunning ? styles.runningSprite : styles.pausedSprite
+        }`}
+        style={
+          {
+            "--sprite": `url("${horse.file}")`,
+          } as CSSProperties
+        }
+      />
+    </div>
+  );
+});
 
 function useRacingTable() {
   const socketRef = useRef<Socket | null>(null);
@@ -887,7 +958,7 @@ function buildLocalRaceTick(
     0,
     raceRunDurationMs * maxUnforcedRaceDurationMultiplier,
   );
-  const positions = simulateRaceTick({
+  const positions = readRaceTimelineTick({
     distanceM: tableState.timing.raceDistanceM,
     elapsedMs: visualElapsedMs,
     entries: race.entries,
@@ -910,7 +981,7 @@ function buildSimulationSeed(input: { raceId: string; raceNo: number }) {
   return `${input.raceId}:${input.raceNo}`;
 }
 
-function simulateRaceTick(input: {
+function readRaceTimelineTick(input: {
   distanceM: number;
   elapsedMs: number;
   entries: RacingRaceEntrySnapshot[];
@@ -918,21 +989,71 @@ function simulateRaceTick(input: {
   seed: string;
   tickIntervalMs: number;
 }) {
+  const timeline = getRaceTimeline(input);
+  const elapsedMs = clamp(input.elapsedMs, 0, timeline.maxElapsedMs);
+  const snapshotIndex = Math.min(
+    timeline.snapshots.length - 1,
+    Math.floor(elapsedMs / timeline.tickIntervalMs),
+  );
+
+  return timeline.snapshots[snapshotIndex] ?? [];
+}
+
+function getRaceTimeline(input: {
+  distanceM: number;
+  entries: RacingRaceEntrySnapshot[];
+  runDurationMs: number;
+  seed: string;
+  tickIntervalMs: number;
+}) {
+  const cacheKey = buildRaceTimelineCacheKey(input);
+  const cachedTimeline = raceTimelineCache.get(cacheKey);
+
+  if (cachedTimeline) {
+    return cachedTimeline;
+  }
+
+  const timeline = buildRaceTimeline(input);
+
+  raceTimelineCache.set(cacheKey, timeline);
+
+  while (raceTimelineCache.size > maxRaceTimelineCacheEntries) {
+    const oldestKey = raceTimelineCache.keys().next().value;
+
+    if (!oldestKey) {
+      break;
+    }
+
+    raceTimelineCache.delete(oldestKey);
+  }
+
+  return timeline;
+}
+
+function buildRaceTimeline(input: {
+  distanceM: number;
+  entries: RacingRaceEntrySnapshot[];
+  runDurationMs: number;
+  seed: string;
+  tickIntervalMs: number;
+}): RacingTimeline {
   const distanceM = input.distanceM;
   const runDurationMs = Math.max(minimumRaceRunDurationMs, input.runDurationMs);
   const maxElapsedMs = runDurationMs * maxUnforcedRaceDurationMultiplier;
   const tickIntervalMs = Math.max(minimumTickIntervalMs, input.tickIntervalMs);
-  const elapsedMs = clamp(input.elapsedMs, 0, maxElapsedMs);
   const states = input.entries.map((entry) => ({
     distanceM: 0,
     finishedAtMs: null,
     number: entry.number,
     raceEntryId: entry.raceEntryId,
   }));
+  const snapshots: DisplayRacePosition[][] = [
+    snapshotSimulationStates(states, distanceM),
+  ];
   let previousStepMs = 0;
 
-  for (let step = 1; previousStepMs < elapsedMs; step += 1) {
-    const stepEndMs = Math.min(step * tickIntervalMs, elapsedMs);
+  for (let step = 1; previousStepMs < maxElapsedMs; step += 1) {
+    const stepEndMs = Math.min(step * tickIntervalMs, maxElapsedMs);
     const deltaMs = stepEndMs - previousStepMs;
 
     advanceSimulationStep({
@@ -946,9 +1067,37 @@ function simulateRaceTick(input: {
       stepStartMs: previousStepMs,
     });
 
+    snapshots.push(snapshotSimulationStates(states, distanceM));
     previousStepMs = stepEndMs;
   }
 
+  return {
+    maxElapsedMs,
+    snapshots,
+    tickIntervalMs,
+  };
+}
+
+function buildRaceTimelineCacheKey(input: {
+  distanceM: number;
+  entries: RacingRaceEntrySnapshot[];
+  runDurationMs: number;
+  seed: string;
+  tickIntervalMs: number;
+}) {
+  return JSON.stringify({
+    distanceM: input.distanceM,
+    entries: input.entries.map((entry) => entry.raceEntryId),
+    runDurationMs: input.runDurationMs,
+    seed: input.seed,
+    tickIntervalMs: input.tickIntervalMs,
+  });
+}
+
+function snapshotSimulationStates(
+  states: RacingSimulationState[],
+  distanceM: number,
+) {
   return rankSimulationStates(states, distanceM).map((state, index) => ({
     finishedAtMs:
       state.finishedAtMs === null ? null : Math.round(state.finishedAtMs),
@@ -1127,6 +1276,27 @@ function getRunnerLeftStyle(progress: number) {
   const noseOffsetPx = runnerFinishNoseOffsetPx * progressValue;
 
   return `calc(${leftPercent}% - ${noseOffsetPx}px)`;
+}
+
+function getRunnerPositionStyle(progress: number, trackWidthPx: number) {
+  const progressValue = clamp(progress, 0, 1);
+
+  if (trackWidthPx <= 0) {
+    return {
+      left: getRunnerLeftStyle(progressValue),
+      x: "0px",
+    };
+  }
+
+  const leftPercent = getRunnerLeftPercent(progressValue);
+  const worldWidthPx = trackWidthPx * worldScale;
+  const noseOffsetPx = runnerFinishNoseOffsetPx * progressValue;
+  const xPx = worldWidthPx * (leftPercent / 100) - noseOffsetPx;
+
+  return {
+    left: "0px",
+    x: `${xPx.toFixed(2)}px`,
+  };
 }
 
 function getCameraTranslatePercent(leaderProgress: number) {

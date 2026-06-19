@@ -212,10 +212,7 @@ export default function RacingAnimationPreviewPage() {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const tableStateRef = useRef<RacingTableViewState | null>(null);
   const visualRaceStartRef = useRef<VisualRaceStart | null>(null);
-  const isVisuallyRunning = isRaceVisuallyRunning(
-    racing.tableState,
-    clockMs,
-  );
+  const isVisuallyRunning = isRaceVisuallyRunning(racing.tableState, clockMs);
   const isRaceRunning = !usesBackendState || isVisuallyRunning;
   const localTick = useMemo(
     () =>
@@ -267,11 +264,8 @@ export default function RacingAnimationPreviewPage() {
     racing.socketError?.message === "Server polling active."
       ? null
       : racing.socketError?.message;
-  const cameraClassName = `${styles.cameraTrack} ${
-    usesBackendState ? styles.liveCameraTrack : styles.previewCameraTrack
-  }`;
-  const runnerLayerClassName = `${styles.runnerLayer} ${
-    usesBackendState ? styles.liveRunnerLayer : styles.previewRunnerLayer
+  const worldLayerClassName = `${styles.worldLayer} ${
+    usesBackendState ? styles.liveWorldLayer : styles.previewWorldLayer
   }`;
   const startCountdownOverlay = getStartCountdownOverlay(
     racing.tableState,
@@ -500,7 +494,9 @@ export default function RacingAnimationPreviewPage() {
             <span className={styles.brandMark}>BK</span>
             <div>
               <h1 id="preview-title">Racing Animation</h1>
-              <p>{usesBackendState ? "Backend linked" : "Asset path preview"}</p>
+              <p>
+                {usesBackendState ? "Backend linked" : "Asset path preview"}
+              </p>
             </div>
           </div>
         </header>
@@ -512,8 +508,7 @@ export default function RacingAnimationPreviewPage() {
             ref={trackRef}
           >
             <div
-              className={cameraClassName}
-              aria-hidden="true"
+              className={worldLayerClassName}
               style={
                 {
                   "--camera-duration": leaderHorse?.duration ?? "4.2s",
@@ -522,11 +517,25 @@ export default function RacingAnimationPreviewPage() {
                 } as CSSProperties
               }
             >
-              <div className={styles.cameraStartGate} />
-              <div className={styles.cameraFinishPost} />
+              <div className={styles.cameraTrack} aria-hidden="true">
+                <div className={styles.cameraStartGate} />
+                <div className={styles.cameraFinishPost} />
+              </div>
+              <div className={styles.straightLaneOverlay} aria-hidden="true" />
+              <div className={styles.runnerLayer}>
+                {displayHorses.map((horse) => (
+                  <Runner
+                    horse={horse}
+                    isLeader={leaderHorse?.raceEntryId === horse.raceEntryId}
+                    isRaceRunning={isRaceRunning}
+                    key={horse.raceEntryId}
+                    trackWidthPx={trackWidthPx}
+                    usesBackendState={usesBackendState}
+                  />
+                ))}
+              </div>
             </div>
             <audio preload="auto" ref={bgmRef} src={raceBgmSrc} />
-            <div className={styles.straightLaneOverlay} aria-hidden="true" />
 
             <div className={styles.gameHud} aria-label="Live race state">
               <div className={styles.gameStatus}>
@@ -600,28 +609,6 @@ export default function RacingAnimationPreviewPage() {
               </div>
             ) : null}
 
-            <div
-              className={runnerLayerClassName}
-              style={
-                {
-                  "--camera-duration": leaderHorse?.duration ?? "4.2s",
-                  "--camera-offset": leaderHorse?.offset ?? "-2.7s",
-                  "--camera-x": `-${cameraTranslatePercent}%`,
-                } as CSSProperties
-              }
-            >
-              {displayHorses.map((horse) => (
-                <Runner
-                  horse={horse}
-                  isLeader={leaderHorse?.raceEntryId === horse.raceEntryId}
-                  isRaceRunning={isRaceRunning}
-                  key={horse.raceEntryId}
-                  trackWidthPx={trackWidthPx}
-                  usesBackendState={usesBackendState}
-                />
-              ))}
-            </div>
-
             {visibleResultBoard ? (
               <aside className={styles.resultBoard} aria-label="Race result">
                 <div className={styles.resultHeader}>
@@ -633,7 +620,9 @@ export default function RacingAnimationPreviewPage() {
                 <ol>
                   {visibleResultBoard.entries.map((entry) => (
                     <li key={entry.raceEntryId}>
-                      <span className={`${styles.badge} ${styles[entry.color]}`}>
+                      <span
+                        className={`${styles.badge} ${styles[entry.color]}`}
+                      >
                         {entry.number}
                       </span>
                       <strong>{formatKoreanRank(entry.rank)}</strong>
@@ -663,10 +652,7 @@ const Runner = memo(function Runner({
   trackWidthPx: number;
   usesBackendState: boolean;
 }) {
-  const runnerPosition = getRunnerPositionStyle(
-    horse.progress,
-    trackWidthPx,
-  );
+  const runnerPosition = getRunnerPositionStyle(horse.progress, trackWidthPx);
 
   return (
     <div
@@ -730,9 +716,7 @@ function useRacingTable() {
       latestTableStateRef.current = resolvedState;
       setTableState(resolvedState);
       setLatestTick((currentTick) =>
-        currentTick?.raceId === resolvedState.race?.raceId
-          ? currentTick
-          : null,
+        currentTick?.raceId === resolvedState.race?.raceId ? currentTick : null,
       );
     }
 
@@ -834,7 +818,8 @@ function useRacingTable() {
                 ? "Server polling active."
                 : payload.message,
           });
-        });
+        },
+      );
     }
 
     connectSocket();
@@ -890,8 +875,9 @@ function resolveRacingSocketUrl() {
 }
 
 function resolveRacingServerUrl() {
-  return (process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? "http://localhost:4000")
-    .replace(/\/$/, "");
+  return (
+    process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? "http://localhost:4000"
+  ).replace(/\/$/, "");
 }
 
 function reconcileRacingTableState(
@@ -977,7 +963,7 @@ function buildDisplayHorses(
     const progress =
       shouldHoldPostFinishPosition && entry.finishedAtMs !== null
         ? Math.max(position?.progress ?? fallbackProgress, fallbackProgress)
-        : position?.progress ?? fallbackProgress;
+        : (position?.progress ?? fallbackProgress);
     const laneIndex = Math.max(0, entry.lane - 1);
 
     return {
@@ -1032,13 +1018,13 @@ function buildRaceResultBoard(
         color: asset.color,
         finishedAtMs: hasLocalFinishTime
           ? localFinishedAtMs
-          : serverFinishedAtMs ?? localFinishedAtMs,
+          : (serverFinishedAtMs ?? localFinishedAtMs),
         name: entry.name,
         number: entry.number,
         raceEntryId: entry.raceEntryId,
         rank: hasLocalFinishTime
-          ? localRank ?? serverRank
-          : serverRank ?? localRank,
+          ? (localRank ?? serverRank)
+          : (serverRank ?? localRank),
       } satisfies RaceResultEntry;
     })
     .sort(
@@ -1624,10 +1610,7 @@ function getTimerText(tableState: RacingTableViewState | null) {
     return `R${tableState.race.raceNo}`;
   }
 
-  const seconds = Math.max(
-    0,
-    Math.ceil(remainingMs / 1000),
-  );
+  const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
   const minutesText = Math.floor(seconds / 60)
     .toString()
     .padStart(2, "0");
@@ -1663,7 +1646,8 @@ function getTimerLabel(tableState: RacingTableViewState | null) {
 function getTimerTargetTime(tableState: RacingTableViewState) {
   if (tableState.phase === "BETTING") {
     return hasSeparateRaceStartDelay(tableState)
-      ? tableState.timers.bettingClosesAt ?? tableState.timers.scheduledStartAt
+      ? (tableState.timers.bettingClosesAt ??
+          tableState.timers.scheduledStartAt)
       : getRaceStartTargetTime(tableState);
   }
 
@@ -1671,7 +1655,9 @@ function getTimerTargetTime(tableState: RacingTableViewState) {
     return getRaceStartTargetTime(tableState);
   }
 
-  return tableState.timers.scheduledStartAt ?? tableState.timers.bettingClosesAt;
+  return (
+    tableState.timers.scheduledStartAt ?? tableState.timers.bettingClosesAt
+  );
 }
 
 function getStartCountdownOverlay(
@@ -1846,9 +1832,7 @@ function resolveVisualRaceStartMs(
   }
 
   const serverStartMs =
-    Date.parse(race.startedAt ?? "") ||
-    scheduledStartMs ||
-    nowMs;
+    Date.parse(race.startedAt ?? "") || scheduledStartMs || nowMs;
   const serverDelayMs = Math.max(0, nowMs - serverStartMs);
 
   return serverDelayMs <= smoothStartDelayThresholdMs ? nowMs : serverStartMs;

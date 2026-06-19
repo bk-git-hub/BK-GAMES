@@ -96,8 +96,19 @@
 .startTrack {
   aspect-ratio: 16 / 9;
   background-image:
-    linear-gradient(90deg, rgb(3 8 10 / 6%), transparent 24%, transparent 76%, rgb(3 8 10 / 16%)),
-    linear-gradient(180deg, rgb(5 10 14 / 8%), transparent 58%, rgb(4 8 9 / 28%)),
+    linear-gradient(
+      90deg,
+      rgb(3 8 10 / 6%),
+      transparent 24%,
+      transparent 76%,
+      rgb(3 8 10 / 16%)
+    ),
+    linear-gradient(
+      180deg,
+      rgb(5 10 14 / 8%),
+      transparent 58%,
+      rgb(4 8 9 / 28%)
+    ),
     url("/racing/generated-reference-style/track-straight-middle.png");
   background-position: center;
   background-size: cover;
@@ -124,7 +135,13 @@
       rgb(226 237 226 / 64%) 0 4px,
       rgb(8 18 18 / 20%) 4px 18px
     ),
-    linear-gradient(90deg, rgb(255 255 255 / 10%), rgb(8 18 18 / 28%) 18%, rgb(5 12 13 / 18%) 82%, rgb(255 255 255 / 10%));
+    linear-gradient(
+      90deg,
+      rgb(255 255 255 / 10%),
+      rgb(8 18 18 / 28%) 18%,
+      rgb(5 12 13 / 18%) 82%,
+      rgb(255 255 255 / 10%)
+    );
   border: 1px solid rgb(230 239 224 / 46%);
   border-radius: 6px;
   bottom: 16%;
@@ -159,7 +176,12 @@
 }
 
 .startGateRig::after {
-  background: linear-gradient(90deg, transparent, rgb(255 245 178 / 30%), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 245 178 / 30%),
+    transparent
+  );
   bottom: 0;
   content: "";
   position: absolute;
@@ -175,7 +197,12 @@
       rgb(228 236 222 / 44%) 0 2px,
       transparent 2px 14px
     ),
-    linear-gradient(90deg, rgb(5 12 13 / 16%), transparent 42%, rgb(0 0 0 / 14%));
+    linear-gradient(
+      90deg,
+      rgb(5 12 13 / 16%),
+      transparent 42%,
+      rgb(0 0 0 / 14%)
+    );
   border-bottom: 1px solid rgb(255 255 255 / 28%);
   position: relative;
 }
@@ -192,7 +219,12 @@
 
 .startLine {
   background:
-    linear-gradient(90deg, rgb(11 19 18 / 62%), rgb(255 246 198 / 96%) 48%, rgb(11 19 18 / 62%)),
+    linear-gradient(
+      90deg,
+      rgb(11 19 18 / 62%),
+      rgb(255 246 198 / 96%) 48%,
+      rgb(11 19 18 / 62%)
+    ),
     repeating-linear-gradient(
       180deg,
       rgb(255 246 198 / 98%) 0 11px,
@@ -291,17 +323,56 @@
   contain: layout paint;
 }
 
+.worldLayer {
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform: translate3d(0, 0, 0);
+  transition: transform 140ms linear;
+  width: var(--world-width);
+  backface-visibility: hidden;
+  contain: layout paint;
+  will-change: transform;
+  z-index: 0;
+}
+
+.previewWorldLayer {
+  animation: leadCameraPan var(--camera-duration) linear infinite;
+  animation-delay: var(--camera-offset);
+}
+
+.liveWorldLayer {
+  transform: translate3d(var(--camera-x), 0, 0);
+}
+
 .cameraTrack {
   background-image:
-    linear-gradient(90deg, rgb(255 255 255 / 0%) 0 8%, rgb(255 255 255 / 18%) 8.2%, rgb(255 255 255 / 0%) 8.8%),
+    linear-gradient(
+      90deg,
+      rgb(255 255 255 / 0%) 0 8%,
+      rgb(255 255 255 / 18%) 8.2%,
+      rgb(255 255 255 / 0%) 8.8%
+    ),
     repeating-linear-gradient(
       90deg,
       rgb(236 246 230 / 0%) 0 11.4%,
       rgb(236 246 230 / 26%) 11.5% 11.6%,
       rgb(236 246 230 / 0%) 11.7% 20%
     ),
-    linear-gradient(90deg, rgb(6 12 14 / 16%), transparent 16%, transparent 84%, rgb(6 12 14 / 26%)),
-    linear-gradient(180deg, rgb(5 9 12 / 8%), transparent 56%, rgb(4 9 10 / 26%)),
+    linear-gradient(
+      90deg,
+      rgb(6 12 14 / 16%),
+      transparent 16%,
+      transparent 84%,
+      rgb(6 12 14 / 26%)
+    ),
+    linear-gradient(
+      180deg,
+      rgb(5 9 12 / 8%),
+      transparent 56%,
+      rgb(4 9 10 / 26%)
+    ),
     url("/racing/generated-reference-style/track-straight-middle.png");
   background-position:
     left center,
@@ -320,39 +391,34 @@
   left: 0;
   position: absolute;
   top: 0;
-  transform: translate3d(0, 0, 0);
-  transition: transform 140ms linear;
-  width: var(--world-width);
+  width: 100%;
   backface-visibility: hidden;
-  will-change: transform;
   z-index: 0;
 }
 
-.previewCameraTrack {
-  animation: leadCameraPan var(--camera-duration) linear infinite;
-  animation-delay: var(--camera-offset);
-}
-
-.liveCameraTrack {
-  transform: translate3d(var(--camera-x), 0, 0);
-}
-
 .cameraTrack::after {
-  background:
-    radial-gradient(circle at 18% 82%, rgb(255 245 180 / 24%), transparent 1.2rem),
-    radial-gradient(circle at 43% 18%, rgb(106 239 155 / 20%), transparent 1.4rem),
-    radial-gradient(circle at 68% 78%, rgb(255 245 180 / 20%), transparent 1.2rem),
-    linear-gradient(90deg, transparent, rgb(255 255 255 / 10%) 45%, transparent 52%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 10%) 45%,
+    transparent 52%
+  );
   content: "";
   inset: 0;
-  opacity: 0.78;
+  opacity: 0.58;
   pointer-events: none;
   position: absolute;
 }
 
 .cameraStartGate {
   background:
-    linear-gradient(90deg, rgb(255 255 255 / 16%), rgb(10 20 20 / 88%) 18%, rgb(9 17 18 / 86%) 82%, rgb(255 255 255 / 18%)),
+    linear-gradient(
+      90deg,
+      rgb(255 255 255 / 16%),
+      rgb(10 20 20 / 88%) 18%,
+      rgb(9 17 18 / 86%) 82%,
+      rgb(255 255 255 / 18%)
+    ),
     repeating-linear-gradient(
       90deg,
       rgb(235 244 232 / 74%) 0 6px,
@@ -383,12 +449,13 @@
 
 .cameraFinishPost {
   background:
-    linear-gradient(90deg, transparent 0 34%, rgb(255 255 255 / 94%) 34% 66%, transparent 66%),
-    repeating-linear-gradient(
-      180deg,
-      #f7f5e8 0 12px,
-      #26342e 12px 24px
-    );
+    linear-gradient(
+      90deg,
+      transparent 0 34%,
+      rgb(255 255 255 / 94%) 34% 66%,
+      transparent 66%
+    ),
+    repeating-linear-gradient(180deg, #f7f5e8 0 12px, #26342e 12px 24px);
   border-left: 3px solid rgb(255 255 255 / 82%);
   border-right: 3px solid rgb(255 255 255 / 48%);
   bottom: 10%;
@@ -401,7 +468,13 @@
 
 .straightLaneOverlay {
   background:
-    linear-gradient(90deg, rgb(255 255 255 / 18%), transparent 12%, transparent 88%, rgb(255 255 255 / 14%)),
+    linear-gradient(
+      90deg,
+      rgb(255 255 255 / 18%),
+      transparent 12%,
+      transparent 88%,
+      rgb(255 255 255 / 14%)
+    ),
     repeating-linear-gradient(
       180deg,
       rgb(255 255 255 / 0%) 0,
@@ -410,7 +483,7 @@
       rgb(255 255 255 / 42%) calc(100% / 6)
     );
   inset: 31% 0 10%;
-  mix-blend-mode: screen;
+  opacity: 0.7;
   pointer-events: none;
   position: absolute;
   z-index: 2;
@@ -557,8 +630,12 @@
 }
 
 .progressRail::after {
-  background:
-    linear-gradient(90deg, #66ef9b 0 3px, transparent 3px calc(100% - 3px), #fff4c4 calc(100% - 3px));
+  background: linear-gradient(
+    90deg,
+    #66ef9b 0 3px,
+    transparent 3px calc(100% - 3px),
+    #fff4c4 calc(100% - 3px)
+  );
   content: "";
   inset: 10px 0;
   position: absolute;
@@ -781,21 +858,9 @@
   left: 0;
   position: absolute;
   top: 0;
-  transform: translate3d(0, 0, 0);
-  transition: transform 140ms linear;
-  width: var(--world-width);
+  width: 100%;
   backface-visibility: hidden;
-  will-change: transform;
   z-index: 10;
-}
-
-.previewRunnerLayer {
-  animation: leadCameraPan var(--camera-duration) linear infinite;
-  animation-delay: var(--camera-offset);
-}
-
-.liveRunnerLayer {
-  transform: translate3d(var(--camera-x), 0, 0);
 }
 
 .runner {
@@ -811,6 +876,23 @@
   z-index: 10;
 }
 
+.runner::before {
+  background: radial-gradient(
+    ellipse,
+    rgb(0 0 0 / 34%) 0 45%,
+    rgb(0 0 0 / 0%) 72%
+  );
+  bottom: 20px;
+  content: "";
+  height: 20px;
+  left: 36px;
+  pointer-events: none;
+  position: absolute;
+  right: 34px;
+  transform: scaleX(1.05);
+  z-index: 0;
+}
+
 .previewRunner {
   animation: raceMove var(--duration) cubic-bezier(0.18, 0.02, 0.18, 1) infinite;
   animation-delay: var(--offset);
@@ -818,12 +900,6 @@
 
 .liveRunner {
   animation: none;
-}
-
-.leaderRunner .sprite {
-  filter:
-    drop-shadow(0 12px 7px rgb(0 0 0 / 35%))
-    drop-shadow(0 0 14px rgb(102 239 155 / 34%));
 }
 
 .sprite,
@@ -847,20 +923,30 @@
 
 .sprite {
   backface-visibility: hidden;
-  filter: drop-shadow(0 12px 7px rgb(0 0 0 / 35%));
+  position: relative;
   transform: scale(0.8);
   transform-origin: center bottom;
+  z-index: 1;
 }
 
 .sprite.runningSprite {
-  filter: drop-shadow(0 8px 4px rgb(0 0 0 / 30%));
   will-change: background-position;
 }
 
-.leaderRunner .runningSprite {
-  filter:
-    drop-shadow(0 8px 4px rgb(0 0 0 / 30%))
-    drop-shadow(0 0 8px rgb(102 239 155 / 28%));
+.leaderRunner::after {
+  border: 1px solid rgb(102 239 155 / 32%);
+  border-radius: 50%;
+  box-shadow: 0 0 14px rgb(102 239 155 / 22%);
+  content: "";
+  height: 82px;
+  left: 52px;
+  opacity: 0.65;
+  pointer-events: none;
+  position: absolute;
+  top: 54px;
+  transform: scale(0.8);
+  width: 116px;
+  z-index: 0;
 }
 
 .startPanel,
@@ -954,7 +1040,11 @@
 }
 
 .spriteCard {
-  background: linear-gradient(180deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 4%));
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 8%),
+    rgb(255 255 255 / 4%)
+  );
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 8px;
   min-width: 0;
@@ -1254,11 +1344,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .previewWorldLayer,
   .previewRunner,
-  .previewRunnerLayer,
   .runningSprite,
-  .rowSprite,
-  .previewCameraTrack {
+  .rowSprite {
     animation-duration: 1ms;
     animation-iteration-count: 1;
   }

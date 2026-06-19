@@ -274,6 +274,7 @@
 }
 
 .track {
+  --world-width: 460%;
   aspect-ratio: 1672 / 941;
   background: #081315;
   border: 1px solid rgb(255 255 255 / 12%);
@@ -285,18 +286,27 @@
 }
 
 .cameraTrack {
-  animation: leadCameraPan var(--camera-duration) linear infinite;
-  animation-delay: var(--camera-offset);
   background-image:
+    linear-gradient(90deg, rgb(255 255 255 / 0%) 0 8%, rgb(255 255 255 / 18%) 8.2%, rgb(255 255 255 / 0%) 8.8%),
+    repeating-linear-gradient(
+      90deg,
+      rgb(236 246 230 / 0%) 0 11.4%,
+      rgb(236 246 230 / 26%) 11.5% 11.6%,
+      rgb(236 246 230 / 0%) 11.7% 20%
+    ),
     linear-gradient(90deg, rgb(6 12 14 / 16%), transparent 16%, transparent 84%, rgb(6 12 14 / 26%)),
     linear-gradient(180deg, rgb(5 9 12 / 8%), transparent 56%, rgb(4 9 10 / 26%)),
     url("/racing/generated-reference-style/track-straight-middle.png");
   background-position:
     left center,
     left center,
+    left center,
+    left center,
     left center;
   background-repeat: no-repeat;
   background-size:
+    100% 100%,
+    100% 100%,
     100% 100%,
     100% 100%,
     100% 100%;
@@ -305,9 +315,32 @@
   position: absolute;
   top: 0;
   transform: translate3d(0, 0, 0);
-  width: 300%;
+  transition: transform 900ms linear;
+  width: var(--world-width);
   will-change: transform;
   z-index: 0;
+}
+
+.previewCameraTrack {
+  animation: leadCameraPan var(--camera-duration) linear infinite;
+  animation-delay: var(--camera-offset);
+}
+
+.liveCameraTrack {
+  transform: translate3d(var(--camera-x), 0, 0);
+}
+
+.cameraTrack::after {
+  background:
+    radial-gradient(circle at 18% 82%, rgb(255 245 180 / 24%), transparent 1.2rem),
+    radial-gradient(circle at 43% 18%, rgb(106 239 155 / 20%), transparent 1.4rem),
+    radial-gradient(circle at 68% 78%, rgb(255 245 180 / 20%), transparent 1.2rem),
+    linear-gradient(90deg, transparent, rgb(255 255 255 / 10%) 45%, transparent 52%);
+  content: "";
+  inset: 0;
+  opacity: 0.78;
+  pointer-events: none;
+  position: absolute;
 }
 
 .cameraStartGate {
@@ -341,6 +374,37 @@
   position: absolute;
 }
 
+.cameraDistanceBoards {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.cameraDistanceBoards::before,
+.cameraDistanceBoards::after {
+  background: rgb(5 12 14 / 78%);
+  border: 2px solid rgb(245 250 235 / 74%);
+  border-radius: 4px;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 26%);
+  color: #f8f3cb;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 8px 12px;
+  position: absolute;
+  top: 15%;
+}
+
+.cameraDistanceBoards::before {
+  content: "800";
+  left: 35%;
+}
+
+.cameraDistanceBoards::after {
+  content: "400";
+  left: 62%;
+}
+
 .cameraFinishPost {
   background:
     linear-gradient(90deg, transparent 0 34%, rgb(255 255 255 / 94%) 34% 66%, transparent 66%),
@@ -353,7 +417,7 @@
   border-right: 3px solid rgb(255 255 255 / 48%);
   bottom: 10%;
   box-shadow: 0 0 24px rgb(255 244 180 / 26%);
-  left: 88%;
+  left: 91.5%;
   position: absolute;
   top: 28%;
   width: 26px;
@@ -423,15 +487,50 @@
   z-index: 25;
 }
 
+.runnerLayer {
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform: translate3d(0, 0, 0);
+  transition: transform 900ms linear;
+  width: var(--world-width);
+  will-change: transform;
+  z-index: 10;
+}
+
+.previewRunnerLayer {
+  animation: leadCameraPan var(--camera-duration) linear infinite;
+  animation-delay: var(--camera-offset);
+}
+
+.liveRunnerLayer {
+  transform: translate3d(var(--camera-x), 0, 0);
+}
+
 .runner {
-  animation: raceMove var(--duration) linear infinite;
-  animation-delay: var(--offset);
   height: 181px;
-  left: -16%;
+  left: var(--runner-left, 1.2%);
   position: absolute;
   top: var(--lane-top);
+  transition: left 900ms linear;
   width: 206px;
   z-index: 10;
+}
+
+.previewRunner {
+  animation: raceMove var(--duration) cubic-bezier(0.18, 0.02, 0.18, 1) infinite;
+  animation-delay: var(--offset);
+}
+
+.liveRunner {
+  animation: none;
+}
+
+.leaderRunner .sprite {
+  filter:
+    drop-shadow(0 12px 7px rgb(0 0 0 / 35%))
+    drop-shadow(0 0 14px rgb(102 239 155 / 34%));
 }
 
 .sprite,
@@ -445,7 +544,7 @@
 }
 
 .sprite {
-  animation: gallop 0.58s steps(7) infinite;
+  animation: gallop 0.4s steps(7) infinite;
   filter: drop-shadow(0 12px 7px rgb(0 0 0 / 35%));
   transform: scale(0.8);
   transform-origin: center bottom;
@@ -488,6 +587,14 @@
   font-weight: 700;
   gap: 10px;
   min-height: 44px;
+}
+
+.socketError {
+  color: #ffb6a8;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 14px 0 0;
 }
 
 .badge {
@@ -554,7 +661,7 @@
 }
 
 .rowSprite {
-  animation: gallop 0.68s steps(7) infinite;
+  animation: gallop 0.52s steps(7) infinite;
   filter: drop-shadow(0 10px 6px rgb(0 0 0 / 30%));
   transform: scale(0.72);
   transform-origin: left center;
@@ -568,7 +675,7 @@
 
 @keyframes raceMove {
   from {
-    left: -18%;
+    left: 1.2%;
   }
 
   to {
@@ -577,17 +684,24 @@
 }
 
 @keyframes leadCameraPan {
-  0%,
-  8% {
+  0% {
     transform: translate3d(0, 0, 0);
   }
 
-  52% {
-    transform: translate3d(-42%, 0, 0);
+  12% {
+    transform: translate3d(-4%, 0, 0);
+  }
+
+  40% {
+    transform: translate3d(-25%, 0, 0);
+  }
+
+  70% {
+    transform: translate3d(-52%, 0, 0);
   }
 
   100% {
-    transform: translate3d(-66.666%, 0, 0);
+    transform: translate3d(-78.2609%, 0, 0);
   }
 }
 
@@ -715,10 +829,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .runner,
+  .previewRunner,
+  .previewRunnerLayer,
   .sprite,
   .rowSprite,
-  .cameraTrack {
+  .previewCameraTrack {
     animation-duration: 1ms;
     animation-iteration-count: 1;
   }

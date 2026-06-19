@@ -37,14 +37,35 @@ export type MainRacingSeedResult = {
   horses: Array<typeof racingHorses.$inferSelect>;
 };
 
+const standardMainRacingTiming = {
+  bettingTimeoutSeconds: 150,
+  raceIntervalSeconds: 240,
+  raceAndResultSeconds: 60,
+  bettingCloseBeforeStartSeconds: 30,
+};
+
+const developmentMainRacingTiming = {
+  bettingTimeoutSeconds: 30,
+  raceIntervalSeconds: 90,
+  raceAndResultSeconds: 60,
+  bettingCloseBeforeStartSeconds: 0,
+};
+
+const activeMainRacingTiming = developmentMainRacingTiming;
+
 const mainRacingRules = {
   betTypes: ["WIN", "QUINELLA", "EXACTA"],
   equalBaseStats: true,
   fixedOdds: true,
   oddsDenominator: 10_000,
-  raceIntervalSeconds: 240,
-  raceAndResultSeconds: 60,
-  bettingCloseBeforeStartSeconds: 30,
+  raceIntervalSeconds: activeMainRacingTiming.raceIntervalSeconds,
+  raceAndResultSeconds: activeMainRacingTiming.raceAndResultSeconds,
+  bettingCloseBeforeStartSeconds:
+    activeMainRacingTiming.bettingCloseBeforeStartSeconds,
+  developmentTiming: {
+    enabled: true,
+    restoreTo: standardMainRacingTiming,
+  },
   cancellation: "SERVER_ONLY",
 } satisfies JsonObject;
 
@@ -54,9 +75,10 @@ const mainRacingTableValues = {
   minBet: BigInt(100),
   maxBet: BigInt(6000),
   payoutRateBps: 9_000,
-  bettingTimeoutSeconds: 150,
-  raceIntervalSeconds: 240,
-  bettingCloseBeforeStartSeconds: 30,
+  bettingTimeoutSeconds: activeMainRacingTiming.bettingTimeoutSeconds,
+  raceIntervalSeconds: activeMainRacingTiming.raceIntervalSeconds,
+  bettingCloseBeforeStartSeconds:
+    activeMainRacingTiming.bettingCloseBeforeStartSeconds,
   tickIntervalMs: 100,
   raceDistanceM: 1200,
   roundEndDelaySeconds: 17,

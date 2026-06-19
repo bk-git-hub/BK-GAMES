@@ -50,6 +50,13 @@
       "when": 1781340733761,
       "tag": "0006_spicy_leper_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781848454113,
+      "tag": "0007_light_jane_foster",
+      "breakpoints": true
     }
   ]
 }

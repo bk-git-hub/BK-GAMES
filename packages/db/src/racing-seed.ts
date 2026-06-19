@@ -51,7 +51,7 @@ const developmentMainRacingTiming = {
   bettingCloseBeforeStartSeconds: 0,
 };
 
-const activeMainRacingTiming = developmentMainRacingTiming;
+const activeMainRacingTiming = standardMainRacingTiming;
 
 const mainRacingRules = {
   betTypes: [
@@ -71,7 +71,8 @@ const mainRacingRules = {
   bettingCloseBeforeStartSeconds:
     activeMainRacingTiming.bettingCloseBeforeStartSeconds,
   developmentTiming: {
-    enabled: true,
+    enabled: false,
+    shortcutTiming: developmentMainRacingTiming,
     restoreTo: standardMainRacingTiming,
   },
   cancellation: "SERVER_ONLY",

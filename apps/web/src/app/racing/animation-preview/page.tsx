@@ -225,7 +225,12 @@ export default function RacingAnimationPreviewPage() {
     [displayHorses],
   );
   const statusLabel = getStatusLabel(racing.connectionStatus, racing.tableState);
-  const statusDetail = getStatusDetail(racing.tableState, displayTick);
+  const statusDetail = getStatusDetail(
+    racing.tableState,
+    displayTick,
+    clockMs,
+    visualRaceStart,
+  );
   const socketErrorMessage =
     racing.socketError?.message === "Server polling active."
       ? null
@@ -1055,16 +1060,51 @@ function getStatusLabel(
 function getStatusDetail(
   tableState: RacingTableViewState | null,
   latestTick: RacingRaceTickSnapshot | null,
+  nowMs: number,
+  visualRaceStart: VisualRaceStart | null,
 ) {
   if (!tableState?.race) {
     return "Demo fallback";
   }
 
+  if (tableState.phase === "RUNNING") {
+    return `${formatLiveElapsedMs(
+      getRaceClockElapsedMs(tableState, nowMs, visualRaceStart),
+    )}s live`;
+  }
+
   if (latestTick?.raceId === tableState.race.raceId) {
-    return `${Math.round(latestTick.elapsedMs / 100) / 10}s live`;
+    return `${formatLiveElapsedMs(latestTick.elapsedMs)}s live`;
   }
 
   return `Race ${tableState.race.raceNo}`;
+}
+
+function getRaceClockElapsedMs(
+  tableState: RacingTableViewState,
+  nowMs: number,
+  visualRaceStart: VisualRaceStart | null,
+) {
+  const race = tableState.race;
+
+  if (!race) {
+    return 0;
+  }
+
+  const fallbackStartAt =
+    Date.parse(race.startedAt ?? "") ||
+    Date.parse(race.scheduledStartAt ?? "") ||
+    nowMs;
+  const startAt =
+    visualRaceStart?.raceId === race.raceId
+      ? visualRaceStart.startMs
+      : fallbackStartAt;
+
+  return Math.max(0, nowMs - startAt);
+}
+
+function formatLiveElapsedMs(elapsedMs: number) {
+  return (Math.floor(elapsedMs / 100) / 10).toFixed(1);
 }
 
 function getTimerText(tableState: RacingTableViewState | null) {

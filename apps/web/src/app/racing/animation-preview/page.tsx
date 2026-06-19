@@ -69,6 +69,17 @@ type RaceResultBoard = {
   source: "local" | "server";
 };
 
+type VisualRaceStart = {
+  raceId: string;
+  startMs: number;
+};
+
+type StartCountdownOverlay = {
+  isStartCue: boolean;
+  label: string;
+  value: string;
+};
+
 type ConnectionStatus =
   | "connecting"
   | "connected"
@@ -93,6 +104,9 @@ const localTickMs = 120;
 const minimumRaceRunDurationMs = 1_000;
 const minimumTickIntervalMs = 10;
 const maxUnforcedRaceDurationMultiplier = 2.2;
+const smoothStartDelayThresholdMs = 2_000;
+const startCountdownWindowMs = 5_000;
+const startCountdownHoldMs = 1_400;
 const visualRaceSpeedMultiplier = 1.7;
 const worldScale = 7.2;
 const trackStartPercent = 1.2;
@@ -172,10 +186,13 @@ export default function RacingAnimationPreviewPage() {
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [persistedResultBoard, setPersistedResultBoard] =
     useState<RaceResultBoard | null>(null);
+  const [visualRaceStart, setVisualRaceStart] =
+    useState<VisualRaceStart | null>(null);
   const tableStateRef = useRef<RacingTableViewState | null>(null);
+  const visualRaceStartRef = useRef<VisualRaceStart | null>(null);
   const localTick = useMemo(
-    () => buildLocalRaceTick(racing.tableState, clockMs),
-    [clockMs, racing.tableState],
+    () => buildLocalRaceTick(racing.tableState, clockMs, visualRaceStart),
+    [clockMs, racing.tableState, visualRaceStart],
   );
   const displayTick = useMemo<DisplayRaceTickSnapshot | null>(
     () => localTick ?? racing.latestTick,
@@ -219,9 +236,40 @@ export default function RacingAnimationPreviewPage() {
   const runnerLayerClassName = `${styles.runnerLayer} ${
     usesBackendState ? styles.liveRunnerLayer : styles.previewRunnerLayer
   }`;
+  const startCountdownOverlay = getStartCountdownOverlay(
+    racing.tableState,
+    clockMs,
+  );
 
   useEffect(() => {
     tableStateRef.current = racing.tableState;
+  }, [racing.tableState]);
+
+  useEffect(() => {
+    const race = racing.tableState?.race;
+    const currentStart = visualRaceStartRef.current;
+
+    if (!race || racing.tableState?.phase !== "RUNNING") {
+      if (!race || currentStart?.raceId !== race.raceId) {
+        visualRaceStartRef.current = null;
+        setVisualRaceStart(null);
+      }
+
+      return;
+    }
+
+    if (currentStart?.raceId === race.raceId) {
+      return;
+    }
+
+    const startMs = resolveVisualRaceStartMs(race, Date.now());
+    const nextStart = {
+      raceId: race.raceId,
+      startMs,
+    };
+
+    visualRaceStartRef.current = nextStart;
+    setVisualRaceStart(nextStart);
   }, [racing.tableState]);
 
   useEffect(() => {
@@ -234,7 +282,11 @@ export default function RacingAnimationPreviewPage() {
         const raceId = tableState?.race?.raceId ?? null;
         const localResultBoard = buildRaceResultBoard(
           tableState,
-          buildLocalRaceTick(tableState, nowMs),
+          buildLocalRaceTick(
+            tableState,
+            nowMs,
+            visualRaceStartRef.current,
+          ),
         );
 
         if (tableState?.phase === "RUNNING" && current?.raceId !== raceId) {
@@ -303,6 +355,22 @@ export default function RacingAnimationPreviewPage() {
                 <p className={styles.socketError}>{socketErrorMessage}</p>
               ) : null}
             </div>
+
+            {startCountdownOverlay ? (
+              <div
+                aria-label={`${startCountdownOverlay.label} ${startCountdownOverlay.value}`}
+                aria-live="polite"
+                className={`${styles.startCountdown} ${
+                  startCountdownOverlay.isStartCue
+                    ? styles.startCountdownGo
+                    : ""
+                }`}
+                key={startCountdownOverlay.value}
+              >
+                <span>{startCountdownOverlay.label}</span>
+                <strong>{startCountdownOverlay.value}</strong>
+              </div>
+            ) : null}
 
             <div
               className={runnerLayerClassName}
@@ -702,6 +770,7 @@ function choosePersistedResultBoard(
 function buildLocalRaceTick(
   tableState: RacingTableViewState | null,
   nowMs: number,
+  visualRaceStart: VisualRaceStart | null = null,
 ): DisplayRaceTickSnapshot | null {
   const race = tableState?.race;
 
@@ -715,10 +784,14 @@ function buildLocalRaceTick(
       tableState.timing.roundEndDelaySeconds) *
       1000,
   );
-  const startAt =
+  const fallbackStartAt =
     Date.parse(race.startedAt ?? "") ||
     Date.parse(race.scheduledStartAt ?? "") ||
     nowMs;
+  const startAt =
+    visualRaceStart?.raceId === race.raceId
+      ? visualRaceStart.startMs
+      : fallbackStartAt;
   const visualElapsedMs = clamp(
     (nowMs - startAt) * visualRaceSpeedMultiplier,
     0,
@@ -1009,9 +1082,15 @@ function getTimerText(tableState: RacingTableViewState | null) {
     return `R${tableState.race.raceNo}`;
   }
 
+  const remainingMs = Date.parse(targetTime) - Date.now();
+
+  if (tableState.phase === "LOCKING_BETS" && remainingMs <= 0) {
+    return "START";
+  }
+
   const seconds = Math.max(
     0,
-    Math.ceil((Date.parse(targetTime) - Date.now()) / 1000),
+    Math.ceil(remainingMs / 1000),
   );
   const minutesText = Math.floor(seconds / 60)
     .toString()
@@ -1053,6 +1132,60 @@ function getTimerTargetTime(tableState: RacingTableViewState) {
   }
 
   return tableState.timers.scheduledStartAt ?? tableState.timers.bettingClosesAt;
+}
+
+function getStartCountdownOverlay(
+  tableState: RacingTableViewState | null,
+  nowMs: number,
+): StartCountdownOverlay | null {
+  if (!tableState?.race || tableState.phase !== "LOCKING_BETS") {
+    return null;
+  }
+
+  const targetTime =
+    tableState.timers.scheduledStartAt ?? tableState.race.scheduledStartAt;
+
+  if (!targetTime) {
+    return null;
+  }
+
+  const remainingMs = Date.parse(targetTime) - nowMs;
+
+  if (
+    remainingMs > startCountdownWindowMs ||
+    remainingMs < -startCountdownHoldMs
+  ) {
+    return null;
+  }
+
+  const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+  if (seconds === 0) {
+    return {
+      isStartCue: true,
+      label: "Race start",
+      value: "START",
+    };
+  }
+
+  return {
+    isStartCue: false,
+    label: "Race starts in",
+    value: seconds.toString(),
+  };
+}
+
+function resolveVisualRaceStartMs(
+  race: NonNullable<RacingTableViewState["race"]>,
+  nowMs: number,
+) {
+  const serverStartMs =
+    Date.parse(race.startedAt ?? "") ||
+    Date.parse(race.scheduledStartAt ?? "") ||
+    nowMs;
+  const serverDelayMs = Math.max(0, nowMs - serverStartMs);
+
+  return serverDelayMs <= smoothStartDelayThresholdMs ? nowMs : serverStartMs;
 }
 
 function formatRank(rank: number | null) {

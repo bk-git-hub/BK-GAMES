@@ -12,12 +12,14 @@ import {
   RACING_NAMESPACE,
   RACING_SERVER_EVENTS,
   type RacingJoinTablePayload,
+  type RacingRaceEntrySnapshot,
   type RacingRaceTickSnapshot,
   type RacingSocketErrorPayload,
   type RacingTableEventPayload,
+  type RacingTableSummary,
   type RacingTableState,
+  type RacingTablesResponse,
 } from "@bk-games/shared/src/socket-events";
-import type { GameTokenRole } from "@bk-games/shared/src/types";
 import { io, type Socket } from "socket.io-client";
 
 import styles from "./page.module.css";
@@ -48,24 +50,28 @@ type TrackPhase = {
 };
 
 type ConnectionStatus =
-  | "requesting-token"
   | "connecting"
   | "connected"
   | "disconnected"
-  | "error";
+  | "error"
+  | "polling";
 
-type GameTokenResponse = {
-  expiresInSeconds: number;
-  token: string;
-  user: {
-    id: string;
-    nickname: string;
-    role: GameTokenRole;
-  };
+type RacingSimulationState = {
+  raceEntryId: string;
+  number: number;
+  distanceM: number;
+  finishedAtMs: number | null;
 };
 
+type RacingTableViewState = RacingTableState | RacingTableSummary;
+
 const tableId = "main";
-const gameTokenTimeoutMs = 8_000;
+const previewGuestUserId = "preview:racing-animation";
+const previewGuestNickname = "Racing Preview";
+const restPollMs = 1_000;
+const localTickMs = 250;
+const minimumRaceRunDurationMs = 1_000;
+const minimumTickIntervalMs = 10;
 const worldScale = 4.6;
 const trackStartPercent = 1.2;
 const trackFinishPercent = 88;
@@ -154,9 +160,14 @@ const trackPhases: TrackPhase[] = [
 export default function RacingAnimationPreviewPage() {
   const racing = useRacingTable();
   const usesBackendState = Boolean(racing.tableState?.race);
+  const [clockMs, setClockMs] = useState(() => Date.now());
+  const displayTick = useMemo(
+    () => racing.latestTick ?? buildLocalRaceTick(racing.tableState, clockMs),
+    [clockMs, racing.latestTick, racing.tableState],
+  );
   const displayHorses = useMemo(
-    () => buildDisplayHorses(racing.tableState, racing.latestTick),
-    [racing.latestTick, racing.tableState],
+    () => buildDisplayHorses(racing.tableState, displayTick),
+    [displayTick, racing.tableState],
   );
   const leaderHorse = getLeaderHorse(displayHorses);
   const cameraTranslatePercent = getCameraTranslatePercent(
@@ -173,13 +184,23 @@ export default function RacingAnimationPreviewPage() {
     [displayHorses],
   );
   const statusLabel = getStatusLabel(racing.connectionStatus, racing.tableState);
-  const statusDetail = getStatusDetail(racing.tableState, racing.latestTick);
+  const statusDetail = getStatusDetail(racing.tableState, displayTick);
   const cameraClassName = `${styles.cameraTrack} ${
     usesBackendState ? styles.liveCameraTrack : styles.previewCameraTrack
   }`;
   const runnerLayerClassName = `${styles.runnerLayer} ${
     usesBackendState ? styles.liveRunnerLayer : styles.previewRunnerLayer
   }`;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setClockMs(Date.now());
+    }, localTickMs);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
   return (
     <main className={styles.page}>
@@ -376,105 +397,140 @@ export default function RacingAnimationPreviewPage() {
 function useRacingTable() {
   const socketRef = useRef<Socket | null>(null);
   const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>("requesting-token");
+    useState<ConnectionStatus>("connecting");
   const [latestTick, setLatestTick] = useState<RacingRaceTickSnapshot | null>(
     null,
   );
   const [socketError, setSocketError] =
     useState<RacingSocketErrorPayload | null>(null);
-  const [tableState, setTableState] = useState<RacingTableState | null>(null);
+  const [tableState, setTableState] = useState<RacingTableViewState | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
-    const controller = new AbortController();
+    const pollController = new AbortController();
+    let pollTimer: number | null = null;
 
-    async function connect() {
-      setConnectionStatus("requesting-token");
-      setSocketError(null);
-
+    async function pollTableState() {
       try {
-        const tokenResponse = await requestGameToken(controller.signal);
+        const state = await requestRacingTableState(pollController.signal);
 
         if (cancelled) {
           return;
         }
 
-        setConnectionStatus("connecting");
-
-        const socket = io(resolveRacingSocketUrl(), {
-          auth: {
-            token: tokenResponse.token,
-          },
-          withCredentials: true,
-        });
-
-        socketRef.current = socket;
-
-        socket.on("connect", () => {
-          setConnectionStatus("connected");
-          socket.emit(RACING_CLIENT_EVENTS.TABLE_JOIN, {
-            tableId,
-          } satisfies RacingJoinTablePayload);
-        });
-
-        socket.on("connect_error", (error) => {
-          setConnectionStatus("error");
-          setSocketError({
-            code: "UNKNOWN_ERROR",
-            message: error.message,
-          });
-        });
-
-        socket.on("disconnect", () => {
-          setConnectionStatus("disconnected");
-        });
-
-        socket.on(
-          RACING_SERVER_EVENTS.TABLE_STATE,
-          (payload: RacingTableState) => {
-            setTableState(payload);
-            setLatestTick((currentTick) =>
-              currentTick?.raceId === payload.race?.raceId ? currentTick : null,
-            );
-          },
+        setTableState(state);
+        setLatestTick((currentTick) =>
+          currentTick?.raceId === state.race?.raceId ? currentTick : null,
         );
-
-        socket.on(
-          RACING_SERVER_EVENTS.TABLE_EVENT,
-          (payload: RacingTableEventPayload) => {
-            if (payload.type === "RACE_TICK" && payload.tick) {
-              setLatestTick(payload.tick);
-            }
-          },
-        );
-
-        socket.on(
-          RACING_SERVER_EVENTS.ERROR,
-          (payload: RacingSocketErrorPayload) => {
-            setSocketError(payload);
-          },
+        setConnectionStatus((currentStatus) =>
+          currentStatus === "connected" ? currentStatus : "polling",
         );
       } catch (error) {
         if (cancelled) {
           return;
         }
 
-        setConnectionStatus("error");
+        setConnectionStatus((currentStatus) =>
+          currentStatus === "connected" ? currentStatus : "error",
+        );
         setSocketError({
           code: "UNKNOWN_ERROR",
           message:
             error instanceof Error
               ? error.message
-              : "Unexpected racing connection error.",
+              : "Racing table polling failed.",
         });
       }
     }
 
-    void connect();
+    function connectSocket() {
+      setConnectionStatus("connecting");
+      setSocketError(null);
+
+      const socket = io(resolveRacingSocketUrl(), {
+        auth: {
+          nickname: previewGuestNickname,
+          role: "USER",
+          userId: previewGuestUserId,
+        },
+        withCredentials: true,
+      });
+
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        setConnectionStatus("connected");
+        setSocketError(null);
+        socket.emit(RACING_CLIENT_EVENTS.TABLE_JOIN, {
+          nickname: previewGuestNickname,
+          tableId,
+        } satisfies RacingJoinTablePayload);
+      });
+
+      socket.on("connect_error", (error) => {
+        setConnectionStatus((currentStatus) =>
+          currentStatus === "polling" ? currentStatus : "error",
+        );
+        setSocketError({
+          code: "UNKNOWN_ERROR",
+          message: error.message,
+        });
+      });
+
+      socket.on("disconnect", () => {
+        setConnectionStatus((currentStatus) =>
+          currentStatus === "polling" ? currentStatus : "disconnected",
+        );
+      });
+
+      socket.on(
+        RACING_SERVER_EVENTS.TABLE_STATE,
+        (payload: RacingTableState) => {
+          setConnectionStatus("connected");
+          setSocketError(null);
+          setTableState(payload);
+          setLatestTick((currentTick) =>
+            currentTick?.raceId === payload.race?.raceId ? currentTick : null,
+          );
+        },
+      );
+
+      socket.on(
+        RACING_SERVER_EVENTS.TABLE_EVENT,
+        (payload: RacingTableEventPayload) => {
+          if (payload.type === "RACE_TICK" && payload.tick) {
+            setLatestTick(payload.tick);
+          }
+        },
+      );
+
+      socket.on(
+        RACING_SERVER_EVENTS.ERROR,
+        (payload: RacingSocketErrorPayload) => {
+          setSocketError({
+            code: payload.code,
+            message:
+              payload.code === "UNAUTHORIZED"
+                ? "Server polling active."
+                : payload.message,
+          });
+        });
+    }
+
+    connectSocket();
+    void pollTableState();
+    pollTimer = window.setInterval(() => {
+      void pollTableState();
+    }, restPollMs);
 
     return () => {
       cancelled = true;
-      controller.abort();
+      pollController.abort();
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+      }
       socketRef.current?.disconnect();
       socketRef.current = null;
     };
@@ -488,62 +544,40 @@ function useRacingTable() {
   };
 }
 
-async function requestGameToken(signal: AbortSignal) {
-  const timeoutController = new AbortController();
-  const timeoutId = window.setTimeout(() => {
-    timeoutController.abort();
-  }, gameTokenTimeoutMs);
-  const abortTimeoutRequest = () => {
-    timeoutController.abort();
-  };
+async function requestRacingTableState(signal: AbortSignal) {
+  const response = await fetch(`${resolveRacingServerUrl()}/racing/tables`, {
+    signal,
+  });
 
-  signal.addEventListener("abort", abortTimeoutRequest, { once: true });
-
-  try {
-    const response = await fetch("/api/game-token", {
-      method: "POST",
-      signal: timeoutController.signal,
-    });
-
-    if (!response.ok) {
-      const message = await readErrorMessage(response);
-      throw new Error(message);
-    }
-
-    return (await response.json()) as GameTokenResponse;
-  } catch (error) {
-    if (timeoutController.signal.aborted && !signal.aborted) {
-      throw new Error("Game token request timed out.");
-    }
-
-    throw error;
-  } finally {
-    window.clearTimeout(timeoutId);
-    signal.removeEventListener("abort", abortTimeoutRequest);
+  if (!response.ok) {
+    throw new Error(`Racing table request failed (${response.status}).`);
   }
-}
 
-async function readErrorMessage(response: Response) {
-  try {
-    const body = (await response.json()) as { error?: string };
-    return body.error ?? `Game token request failed (${response.status}).`;
-  } catch {
-    return `Game token request failed (${response.status}).`;
+  const body = (await response.json()) as RacingTablesResponse;
+  const table = body.tables.find((candidate) => candidate.tableId === tableId);
+
+  if (!table) {
+    throw new Error(`Racing table ${tableId} was not returned.`);
   }
+
+  return table;
 }
 
 function resolveRacingSocketUrl() {
-  const configuredUrl =
-    process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? "http://localhost:4000";
-  const normalizedUrl = configuredUrl.replace(/\/$/, "");
+  const normalizedUrl = resolveRacingServerUrl();
 
   return normalizedUrl.endsWith(RACING_NAMESPACE)
     ? normalizedUrl
     : `${normalizedUrl}${RACING_NAMESPACE}`;
 }
 
+function resolveRacingServerUrl() {
+  return (process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? "http://localhost:4000")
+    .replace(/\/$/, "");
+}
+
 function buildDisplayHorses(
-  tableState: RacingTableState | null,
+  tableState: RacingTableViewState | null,
   latestTick: RacingRaceTickSnapshot | null,
 ): DisplayHorse[] {
   const race = tableState?.race;
@@ -595,6 +629,254 @@ function buildDisplayHorses(
   });
 }
 
+function buildLocalRaceTick(
+  tableState: RacingTableViewState | null,
+  nowMs: number,
+): RacingRaceTickSnapshot | null {
+  const race = tableState?.race;
+
+  if (!race || tableState.phase !== "RUNNING") {
+    return null;
+  }
+
+  const raceRunDurationMs = Math.max(
+    minimumRaceRunDurationMs,
+    (tableState.timing.raceAndResultSeconds -
+      tableState.timing.roundEndDelaySeconds) *
+      1000,
+  );
+  const startAt =
+    Date.parse(race.startedAt ?? "") ||
+    Date.parse(race.scheduledStartAt ?? "") ||
+    nowMs;
+  const elapsedMs = clamp(nowMs - startAt, 0, raceRunDurationMs);
+  const positions = simulateRaceTick({
+    distanceM: tableState.timing.raceDistanceM,
+    elapsedMs,
+    entries: race.entries,
+    runDurationMs: raceRunDurationMs,
+    seed: buildSimulationSeed({
+      raceId: race.raceId,
+      raceNo: race.raceNo,
+    }),
+    tickIntervalMs: tableState.timing.tickIntervalMs,
+  });
+
+  return {
+    elapsedMs,
+    positions,
+    raceId: race.raceId,
+  };
+}
+
+function buildSimulationSeed(input: { raceId: string; raceNo: number }) {
+  return `${input.raceId}:${input.raceNo}`;
+}
+
+function simulateRaceTick(input: {
+  distanceM: number;
+  elapsedMs: number;
+  entries: RacingRaceEntrySnapshot[];
+  runDurationMs: number;
+  seed: string;
+  tickIntervalMs: number;
+}) {
+  const distanceM = input.distanceM;
+  const runDurationMs = Math.max(minimumRaceRunDurationMs, input.runDurationMs);
+  const tickIntervalMs = Math.max(minimumTickIntervalMs, input.tickIntervalMs);
+  const elapsedMs = clamp(input.elapsedMs, 0, runDurationMs);
+  const states = input.entries.map((entry) => ({
+    distanceM: 0,
+    finishedAtMs: null,
+    number: entry.number,
+    raceEntryId: entry.raceEntryId,
+  }));
+  let previousStepMs = 0;
+
+  for (let step = 1; previousStepMs < elapsedMs; step += 1) {
+    const stepEndMs = Math.min(step * tickIntervalMs, elapsedMs);
+    const deltaMs = stepEndMs - previousStepMs;
+
+    advanceSimulationStep({
+      deltaMs,
+      distanceM,
+      runDurationMs,
+      seed: input.seed,
+      states,
+      step,
+      stepEndMs,
+      stepStartMs: previousStepMs,
+    });
+
+    previousStepMs = stepEndMs;
+  }
+
+  return rankSimulationStates(states, distanceM).map((state, index) => ({
+    progress: Number((state.distanceM / distanceM).toFixed(4)),
+    raceEntryId: state.raceEntryId,
+    rank: index + 1,
+  }));
+}
+
+function advanceSimulationStep(input: {
+  deltaMs: number;
+  distanceM: number;
+  runDurationMs: number;
+  seed: string;
+  states: RacingSimulationState[];
+  step: number;
+  stepEndMs: number;
+  stepStartMs: number;
+}) {
+  const baseSpeedMPerMs = input.distanceM / input.runDurationMs;
+
+  for (const state of input.states) {
+    if (state.finishedAtMs !== null) {
+      state.distanceM = input.distanceM;
+      continue;
+    }
+
+    const previousDistanceM = state.distanceM;
+    const speedMPerMs = calculateStepSpeed({
+      baseSpeedMPerMs,
+      distanceM: input.distanceM,
+      runDurationMs: input.runDurationMs,
+      seed: input.seed,
+      state,
+      step: input.step,
+      stepEndMs: input.stepEndMs,
+    });
+    const nextDistanceM = Math.min(
+      input.distanceM,
+      previousDistanceM + speedMPerMs * input.deltaMs,
+    );
+
+    if (
+      nextDistanceM >= input.distanceM &&
+      previousDistanceM < input.distanceM
+    ) {
+      const travelledM = nextDistanceM - previousDistanceM;
+      const crossingRatio =
+        travelledM <= 0
+          ? 1
+          : (input.distanceM - previousDistanceM) / travelledM;
+
+      state.finishedAtMs =
+        input.stepStartMs + clamp(crossingRatio, 0, 1) * input.deltaMs;
+    }
+
+    state.distanceM = nextDistanceM;
+  }
+}
+
+function calculateStepSpeed(input: {
+  baseSpeedMPerMs: number;
+  distanceM: number;
+  runDurationMs: number;
+  seed: string;
+  state: RacingSimulationState;
+  step: number;
+  stepEndMs: number;
+}) {
+  const ratio = input.stepEndMs / input.runDurationMs;
+  const entrySeed = `${input.seed}:${input.state.raceEntryId}:${input.state.number}`;
+  const earlyPace = lerp(0.88, 1.14, unitRandom(`${entrySeed}:early`));
+  const latePace = lerp(0.9, 1.18, unitRandom(`${entrySeed}:late`));
+  const stamina = lerp(0.78, 0.94, unitRandom(`${entrySeed}:stamina`));
+  const phasePace = lerp(earlyPace, latePace, smoothStep(ratio));
+  const tickNoise = lerp(
+    -0.18,
+    0.18,
+    unitRandom(`${entrySeed}:tick:${input.step}`),
+  );
+  const burstRoll = unitRandom(`${entrySeed}:burst:${input.step}`);
+  const stumbleRoll = unitRandom(`${entrySeed}:stumble:${input.step}`);
+  const burst = burstRoll > 0.91 ? lerp(0.05, 0.22, burstRoll) : 0;
+  const stumble = stumbleRoll < 0.055 ? -lerp(0.05, 0.18, 1 - stumbleRoll) : 0;
+  const fatigue =
+    ratio <= stamina ? 1 : Math.max(0.88, 1 - (ratio - stamina) * 0.34);
+  let speedMPerMs =
+    input.baseSpeedMPerMs *
+    Math.max(0.28, phasePace + tickNoise + burst + stumble) *
+    fatigue;
+  const remainingMs = Math.max(1, input.runDurationMs - input.stepEndMs);
+  const remainingM = Math.max(0, input.distanceM - input.state.distanceM);
+
+  if (ratio >= 0.72 || remainingMs <= 8_000) {
+    const requiredSpeedMPerMs = remainingM / remainingMs;
+    const closingPush = lerp(
+      1.005,
+      1.04,
+      unitRandom(`${entrySeed}:close:${input.step}`),
+    );
+
+    speedMPerMs = Math.max(speedMPerMs, requiredSpeedMPerMs * closingPush);
+  }
+
+  return speedMPerMs;
+}
+
+function rankSimulationStates(
+  states: RacingSimulationState[],
+  distanceM: number,
+) {
+  return [...states]
+    .sort((left, right) => {
+      if (left.finishedAtMs !== null || right.finishedAtMs !== null) {
+        if (left.finishedAtMs === null) {
+          return 1;
+        }
+
+        if (right.finishedAtMs === null) {
+          return -1;
+        }
+
+        if (left.finishedAtMs !== right.finishedAtMs) {
+          return left.finishedAtMs - right.finishedAtMs;
+        }
+      }
+
+      if (left.distanceM !== right.distanceM) {
+        return right.distanceM - left.distanceM;
+      }
+
+      if (left.number !== right.number) {
+        return left.number - right.number;
+      }
+
+      return left.raceEntryId.localeCompare(right.raceEntryId);
+    })
+    .map((state) => ({
+      ...state,
+      distanceM: Math.min(distanceM, state.distanceM),
+    }));
+}
+
+function deterministicScore(seed: string) {
+  let hash = 2_166_136_261;
+
+  for (const character of seed) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16_777_619);
+  }
+
+  return hash >>> 0;
+}
+
+function unitRandom(seed: string) {
+  return deterministicScore(seed) / 0xffffffff;
+}
+
+function lerp(start: number, end: number, ratio: number) {
+  return start + (end - start) * ratio;
+}
+
+function smoothStep(ratio: number) {
+  const value = clamp(ratio, 0, 1);
+
+  return value * value * (3 - 2 * value);
+}
+
 function getLeaderHorse(horses: DisplayHorse[]) {
   return [...horses].sort(
     (left, right) =>
@@ -624,21 +906,17 @@ function getCameraTranslatePercent(leaderProgress: number) {
 
 function getStatusLabel(
   connectionStatus: ConnectionStatus,
-  tableState: RacingTableState | null,
+  tableState: RacingTableViewState | null,
 ) {
   if (tableState?.phase) {
     return tableState.phase;
-  }
-
-  if (connectionStatus === "requesting-token") {
-    return "AUTH";
   }
 
   return connectionStatus.toUpperCase();
 }
 
 function getStatusDetail(
-  tableState: RacingTableState | null,
+  tableState: RacingTableViewState | null,
   latestTick: RacingRaceTickSnapshot | null,
 ) {
   if (!tableState?.race) {
@@ -652,7 +930,7 @@ function getStatusDetail(
   return `Race ${tableState.race.raceNo}`;
 }
 
-function getTimerText(tableState: RacingTableState | null) {
+function getTimerText(tableState: RacingTableViewState | null) {
   if (!tableState?.race) {
     return "00:03";
   }

@@ -286,6 +286,7 @@ export default function RacingAnimationPreviewPage() {
               <div className={styles.gameStatus}>
                 <span>{statusLabel}</span>
                 <strong>{statusDetail}</strong>
+                <small>{getTimerLabel(racing.tableState)}</small>
                 <em>{getTimerText(racing.tableState)}</em>
               </div>
               <ol className={styles.gameRanks} aria-label="Live rank">
@@ -1002,8 +1003,7 @@ function getTimerText(tableState: RacingTableViewState | null) {
     return "LIVE";
   }
 
-  const targetTime =
-    tableState.timers.bettingClosesAt ?? tableState.timers.scheduledStartAt;
+  const targetTime = getTimerTargetTime(tableState);
 
   if (!targetTime) {
     return `R${tableState.race.raceNo}`;
@@ -1019,6 +1019,40 @@ function getTimerText(tableState: RacingTableViewState | null) {
   const secondsText = (seconds % 60).toString().padStart(2, "0");
 
   return `${minutesText}:${secondsText}`;
+}
+
+function getTimerLabel(tableState: RacingTableViewState | null) {
+  if (!tableState?.race) {
+    return "Ready";
+  }
+
+  if (tableState.phase === "BETTING") {
+    return "Bet closes";
+  }
+
+  if (tableState.phase === "LOCKING_BETS") {
+    return "Race starts";
+  }
+
+  if (tableState.phase === "RUNNING") {
+    return "Track";
+  }
+
+  return "Next race";
+}
+
+function getTimerTargetTime(tableState: RacingTableViewState) {
+  if (tableState.phase === "BETTING") {
+    return (
+      tableState.timers.bettingClosesAt ?? tableState.timers.scheduledStartAt
+    );
+  }
+
+  if (tableState.phase === "LOCKING_BETS") {
+    return tableState.timers.scheduledStartAt;
+  }
+
+  return tableState.timers.scheduledStartAt ?? tableState.timers.bettingClosesAt;
 }
 
 function formatRank(rank: number | null) {

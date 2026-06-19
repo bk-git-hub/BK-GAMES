@@ -489,6 +489,14 @@
   font-weight: 900;
 }
 
+.gameStatus small {
+  color: #9fb6aa;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .gameStatus em {
   color: #fff4c4;
   font-size: 22px;
@@ -997,6 +1005,10 @@
 
   .gameStatus strong {
     font-size: 13px;
+  }
+
+  .gameStatus small {
+    font-size: 10px;
   }
 
   .gameStatus em {

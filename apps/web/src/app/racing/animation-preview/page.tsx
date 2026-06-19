@@ -182,8 +182,6 @@ const fallbackHorses: DisplayHorse[] = assetHorses.map((horse, index) => ({
 export default function RacingAnimationPreviewPage() {
   const racing = useRacingTable();
   const usesBackendState = Boolean(racing.tableState?.race);
-  const isRaceRunning =
-    !usesBackendState || racing.tableState?.phase === "RUNNING";
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [persistedResultBoard, setPersistedResultBoard] =
     useState<RaceResultBoard | null>(null);
@@ -191,9 +189,20 @@ export default function RacingAnimationPreviewPage() {
     useState<VisualRaceStart | null>(null);
   const tableStateRef = useRef<RacingTableViewState | null>(null);
   const visualRaceStartRef = useRef<VisualRaceStart | null>(null);
+  const isVisuallyRunning = isRaceVisuallyRunning(
+    racing.tableState,
+    clockMs,
+  );
+  const isRaceRunning = !usesBackendState || isVisuallyRunning;
   const localTick = useMemo(
-    () => buildLocalRaceTick(racing.tableState, clockMs, visualRaceStart),
-    [clockMs, racing.tableState, visualRaceStart],
+    () =>
+      buildLocalRaceTick(
+        racing.tableState,
+        clockMs,
+        visualRaceStart,
+        isVisuallyRunning,
+      ),
+    [clockMs, isVisuallyRunning, racing.tableState, visualRaceStart],
   );
   const displayTick = useMemo<DisplayRaceTickSnapshot | null>(
     () => localTick ?? racing.latestTick,
@@ -225,12 +234,17 @@ export default function RacingAnimationPreviewPage() {
       ),
     [displayHorses],
   );
-  const statusLabel = getStatusLabel(racing.connectionStatus, racing.tableState);
+  const statusLabel = getStatusLabel(
+    racing.connectionStatus,
+    racing.tableState,
+    isVisuallyRunning,
+  );
   const statusDetail = getStatusDetail(
     racing.tableState,
     displayTick,
     clockMs,
     visualRaceStart,
+    isVisuallyRunning,
   );
   const socketErrorMessage =
     racing.socketError?.message === "Server polling active."
@@ -252,10 +266,11 @@ export default function RacingAnimationPreviewPage() {
   }, [racing.tableState]);
 
   useEffect(() => {
-    const race = racing.tableState?.race;
+    const tableState = racing.tableState;
+    const race = tableState?.race;
     const currentStart = visualRaceStartRef.current;
 
-    if (!race || racing.tableState?.phase !== "RUNNING") {
+    if (!tableState || !race || !isVisuallyRunning) {
       if (!race || currentStart?.raceId !== race.raceId) {
         visualRaceStartRef.current = null;
         setVisualRaceStart(null);
@@ -268,7 +283,7 @@ export default function RacingAnimationPreviewPage() {
       return;
     }
 
-    const startMs = resolveVisualRaceStartMs(race, Date.now());
+    const startMs = resolveVisualRaceStartMs(tableState, Date.now());
     const nextStart = {
       raceId: race.raceId,
       startMs,
@@ -276,7 +291,7 @@ export default function RacingAnimationPreviewPage() {
 
     visualRaceStartRef.current = nextStart;
     setVisualRaceStart(nextStart);
-  }, [racing.tableState]);
+  }, [isVisuallyRunning, racing.tableState]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -286,16 +301,18 @@ export default function RacingAnimationPreviewPage() {
       setPersistedResultBoard((current) => {
         const tableState = tableStateRef.current;
         const raceId = tableState?.race?.raceId ?? null;
+        const isLocalRaceRunning = isRaceVisuallyRunning(tableState, nowMs);
         const localResultBoard = buildRaceResultBoard(
           tableState,
           buildLocalRaceTick(
             tableState,
             nowMs,
             visualRaceStartRef.current,
+            isLocalRaceRunning,
           ),
         );
 
-        if (tableState?.phase === "RUNNING" && current?.raceId !== raceId) {
+        if (isLocalRaceRunning && current?.raceId !== raceId) {
           return null;
         }
 
@@ -344,8 +361,14 @@ export default function RacingAnimationPreviewPage() {
               <div className={styles.gameStatus}>
                 <span>{statusLabel}</span>
                 <strong>{statusDetail}</strong>
-                <small>{getTimerLabel(racing.tableState)}</small>
-                <em>{getTimerText(racing.tableState)}</em>
+                <small>
+                  {isVisuallyRunning
+                    ? "Track"
+                    : getTimerLabel(racing.tableState)}
+                </small>
+                <em>
+                  {isVisuallyRunning ? "LIVE" : getTimerText(racing.tableState)}
+                </em>
               </div>
               <ol className={styles.gameRanks} aria-label="Live rank">
                 {rankedHorses.map((horse) => (
@@ -451,6 +474,7 @@ export default function RacingAnimationPreviewPage() {
 
 function useRacingTable() {
   const socketRef = useRef<Socket | null>(null);
+  const latestTableStateRef = useRef<RacingTableViewState | null>(null);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("connecting");
   const [latestTick, setLatestTick] = useState<RacingRaceTickSnapshot | null>(
@@ -467,6 +491,22 @@ function useRacingTable() {
     const pollController = new AbortController();
     let pollTimer: number | null = null;
 
+    function applyTableState(nextState: RacingTableViewState) {
+      const resolvedState = reconcileRacingTableState(
+        latestTableStateRef.current,
+        nextState,
+        Date.now(),
+      );
+
+      latestTableStateRef.current = resolvedState;
+      setTableState(resolvedState);
+      setLatestTick((currentTick) =>
+        currentTick?.raceId === resolvedState.race?.raceId
+          ? currentTick
+          : null,
+      );
+    }
+
     async function pollTableState() {
       try {
         const state = await requestRacingTableState(pollController.signal);
@@ -475,10 +515,7 @@ function useRacingTable() {
           return;
         }
 
-        setTableState(state);
-        setLatestTick((currentTick) =>
-          currentTick?.raceId === state.race?.raceId ? currentTick : null,
-        );
+        applyTableState(state);
         setConnectionStatus((currentStatus) =>
           currentStatus === "connected" ? currentStatus : "polling",
         );
@@ -545,10 +582,7 @@ function useRacingTable() {
         (payload: RacingTableState) => {
           setConnectionStatus("connected");
           setSocketError(null);
-          setTableState(payload);
-          setLatestTick((currentTick) =>
-            currentTick?.raceId === payload.race?.raceId ? currentTick : null,
-          );
+          applyTableState(payload);
         },
       );
 
@@ -629,6 +663,50 @@ function resolveRacingSocketUrl() {
 function resolveRacingServerUrl() {
   return (process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? "http://localhost:4000")
     .replace(/\/$/, "");
+}
+
+function reconcileRacingTableState(
+  currentState: RacingTableViewState | null,
+  nextState: RacingTableViewState,
+  nowMs: number,
+) {
+  if (shouldKeepCurrentRaceState(currentState, nextState, nowMs)) {
+    return currentState ?? nextState;
+  }
+
+  return nextState;
+}
+
+function shouldKeepCurrentRaceState(
+  currentState: RacingTableViewState | null,
+  nextState: RacingTableViewState,
+  nowMs: number,
+) {
+  const currentRace = currentState?.race;
+  const nextRace = nextState.race;
+
+  if (!currentState || !currentRace || !nextRace) {
+    return false;
+  }
+
+  if (currentRace.raceId === nextRace.raceId) {
+    return false;
+  }
+
+  if (nextRace.raceNo <= currentRace.raceNo) {
+    return false;
+  }
+
+  if (!isRaceVisuallyRunning(currentState, nowMs)) {
+    return false;
+  }
+
+  const nextStartMs = getScheduledRaceStartMs(nextState);
+  const isFutureWaitingRace =
+    (nextState.phase === "WAITING" || nextState.phase === "BETTING") &&
+    (nextStartMs === null || nextStartMs > nowMs);
+
+  return isFutureWaitingRace;
 }
 
 function buildDisplayHorses(
@@ -782,10 +860,11 @@ function buildLocalRaceTick(
   tableState: RacingTableViewState | null,
   nowMs: number,
   visualRaceStart: VisualRaceStart | null = null,
+  isVisuallyRunning = false,
 ): DisplayRaceTickSnapshot | null {
   const race = tableState?.race;
 
-  if (!race || tableState.phase !== "RUNNING") {
+  if (!race || !isVisuallyRunning) {
     return null;
   }
 
@@ -1063,7 +1142,12 @@ function getCameraTranslatePercent(leaderProgress: number) {
 function getStatusLabel(
   connectionStatus: ConnectionStatus,
   tableState: RacingTableViewState | null,
+  isVisuallyRunning: boolean,
 ) {
+  if (isVisuallyRunning) {
+    return "RUNNING";
+  }
+
   if (tableState?.phase) {
     return tableState.phase;
   }
@@ -1076,12 +1160,13 @@ function getStatusDetail(
   latestTick: RacingRaceTickSnapshot | null,
   nowMs: number,
   visualRaceStart: VisualRaceStart | null,
+  isVisuallyRunning: boolean,
 ) {
   if (!tableState?.race) {
     return "Demo fallback";
   }
 
-  if (tableState.phase === "RUNNING") {
+  if (isVisuallyRunning) {
     return `${formatLiveElapsedMs(
       getRaceClockElapsedMs(tableState, nowMs, visualRaceStart),
     )}s live`;
@@ -1130,6 +1215,10 @@ function getTimerText(tableState: RacingTableViewState | null) {
     return "LIVE";
   }
 
+  if (isRaceResultPhase(tableState.phase)) {
+    return "RESULT";
+  }
+
   const targetTime = getTimerTargetTime(tableState);
 
   if (!targetTime) {
@@ -1140,6 +1229,10 @@ function getTimerText(tableState: RacingTableViewState | null) {
 
   if (isRaceStartCountdownPhase(tableState) && remainingMs <= 0) {
     return "START";
+  }
+
+  if (!isRaceStartCountdownPhase(tableState) && remainingMs <= 0) {
+    return `R${tableState.race.raceNo}`;
   }
 
   const seconds = Math.max(
@@ -1169,6 +1262,10 @@ function getTimerLabel(tableState: RacingTableViewState | null) {
 
   if (tableState.phase === "RUNNING") {
     return "Track";
+  }
+
+  if (isRaceResultPhase(tableState.phase)) {
+    return "Result";
   }
 
   return "Next race";
@@ -1236,10 +1333,53 @@ function getRaceStartTargetTime(tableState: RacingTableViewState) {
   );
 }
 
+function getScheduledRaceStartMs(tableState: RacingTableViewState) {
+  const targetTime =
+    tableState.timers.scheduledStartAt ?? tableState.race?.scheduledStartAt;
+
+  if (!targetTime) {
+    return null;
+  }
+
+  const startMs = Date.parse(targetTime);
+
+  return Number.isFinite(startMs) ? startMs : null;
+}
+
+function isRaceVisuallyRunning(
+  tableState: RacingTableViewState | null,
+  nowMs: number,
+) {
+  if (!tableState?.race) {
+    return false;
+  }
+
+  if (tableState.phase === "RUNNING") {
+    return true;
+  }
+
+  if (tableState.phase !== "BETTING" && tableState.phase !== "LOCKING_BETS") {
+    return false;
+  }
+
+  const scheduledStartMs = getScheduledRaceStartMs(tableState);
+
+  return scheduledStartMs !== null && nowMs >= scheduledStartMs;
+}
+
 function isRaceStartCountdownPhase(tableState: RacingTableViewState) {
   return (
     tableState.phase === "LOCKING_BETS" ||
     (tableState.phase === "BETTING" && !hasSeparateRaceStartDelay(tableState))
+  );
+}
+
+function isRaceResultPhase(phase: RacingTableViewState["phase"]) {
+  return (
+    phase === "FINISHING" ||
+    phase === "SETTLING" ||
+    phase === "SETTLED" ||
+    phase === "ROUND_END"
   );
 }
 
@@ -1261,12 +1401,24 @@ function hasSeparateRaceStartDelay(tableState: RacingTableViewState) {
 }
 
 function resolveVisualRaceStartMs(
-  race: NonNullable<RacingTableViewState["race"]>,
+  tableState: RacingTableViewState,
   nowMs: number,
 ) {
+  const race = tableState.race;
+
+  if (!race) {
+    return nowMs;
+  }
+
+  const scheduledStartMs = getScheduledRaceStartMs(tableState);
+
+  if (scheduledStartMs !== null && nowMs >= scheduledStartMs) {
+    return scheduledStartMs;
+  }
+
   const serverStartMs =
     Date.parse(race.startedAt ?? "") ||
-    Date.parse(race.scheduledStartAt ?? "") ||
+    scheduledStartMs ||
     nowMs;
   const serverDelayMs = Math.max(0, nowMs - serverStartMs);
 

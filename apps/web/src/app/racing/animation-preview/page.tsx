@@ -44,6 +44,31 @@ type DisplayHorse = AssetHorse & {
   startX: string;
 };
 
+type DisplayRacePosition = RacingRaceTickSnapshot["positions"][number] & {
+  finishedAtMs?: number | null;
+};
+
+type DisplayRaceTickSnapshot = Omit<RacingRaceTickSnapshot, "positions"> & {
+  positions: DisplayRacePosition[];
+};
+
+type RaceResultEntry = {
+  color: AssetHorse["color"];
+  finishedAtMs: number | null;
+  name: string;
+  number: number;
+  raceEntryId: string;
+  rank: number | null;
+};
+
+type RaceResultBoard = {
+  entries: RaceResultEntry[];
+  isComplete: boolean;
+  raceId: string;
+  raceNo: number;
+  source: "local" | "server";
+};
+
 type ConnectionStatus =
   | "connecting"
   | "connected"
@@ -67,6 +92,7 @@ const restPollMs = 1_000;
 const localTickMs = 120;
 const minimumRaceRunDurationMs = 1_000;
 const minimumTickIntervalMs = 10;
+const maxUnforcedRaceDurationMultiplier = 2.2;
 const visualRaceSpeedMultiplier = 1.7;
 const worldScale = 7.2;
 const trackStartPercent = 1.2;
@@ -144,9 +170,24 @@ export default function RacingAnimationPreviewPage() {
   const isRaceRunning =
     !usesBackendState || racing.tableState?.phase === "RUNNING";
   const [clockMs, setClockMs] = useState(() => Date.now());
-  const displayTick = useMemo(
-    () => racing.latestTick ?? buildLocalRaceTick(racing.tableState, clockMs),
-    [clockMs, racing.latestTick, racing.tableState],
+  const [persistedResultBoard, setPersistedResultBoard] =
+    useState<RaceResultBoard | null>(null);
+  const tableStateRef = useRef<RacingTableViewState | null>(null);
+  const localTick = useMemo(
+    () => buildLocalRaceTick(racing.tableState, clockMs),
+    [clockMs, racing.tableState],
+  );
+  const displayTick = useMemo<DisplayRaceTickSnapshot | null>(
+    () => localTick ?? racing.latestTick,
+    [localTick, racing.latestTick],
+  );
+  const currentResultBoard = useMemo(
+    () => buildRaceResultBoard(racing.tableState, localTick ?? displayTick),
+    [displayTick, localTick, racing.tableState],
+  );
+  const visibleResultBoard = chooseVisibleResultBoard(
+    currentResultBoard,
+    persistedResultBoard,
   );
   const displayHorses = useMemo(
     () => buildDisplayHorses(racing.tableState, displayTick),
@@ -180,8 +221,28 @@ export default function RacingAnimationPreviewPage() {
   }`;
 
   useEffect(() => {
+    tableStateRef.current = racing.tableState;
+  }, [racing.tableState]);
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
-      setClockMs(Date.now());
+      const nowMs = Date.now();
+
+      setClockMs(nowMs);
+      setPersistedResultBoard((current) => {
+        const tableState = tableStateRef.current;
+        const raceId = tableState?.race?.raceId ?? null;
+        const localResultBoard = buildRaceResultBoard(
+          tableState,
+          buildLocalRaceTick(tableState, nowMs),
+        );
+
+        if (tableState?.phase === "RUNNING" && current?.raceId !== raceId) {
+          return null;
+        }
+
+        return choosePersistedResultBoard(current, localResultBoard);
+      });
     }, localTickMs);
 
     return () => {
@@ -284,6 +345,28 @@ export default function RacingAnimationPreviewPage() {
                 </div>
               ))}
             </div>
+
+            {visibleResultBoard ? (
+              <aside className={styles.resultBoard} aria-label="Race result">
+                <div className={styles.resultHeader}>
+                  <span>Race {visibleResultBoard.raceNo}</span>
+                  <strong>
+                    {visibleResultBoard.isComplete ? "Result" : "Finishing"}
+                  </strong>
+                </div>
+                <ol>
+                  {visibleResultBoard.entries.map((entry) => (
+                    <li key={entry.raceEntryId}>
+                      <span className={`${styles.badge} ${styles[entry.color]}`}>
+                        {entry.number}
+                      </span>
+                      <strong>{formatKoreanRank(entry.rank)}</strong>
+                      <time>{formatFinishTime(entry.finishedAtMs)}</time>
+                    </li>
+                  ))}
+                </ol>
+              </aside>
+            ) : null}
           </div>
         </div>
       </section>
@@ -475,7 +558,7 @@ function resolveRacingServerUrl() {
 
 function buildDisplayHorses(
   tableState: RacingTableViewState | null,
-  latestTick: RacingRaceTickSnapshot | null,
+  latestTick: DisplayRaceTickSnapshot | null,
 ): DisplayHorse[] {
   const race = tableState?.race;
 
@@ -491,13 +574,6 @@ function buildDisplayHorses(
   const resultRankByEntryId = new Map(
     race.resultOrder.map((raceEntryId, index) => [raceEntryId, index + 1]),
   );
-  const phase = tableState?.phase;
-  const isFinishedPhase =
-    phase === "SETTLED" ||
-    phase === "ROUND_END" ||
-    phase === "FINISHING" ||
-    phase === "SETTLING";
-
   return race.entries.map((entry, index) => {
     const asset = assetHorses[index % assetHorses.length];
     const position = positionByEntryId.get(entry.raceEntryId);
@@ -506,8 +582,7 @@ function buildDisplayHorses(
       entry.finalRank ??
       resultRankByEntryId.get(entry.raceEntryId) ??
       null;
-    const progress =
-      position?.progress ?? (isFinishedPhase && rank !== null ? 1 : 0);
+    const progress = position?.progress ?? (entry.finishedAtMs !== null ? 1 : 0);
     const laneIndex = Math.max(0, entry.lane - 1);
 
     return {
@@ -526,10 +601,107 @@ function buildDisplayHorses(
   });
 }
 
+function buildRaceResultBoard(
+  tableState: RacingTableViewState | null,
+  latestTick: DisplayRaceTickSnapshot | null,
+): RaceResultBoard | null {
+  const race = tableState?.race;
+
+  if (!race?.entries.length) {
+    return null;
+  }
+
+  const positionByEntryId = new Map(
+    latestTick?.raceId === race.raceId
+      ? latestTick.positions.map((position) => [position.raceEntryId, position])
+      : [],
+  );
+  const hasLocalFinishTime = [...positionByEntryId.values()].some(
+    (position) =>
+      position.finishedAtMs !== null && position.finishedAtMs !== undefined,
+  );
+  const resultRankByEntryId = new Map(
+    race.resultOrder.map((raceEntryId, index) => [raceEntryId, index + 1]),
+  );
+  const entries = race.entries
+    .map((entry, index) => {
+      const position = positionByEntryId.get(entry.raceEntryId);
+      const asset = assetHorses[index % assetHorses.length];
+
+      return {
+        color: asset.color,
+        finishedAtMs: entry.finishedAtMs ?? position?.finishedAtMs ?? null,
+        name: entry.name,
+        number: entry.number,
+        raceEntryId: entry.raceEntryId,
+        rank:
+          entry.finalRank ??
+          resultRankByEntryId.get(entry.raceEntryId) ??
+          position?.rank ??
+          null,
+      } satisfies RaceResultEntry;
+    })
+    .sort(
+      (left, right) =>
+        (left.rank ?? Number.MAX_SAFE_INTEGER) -
+          (right.rank ?? Number.MAX_SAFE_INTEGER) ||
+        (left.finishedAtMs ?? Number.MAX_SAFE_INTEGER) -
+          (right.finishedAtMs ?? Number.MAX_SAFE_INTEGER) ||
+        left.number - right.number,
+    );
+  const hasAnyResult = entries.some((entry) => entry.finishedAtMs !== null);
+
+  if (!hasAnyResult) {
+    return null;
+  }
+
+  return {
+    entries,
+    isComplete: entries.every((entry) => entry.finishedAtMs !== null),
+    raceId: race.raceId,
+    raceNo: race.raceNo,
+    source: hasLocalFinishTime ? "local" : "server",
+  };
+}
+
+function chooseVisibleResultBoard(
+  currentResultBoard: RaceResultBoard | null,
+  persistedResultBoard: RaceResultBoard | null,
+) {
+  if (
+    currentResultBoard?.source === "server" &&
+    persistedResultBoard?.source === "local" &&
+    persistedResultBoard.raceId === currentResultBoard.raceId
+  ) {
+    return persistedResultBoard;
+  }
+
+  return currentResultBoard ?? persistedResultBoard;
+}
+
+function choosePersistedResultBoard(
+  current: RaceResultBoard | null,
+  next: RaceResultBoard | null,
+) {
+  if (!next) {
+    return current;
+  }
+
+  if (
+    next.source === "server" &&
+    current?.source === "local" &&
+    current.raceId === next.raceId
+  ) {
+    return current;
+  }
+
+  return next;
+}
+
 function buildLocalRaceTick(
   tableState: RacingTableViewState | null,
   nowMs: number,
-): RacingRaceTickSnapshot | null {
+): DisplayRaceTickSnapshot | null {
   const race = tableState?.race;
 
   if (!race || tableState.phase !== "RUNNING") {
@@ -549,7 +721,7 @@ function buildLocalRaceTick(
   const visualElapsedMs = clamp(
     (nowMs - startAt) * visualRaceSpeedMultiplier,
     0,
-    raceRunDurationMs,
+    raceRunDurationMs * maxUnforcedRaceDurationMultiplier,
   );
   const positions = simulateRaceTick({
     distanceM: tableState.timing.raceDistanceM,
@@ -584,8 +756,9 @@ function simulateRaceTick(input: {
 }) {
   const distanceM = input.distanceM;
   const runDurationMs = Math.max(minimumRaceRunDurationMs, input.runDurationMs);
+  const maxElapsedMs = runDurationMs * maxUnforcedRaceDurationMultiplier;
   const tickIntervalMs = Math.max(minimumTickIntervalMs, input.tickIntervalMs);
-  const elapsedMs = clamp(input.elapsedMs, 0, runDurationMs);
+  const elapsedMs = clamp(input.elapsedMs, 0, maxElapsedMs);
   const states = input.entries.map((entry) => ({
     distanceM: 0,
     finishedAtMs: null,
@@ -613,6 +786,8 @@ function simulateRaceTick(input: {
   }
 
   return rankSimulationStates(states, distanceM).map((state, index) => ({
+    finishedAtMs:
+      state.finishedAtMs === null ? null : Math.round(state.finishedAtMs),
     progress: Number((state.distanceM / distanceM).toFixed(4)),
     raceEntryId: state.raceEntryId,
     rank: index + 1,
@@ -696,23 +871,10 @@ function calculateStepSpeed(input: {
   const stumble = stumbleRoll < 0.055 ? -lerp(0.05, 0.18, 1 - stumbleRoll) : 0;
   const fatigue =
     ratio <= stamina ? 1 : Math.max(0.88, 1 - (ratio - stamina) * 0.34);
-  let speedMPerMs =
+  const speedMPerMs =
     input.baseSpeedMPerMs *
     Math.max(0.28, phasePace + tickNoise + burst + stumble) *
     fatigue;
-  const remainingMs = Math.max(1, input.runDurationMs - input.stepEndMs);
-  const remainingM = Math.max(0, input.distanceM - input.state.distanceM);
-
-  if (ratio >= 0.72 || remainingMs <= 8_000) {
-    const requiredSpeedMPerMs = remainingM / remainingMs;
-    const closingPush = lerp(
-      1.005,
-      1.04,
-      unitRandom(`${entrySeed}:close:${input.step}`),
-    );
-
-    speedMPerMs = Math.max(speedMPerMs, requiredSpeedMPerMs * closingPush);
-  }
 
   return speedMPerMs;
 }
@@ -877,6 +1039,22 @@ function formatRank(rank: number | null) {
   }
 
   return `${rank}th`;
+}
+
+function formatKoreanRank(rank: number | null) {
+  if (rank === null) {
+    return "-";
+  }
+
+  return `${rank}위`;
+}
+
+function formatFinishTime(finishedAtMs: number | null) {
+  if (finishedAtMs === null) {
+    return "--.--s";
+  }
+
+  return `${(finishedAtMs / 1000).toFixed(2)}s`;
 }
 
 function clamp(value: number, min: number, max: number) {

@@ -537,6 +537,80 @@
   padding: 9px 10px;
 }
 
+.resultBoard {
+  background: rgb(5 12 14 / 80%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 8px;
+  bottom: 18px;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 36%);
+  color: #f5f8f5;
+  min-width: 292px;
+  padding: 12px;
+  pointer-events: none;
+  position: absolute;
+  right: 18px;
+  z-index: 80;
+}
+
+.resultHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+
+.resultHeader span {
+  color: #9fb6aa;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.resultHeader strong {
+  color: #fff4c4;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.resultBoard ol {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.resultBoard li {
+  align-items: center;
+  background: rgb(255 255 255 / 8%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 28px minmax(40px, 1fr) minmax(64px, auto);
+  min-height: 34px;
+  padding: 4px 8px 4px 4px;
+}
+
+.resultBoard .badge {
+  font-size: 14px;
+  height: 26px;
+  min-width: 26px;
+}
+
+.resultBoard li strong {
+  color: #66ef9b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.resultBoard time {
+  color: #f5f8f5;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: right;
+}
+
 .phaseHud {
   align-items: center;
   display: flex;
@@ -943,6 +1017,37 @@
     font-size: 12px;
     height: 22px;
     min-width: 22px;
+  }
+
+  .resultBoard {
+    bottom: 10px;
+    left: 10px;
+    min-width: 0;
+    padding: 9px;
+    right: 10px;
+  }
+
+  .resultBoard ol {
+    gap: 5px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .resultBoard li {
+    gap: 5px;
+    grid-template-columns: 24px minmax(30px, 1fr) minmax(52px, auto);
+    min-height: 30px;
+    padding: 3px 6px 3px 3px;
+  }
+
+  .resultBoard .badge {
+    font-size: 12px;
+    height: 22px;
+    min-width: 22px;
+  }
+
+  .resultBoard li strong,
+  .resultBoard time {
+    font-size: 11px;
   }
 
   .startLine {

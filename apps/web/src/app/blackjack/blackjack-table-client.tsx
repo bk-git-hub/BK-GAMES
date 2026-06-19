@@ -480,7 +480,10 @@ function CasinoTable({
   seatBetDrafts: Record<number, string>;
   state: BlackjackTableState | null;
 }) {
-  const countdown = useCountdown(state?.timers.phaseEndsAt ?? null);
+  const countdown = useCountdown(
+    state?.timers.phaseEndsAt ?? null,
+    state?.updatedAt ?? null,
+  );
   const resultCountdown = useCountdown(roundResultReview?.endsAt ?? null);
   const seatsByNo = new Map(state?.seats.map((seat) => [seat.seatNo, seat]));
   const showBettingTimer = state?.phase === "WAITING_BETS";
@@ -1591,31 +1594,59 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function useCountdown(endsAt: string | null) {
-  const [now, setNow] = useState(() => Date.now());
+function useCountdown(endsAt: string | null, initialNow?: string | null) {
+  const [clock, setClock] = useState(() => ({
+    endsAt,
+    nowMs: Date.now(),
+  }));
 
   useEffect(() => {
     if (!endsAt) {
       return;
     }
 
+    const syncTimeout = window.setTimeout(() => {
+      setClock({
+        endsAt,
+        nowMs: Date.now(),
+      });
+    }, 0);
     const interval = window.setInterval(() => {
-      setNow(Date.now());
+      setClock({
+        endsAt,
+        nowMs: Date.now(),
+      });
     }, 500);
 
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(syncTimeout);
+      window.clearInterval(interval);
+    };
   }, [endsAt]);
 
   if (!endsAt) {
     return null;
   }
 
-  const remainingMs = Math.max(0, new Date(endsAt).getTime() - now);
+  const initialNowMs = readTimestamp(initialNow);
+  const nowMs =
+    clock.endsAt === endsAt ? clock.nowMs : (initialNowMs ?? clock.nowMs);
+  const remainingMs = Math.max(0, new Date(endsAt).getTime() - nowMs);
   const seconds = Math.ceil(remainingMs / 1000);
   const minutes = Math.floor(seconds / 60);
   const secondRemainder = seconds % 60;
 
   return `${minutes}:${String(secondRemainder).padStart(2, "0")}`;
+}
+
+function readTimestamp(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = new Date(value).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 function getActionPrompt({

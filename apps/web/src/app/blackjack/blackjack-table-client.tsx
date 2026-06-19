@@ -64,6 +64,7 @@ type DeckRemainingInfo = {
 
 const pointFormatter = new Intl.NumberFormat("en-US");
 const cardEventAnimationMs = 1400;
+const tableCelebrationVisibleMs = 3000;
 const quickBetAmounts = ["100", "500", "1000"] as const;
 const tableSeatNumbers = [1, 2, 3, 4, 5, 6, 7] as const;
 const celebrationParticles = [
@@ -156,6 +157,23 @@ export function BlackjackTableClient({
     selectedSeatNo,
     state: visibleState,
   });
+
+  useEffect(() => {
+    if (visibleState?.phase === "WAITING_BETS") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSeatBetDraftsByWindow((currentDraftsByWindow) =>
+        Object.keys(currentDraftsByWindow).length ? {} : currentDraftsByWindow,
+      );
+      setChipHistory((currentHistory) =>
+        currentHistory.length ? [] : currentHistory,
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [visibleState?.phase]);
 
   function updateSeatBetDraft(seatNo: number | null, value: string) {
     if (seatNo === null || !bettingWindowKey) {
@@ -467,7 +485,31 @@ function CasinoTable({
   const seatsByNo = new Map(state?.seats.map((seat) => [seat.seatNo, seat]));
   const showBettingTimer = state?.phase === "WAITING_BETS";
   const celebration = getTableCelebration(state, myUserId);
+  const [dismissedCelebrationKeys, setDismissedCelebrationKeys] = useState<
+    string[]
+  >([]);
+  const celebrationKey = celebration?.key ?? null;
+  const visibleCelebration =
+    celebration && !dismissedCelebrationKeys.includes(celebration.key)
+      ? celebration
+      : null;
   const deckRemainingInfo = getDeckRemainingInfo(state);
+
+  useEffect(() => {
+    if (!celebrationKey || dismissedCelebrationKeys.includes(celebrationKey)) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setDismissedCelebrationKeys((currentKeys) =>
+        currentKeys.includes(celebrationKey)
+          ? currentKeys
+          : [...currentKeys, celebrationKey].slice(-24),
+      );
+    }, tableCelebrationVisibleMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [celebrationKey, dismissedCelebrationKeys]);
 
   return (
     <section className="relative min-h-[620px] overflow-hidden rounded-[2rem] border border-white/10 bg-[#10251d] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:min-h-[760px]">
@@ -534,10 +576,10 @@ function CasinoTable({
         </div>
       )}
 
-      {!roundResultReview && celebration ? (
+      {!roundResultReview && visibleCelebration ? (
         <TableCelebrationOverlay
-          celebration={celebration}
-          key={celebration.key}
+          celebration={visibleCelebration}
+          key={visibleCelebration.key}
         />
       ) : null}
 
@@ -1907,7 +1949,6 @@ function getBettingWindowKey(state: BlackjackTableState | null) {
   return [
     state.tableId,
     state.round?.roundId ?? "pending-round",
-    state.timers.phaseEndsAt ?? "open-window",
   ].join(":");
 }
 

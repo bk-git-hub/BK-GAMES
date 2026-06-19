@@ -247,14 +247,8 @@ export default function RacingAnimationPreviewPage() {
   const cameraTranslatePercent = getCameraTranslatePercent(
     leaderHorse?.progress ?? 0,
   );
-  const rankedHorses = useMemo(
-    () =>
-      [...displayHorses].sort(
-        (left, right) =>
-          (left.rank ?? Number.MAX_SAFE_INTEGER) -
-            (right.rank ?? Number.MAX_SAFE_INTEGER) ||
-          left.number - right.number,
-      ),
+  const progressHorses = useMemo(
+    () => [...displayHorses].sort((left, right) => left.number - right.number),
     [displayHorses],
   );
   const statusLabel = getStatusLabel(
@@ -560,16 +554,31 @@ export default function RacingAnimationPreviewPage() {
                   BGM
                 </button>
               </div>
-              <ol className={styles.gameRanks} aria-label="Live rank">
-                {rankedHorses.map((horse) => (
-                  <li key={horse.raceEntryId}>
-                    <span className={`${styles.badge} ${styles[horse.color]}`}>
+              <div
+                className={styles.raceProgressBoard}
+                aria-label="Live race progress"
+              >
+                <div className={styles.progressLabels} aria-hidden="true">
+                  <span>START</span>
+                  <span>FINISH</span>
+                </div>
+                <div className={styles.progressRail}>
+                  {progressHorses.map((horse, index) => (
+                    <span
+                      aria-label={`${horse.number}번 말 ${formatRank(
+                        horse.rank,
+                      )} ${Math.round(getRaceProgressPercent(horse.progress))}% 지점`}
+                      className={`${styles.progressHorse} ${
+                        styles[horse.color]
+                      }`}
+                      key={horse.raceEntryId}
+                      style={getProgressHorseStyle(horse.progress, index)}
+                    >
                       {horse.number}
                     </span>
-                    <span>{formatRank(horse.rank)}</span>
-                  </li>
-                ))}
-              </ol>
+                  ))}
+                </div>
+              </div>
               {socketErrorMessage ? (
                 <p className={styles.socketError}>{socketErrorMessage}</p>
               ) : null}
@@ -1384,6 +1393,19 @@ function calculateStepSpeed(input: {
     fatigue;
 
   return speedMPerMs;
+}
+
+function getRaceProgressPercent(progress: number) {
+  return clamp(progress, 0, 1) * 100;
+}
+
+function getProgressHorseStyle(progress: number, index: number) {
+  const rowOffsetPx = (index - 2.5) * 9;
+
+  return {
+    "--horse-progress": `${getRaceProgressPercent(progress).toFixed(2)}%`,
+    "--horse-row-y": `${rowOffsetPx}px`,
+  } as CSSProperties;
 }
 
 function rankSimulationStates(

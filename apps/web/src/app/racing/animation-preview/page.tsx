@@ -1261,7 +1261,7 @@ function formatFinishTime(finishedAtMs: number | null) {
     return "--.--s";
   }
 
-  return `${(finishedAtMs / 1000).toFixed(2)}s`;
+  return `${(finishedAtMs / visualRaceSpeedMultiplier / 1000).toFixed(2)}s`;
 }
 
 function clamp(value: number, min: number, max: number) {

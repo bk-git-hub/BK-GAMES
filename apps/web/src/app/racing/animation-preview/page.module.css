@@ -7,6 +7,12 @@
   padding: 24px;
 }
 
+.page *,
+.page *::before,
+.page *::after {
+  box-sizing: border-box;
+}
+
 .shell {
   display: grid;
   gap: 18px;
@@ -321,6 +327,14 @@
   overflow: hidden;
   position: relative;
   contain: layout paint;
+}
+
+.raceViewport {
+  border-radius: inherit;
+  contain: layout paint;
+  inset: 0;
+  overflow: hidden;
+  position: absolute;
 }
 
 .worldLayer {
@@ -1225,7 +1239,7 @@
   line-height: 1.1;
 }
 
-.track::after {
+.raceViewport::after {
   background: linear-gradient(180deg, transparent 60%, rgb(4 9 10 / 38%));
   content: "";
   inset: 0;
@@ -1550,11 +1564,32 @@
     font-size: 22px;
   }
 
-  .startTrack,
-  .track {
+  .startTrack {
     aspect-ratio: 4 / 3;
-    height: clamp(360px, 70vh, 560px);
+    height: clamp(320px, 48svh, 430px);
     min-height: unset;
+  }
+
+  .track {
+    aspect-ratio: auto;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    contain: layout;
+    display: grid;
+    gap: 10px;
+    height: auto;
+    min-height: unset;
+    overflow: visible;
+  }
+
+  .raceViewport {
+    background: #081315;
+    border: 1px solid rgb(255 255 255 / 12%);
+    border-radius: 8px;
+    box-shadow: 0 16px 42px rgb(0 0 0 / 36%);
+    height: clamp(286px, 42svh, 380px);
+    position: relative;
   }
 
   .startHud {
@@ -1605,28 +1640,46 @@
   .gameHud {
     align-items: stretch;
     flex-direction: column;
-    gap: 8px;
-    left: 10px;
-    right: 10px;
-    top: 10px;
+    gap: 6px;
+    left: 8px;
+    right: 8px;
+    top: 8px;
   }
 
   .gameStatus {
+    gap: 6px;
     justify-content: space-between;
-    min-height: 40px;
-    padding: 0 10px;
+    min-height: 34px;
+    min-width: 0;
+    padding: 0 8px;
+  }
+
+  .gameStatus span {
+    font-size: 11px;
   }
 
   .gameStatus strong {
-    font-size: 13px;
+    font-size: 12px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .gameStatus small {
-    font-size: 10px;
+    display: none;
   }
 
   .gameStatus em {
-    font-size: 18px;
+    font-size: 16px;
+    min-width: 48px;
+    text-align: right;
+  }
+
+  .bgmButton {
+    height: 24px;
+    min-width: 38px;
+    padding: 0 7px;
   }
 
   .startCountdown {
@@ -1648,36 +1701,50 @@
   }
 
   .raceProgressBoard {
+    flex: 0 0 auto;
     max-width: none;
-    min-height: 66px;
+    min-height: 50px;
     min-width: 0;
-    padding: 6px 10px 8px;
+    padding: 5px 8px 7px;
   }
 
   .progressRail {
-    height: 48px;
-    margin: 0 11px;
+    height: 34px;
+    margin: 0 10px;
   }
 
   .progressHorse {
-    font-size: 11px;
-    height: 22px;
-    min-width: 22px;
+    font-size: 10px;
+    height: 20px;
+    min-width: 20px;
   }
 
   .bettingPanel {
-    bottom: 10px;
     gap: 7px;
-    left: 10px;
-    max-height: 46%;
-    overflow: auto;
+    inset: auto;
+    max-height: none;
+    max-width: none;
+    overflow: visible;
     padding: 9px;
-    right: 10px;
-    width: auto;
+    position: relative;
+    width: 100%;
+  }
+
+  .betAccountStrip {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .betAccountStrip span,
+  .betAccountStrip strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .betTypeGrid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .betHorseGrid {
@@ -1733,11 +1800,11 @@
   }
 
   .sprite {
-    transform: scale(0.58);
+    transform: scale(0.46);
   }
 
   .staticSprite {
-    transform: scale(0.43);
+    transform: scale(0.36);
   }
 
   .startBadge {

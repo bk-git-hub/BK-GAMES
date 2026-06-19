@@ -1124,7 +1124,7 @@ function getTimerText(tableState: RacingTableViewState | null) {
 
   const remainingMs = Date.parse(targetTime) - Date.now();
 
-  if (tableState.phase === "LOCKING_BETS" && remainingMs <= 0) {
+  if (isRaceStartCountdownPhase(tableState) && remainingMs <= 0) {
     return "START";
   }
 
@@ -1146,7 +1146,7 @@ function getTimerLabel(tableState: RacingTableViewState | null) {
   }
 
   if (tableState.phase === "BETTING") {
-    return "Bet closes";
+    return hasSeparateRaceStartDelay(tableState) ? "Bet closes" : "Race starts";
   }
 
   if (tableState.phase === "LOCKING_BETS") {
@@ -1162,13 +1162,13 @@ function getTimerLabel(tableState: RacingTableViewState | null) {
 
 function getTimerTargetTime(tableState: RacingTableViewState) {
   if (tableState.phase === "BETTING") {
-    return (
-      tableState.timers.bettingClosesAt ?? tableState.timers.scheduledStartAt
-    );
+    return hasSeparateRaceStartDelay(tableState)
+      ? tableState.timers.bettingClosesAt ?? tableState.timers.scheduledStartAt
+      : getRaceStartTargetTime(tableState);
   }
 
   if (tableState.phase === "LOCKING_BETS") {
-    return tableState.timers.scheduledStartAt;
+    return getRaceStartTargetTime(tableState);
   }
 
   return tableState.timers.scheduledStartAt ?? tableState.timers.bettingClosesAt;
@@ -1178,12 +1178,11 @@ function getStartCountdownOverlay(
   tableState: RacingTableViewState | null,
   nowMs: number,
 ): StartCountdownOverlay | null {
-  if (!tableState?.race || tableState.phase !== "LOCKING_BETS") {
+  if (!tableState?.race || !isRaceStartCountdownPhase(tableState)) {
     return null;
   }
 
-  const targetTime =
-    tableState.timers.scheduledStartAt ?? tableState.race.scheduledStartAt;
+  const targetTime = getRaceStartTargetTime(tableState);
 
   if (!targetTime) {
     return null;
@@ -1213,6 +1212,38 @@ function getStartCountdownOverlay(
     label: "Race starts in",
     value: seconds.toString(),
   };
+}
+
+function getRaceStartTargetTime(tableState: RacingTableViewState) {
+  return (
+    tableState.timers.scheduledStartAt ??
+    tableState.race?.scheduledStartAt ??
+    tableState.timers.bettingClosesAt
+  );
+}
+
+function isRaceStartCountdownPhase(tableState: RacingTableViewState) {
+  return (
+    tableState.phase === "LOCKING_BETS" ||
+    (tableState.phase === "BETTING" && !hasSeparateRaceStartDelay(tableState))
+  );
+}
+
+function hasSeparateRaceStartDelay(tableState: RacingTableViewState) {
+  if (tableState.timing.bettingCloseBeforeStartSeconds > 0) {
+    return true;
+  }
+
+  const bettingClosesAt =
+    tableState.timers.bettingClosesAt ?? tableState.race?.bettingClosesAt;
+  const scheduledStartAt =
+    tableState.timers.scheduledStartAt ?? tableState.race?.scheduledStartAt;
+
+  if (!bettingClosesAt || !scheduledStartAt) {
+    return false;
+  }
+
+  return Date.parse(scheduledStartAt) - Date.parse(bettingClosesAt) > 1_000;
 }
 
 function resolveVisualRaceStartMs(

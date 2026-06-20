@@ -95,6 +95,12 @@ type BetFeedback = {
 };
 
 type RacingTicketStatus = "pending" | "accepted" | "rejected";
+type RacingTicketOutcomeStatus =
+  | "issuing"
+  | "pending"
+  | "won"
+  | "lost"
+  | "rejected";
 
 type RacingTicketSelection = {
   color: AssetHorse["color"];
@@ -114,6 +120,20 @@ type RacingTicketItem = {
   raceNo: number | null;
   selections: RacingTicketSelection[];
   status: RacingTicketStatus;
+};
+
+type RacingTicketResultEntry = {
+  color: AssetHorse["color"];
+  finalRank: number;
+  number: number;
+  raceEntryId: string;
+};
+
+type RacingTicketHistoryItem = RacingTicketItem & {
+  outcomeDetail: string;
+  outcomeStatus: RacingTicketOutcomeStatus;
+  projectedReturn: number | null;
+  resultOrder: RacingTicketResultEntry[];
 };
 
 type RaceHistoryStatus = "loading" | "ready" | "error";
@@ -202,7 +222,6 @@ const runnerFinishNoseOffsetPx = 185;
 const postFinishTrackOvershootRatio = 0.075;
 const maxVisualRaceProgress = 1 + postFinishTrackOvershootRatio;
 const maxRaceTimelineCacheEntries = 8;
-const maxRecentTicketItems = 8;
 const maxCameraTranslatePercent = ((worldScale - 1) / worldScale) * 100;
 const leaderViewportAnchorPercent = 50 / worldScale;
 const laneTops = ["14%", "23%", "32%", "41%", "50%", "57%", "64%", "71%"];
@@ -463,9 +482,9 @@ export default function BkDerbyPage() {
     selectedBetType: effectiveBetType,
     socketError: betSocketError,
   });
-  const recentTickets = useMemo(
+  const ticketHistory = useMemo(
     () =>
-      buildRecentTickets({
+      buildTicketHistory({
         acceptedEvents: racing.betEvents,
         betSocketError,
         currentRace: racing.tableState?.race ?? null,
@@ -474,6 +493,7 @@ export default function BkDerbyPage() {
         localTickets,
         pendingBetRequest,
         playerId: racing.player?.id ?? null,
+        settledRaces: raceHistory.races,
       }),
     [
       betSocketError,
@@ -481,6 +501,7 @@ export default function BkDerbyPage() {
       effectiveBetType,
       localTickets,
       pendingBetRequest,
+      raceHistory.races,
       racing.betEvents,
       racing.player?.id,
       racing.tableState?.race,
@@ -799,12 +820,10 @@ export default function BkDerbyPage() {
         previousAcceptedEventKeys: racing.betEvents.map(getRacingTableEventKey),
         raceId,
       });
-      setLocalTickets((currentTickets) =>
-        limitRecentTickets([
-          pendingTicket,
-          ...currentTickets.filter((ticket) => ticket.localId !== commandId),
-        ]),
-      );
+      setLocalTickets((currentTickets) => [
+        pendingTicket,
+        ...currentTickets.filter((ticket) => ticket.localId !== commandId),
+      ]);
       setBetFeedback({
         detail: `${activeBetTypeConfig.label} ${formatPoints(normalizedAmount)}P 발권 요청을 보냈습니다.`,
         title: "Issuing ticket",
@@ -814,16 +833,14 @@ export default function BkDerbyPage() {
       const errorMessage =
         error instanceof Error ? error.message : "Bet request could not send.";
 
-      setLocalTickets((currentTickets) =>
-        limitRecentTickets([
-          {
-            ...pendingTicket,
-            message: errorMessage,
-            status: "rejected",
-          },
-          ...currentTickets,
-        ]),
-      );
+      setLocalTickets((currentTickets) => [
+        {
+          ...pendingTicket,
+          message: errorMessage,
+          status: "rejected",
+        },
+        ...currentTickets,
+      ]);
       setBetFeedback({
         detail: errorMessage,
         title: "Ticket rejected",
@@ -1000,10 +1017,10 @@ export default function BkDerbyPage() {
               onSubmit={handleSubmitBet}
               onToggleEntry={handleToggleBetEntry}
               playerNickname={racing.player?.nickname ?? null}
-              recentTickets={recentTickets}
               selectedBetType={effectiveBetType}
               selectedEntryIds={activeSelectedBetEntryIds}
               tableState={racing.tableState}
+              ticketHistory={ticketHistory}
               validationReason={bettingValidation.reason}
               walletBalance={racing.walletBalance}
             />
@@ -1080,10 +1097,10 @@ function RacingBettingPanel({
   onSubmit,
   onToggleEntry,
   playerNickname,
-  recentTickets,
   selectedBetType,
   selectedEntryIds,
   tableState,
+  ticketHistory,
   validationReason,
   walletBalance,
 }: {
@@ -1100,10 +1117,10 @@ function RacingBettingPanel({
   onSubmit: () => void;
   onToggleEntry: (raceEntryId: string) => void;
   playerNickname: string | null;
-  recentTickets: RacingTicketItem[];
   selectedBetType: RacingBetType;
   selectedEntryIds: string[];
   tableState: RacingTableViewState | null;
+  ticketHistory: RacingTicketHistoryItem[];
   validationReason: string | null;
   walletBalance: string | null;
 }) {
@@ -1308,32 +1325,30 @@ function RacingBettingPanel({
         <span>{feedback?.detail ?? validationReason ?? "Ready"}</span>
       </div>
 
-      <section className={styles.ticketList} aria-label="Recent tickets">
+      <section className={styles.ticketList} aria-label="Ticket history">
         <div className={styles.ticketListHeader}>
-          <span>Recent tickets</span>
-          <strong>{recentTickets.length}</strong>
+          <span>Ticket history</span>
+          <strong>{ticketHistory.length}</strong>
         </div>
-        {recentTickets.length > 0 ? (
+        {ticketHistory.length > 0 ? (
           <ol>
-            {recentTickets.map((ticket) => {
+            {ticketHistory.map((ticket) => {
               const ticketConfig = getRacingBetTypeConfig(ticket.betType);
 
               return (
                 <li
-                  className={`${styles.ticketItem} ${
-                    ticket.status === "accepted"
-                      ? styles.ticketItemAccepted
-                      : ticket.status === "rejected"
-                        ? styles.ticketItemRejected
-                        : styles.ticketItemPending
-                  }`}
+                  className={`${styles.ticketItem} ${getTicketHistoryClassName(
+                    ticket.outcomeStatus,
+                  )}`}
                   key={ticket.localId}
                 >
                   <div className={styles.ticketItemTopline}>
                     <span>
                       {ticket.raceNo ? `Race ${ticket.raceNo}` : "Race"}
                     </span>
-                    <strong>{getTicketStatusLabel(ticket.status)}</strong>
+                    <strong>
+                      {getTicketHistoryStatusLabel(ticket.outcomeStatus)}
+                    </strong>
                   </div>
                   <div className={styles.ticketItemMain}>
                     <strong>{ticketConfig.shortLabel}</strong>
@@ -1367,12 +1382,40 @@ function RacingBettingPanel({
                   {ticket.message ? (
                     <em className={styles.ticketMessage}>{ticket.message}</em>
                   ) : null}
+                  <div className={styles.ticketResultLine}>
+                    <span>{ticket.outcomeDetail}</span>
+                    {ticket.projectedReturn !== null ? (
+                      <strong>
+                        예상 {formatPoints(ticket.projectedReturn)}P
+                      </strong>
+                    ) : null}
+                  </div>
+                  {ticket.resultOrder.length > 0 ? (
+                    <div
+                      className={styles.ticketResultOrder}
+                      aria-label="Race result order"
+                    >
+                      <span>Result</span>
+                      {ticket.resultOrder.map((entry) => (
+                        <strong
+                          className={`${styles.ticketResultChip} ${
+                            styles[entry.color]
+                          }`}
+                          key={`${ticket.localId}-result-${entry.raceEntryId}`}
+                          title={`${formatKoreanRank(entry.finalRank)} ${entry.number}번`}
+                        >
+                          {entry.number}
+                          <em>{entry.finalRank}</em>
+                        </strong>
+                      ))}
+                    </div>
+                  ) : null}
                 </li>
               );
             })}
           </ol>
         ) : (
-          <p className={styles.ticketEmpty}>No tickets yet</p>
+          <p className={styles.ticketEmpty}>No ticket history yet</p>
         )}
       </section>
     </aside>
@@ -1729,14 +1772,12 @@ function useRacingTable() {
           if (payload.type === "BET_PLACED") {
             const eventKey = getRacingTicketEventKey(payload);
 
-            setBetEvents((currentEvents) =>
-              [
-                payload,
-                ...currentEvents.filter(
-                  (event) => getRacingTicketEventKey(event) !== eventKey,
-                ),
-              ].slice(0, maxRecentTicketItems * 2),
-            );
+            setBetEvents((currentEvents) => [
+              payload,
+              ...currentEvents.filter(
+                (event) => getRacingTicketEventKey(event) !== eventKey,
+              ),
+            ]);
           }
 
           if (payload.type === "RACE_TICK" && payload.tick) {
@@ -2034,7 +2075,7 @@ function getVisibleBetFeedback(input: {
   return input.fallback;
 }
 
-function buildRecentTickets(input: {
+function buildTicketHistory(input: {
   acceptedEvents: RacingTableEventPayload[];
   betSocketError: RacingSocketErrorPayload | null;
   currentRace: RacingTableViewState["race"];
@@ -2043,7 +2084,8 @@ function buildRecentTickets(input: {
   localTickets: RacingTicketItem[];
   pendingBetRequest: { commandId: string; raceId: string } | null;
   playerId: string | null;
-}) {
+  settledRaces: RacingSettledRaceSnapshot[];
+}): RacingTicketHistoryItem[] {
   let mergedTickets = input.localTickets.map((ticket) =>
     input.betSocketError &&
     input.pendingBetRequest?.commandId === ticket.localId
@@ -2077,8 +2119,7 @@ function buildRecentTickets(input: {
       localId: event.betId ?? getRacingTicketEventKey(event),
       message: null,
       raceId,
-      raceNo:
-        input.currentRace?.raceId === raceId ? input.currentRace.raceNo : null,
+      raceNo: getTicketRaceNo(raceId, input.currentRace, input.settledRaces),
       selections: buildTicketSelections(
         event.raceEntryIds ?? [],
         input.entries,
@@ -2087,7 +2128,19 @@ function buildRecentTickets(input: {
     });
   }
 
-  return limitRecentTickets(mergedTickets);
+  const settledRaceById = buildSettledRaceLookup(
+    input.currentRace,
+    input.settledRaces,
+  );
+
+  return [...mergedTickets]
+    .sort((left, right) => getTicketTimestamp(right) - getTicketTimestamp(left))
+    .map((ticket) =>
+      buildTicketHistoryItem(
+        ticket,
+        settledRaceById.get(ticket.raceId) ?? null,
+      ),
+    );
 }
 
 function buildTicketSelections(
@@ -2133,7 +2186,7 @@ function upsertAcceptedTicket(
       status: "accepted",
     };
 
-    return limitRecentTickets(nextTickets);
+    return nextTickets;
   }
 
   const pendingIndex = currentTickets.findIndex(
@@ -2159,10 +2212,10 @@ function upsertAcceptedTicket(
       status: "accepted",
     };
 
-    return limitRecentTickets(nextTickets);
+    return nextTickets;
   }
 
-  return limitRecentTickets([acceptedTicket, ...currentTickets]);
+  return [acceptedTicket, ...currentTickets];
 }
 
 function hasSameTicketSelections(
@@ -2179,8 +2232,210 @@ function hasSameTicketSelections(
   );
 }
 
-function limitRecentTickets(tickets: RacingTicketItem[]) {
-  return tickets.slice(0, maxRecentTicketItems);
+function buildSettledRaceLookup(
+  currentRace: RacingTableViewState["race"],
+  settledRaces: RacingSettledRaceSnapshot[],
+) {
+  const settledRaceById = new Map(
+    settledRaces.map((race) => [race.raceId, race]),
+  );
+  const currentSettledRace = toSettledRaceSnapshot(currentRace);
+
+  if (currentSettledRace) {
+    settledRaceById.set(currentSettledRace.raceId, currentSettledRace);
+  }
+
+  return settledRaceById;
+}
+
+function toSettledRaceSnapshot(
+  race: RacingTableViewState["race"],
+): RacingSettledRaceSnapshot | null {
+  if (
+    !race ||
+    race.entries.length === 0 ||
+    race.entries.some(
+      (entry) => entry.finalRank === null || entry.finishedAtMs === null,
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    ...race,
+    entries: race.entries.map((entry) => ({
+      ...entry,
+      finalRank: entry.finalRank ?? 0,
+      finishedAtMs: entry.finishedAtMs ?? 0,
+    })),
+  };
+}
+
+function buildTicketHistoryItem(
+  ticket: RacingTicketItem,
+  settledRace: RacingSettledRaceSnapshot | null,
+): RacingTicketHistoryItem {
+  const resultOrder = settledRace ? buildTicketResultOrder(settledRace) : [];
+
+  if (ticket.status === "rejected") {
+    return {
+      ...ticket,
+      outcomeDetail: ticket.message ?? "발권 실패",
+      outcomeStatus: "rejected",
+      projectedReturn: null,
+      resultOrder,
+    };
+  }
+
+  if (ticket.status === "pending") {
+    return {
+      ...ticket,
+      outcomeDetail: "발권 확인중",
+      outcomeStatus: "issuing",
+      projectedReturn: null,
+      resultOrder,
+    };
+  }
+
+  if (!settledRace) {
+    return {
+      ...ticket,
+      outcomeDetail: "결과 대기중",
+      outcomeStatus: "pending",
+      projectedReturn: null,
+      resultOrder,
+    };
+  }
+
+  const isWon = isWinningTicket(ticket, settledRace);
+  const fieldSize = settledRace.entries.length;
+  const projectedReturn =
+    isWon && ticket.amount !== null
+      ? Math.floor(
+          ticket.amount * getEstimatedOddsMultiplier(ticket.betType, fieldSize),
+        )
+      : null;
+
+  return {
+    ...ticket,
+    outcomeDetail: getSettledTicketDetail(ticket, settledRace, isWon),
+    outcomeStatus: isWon ? "won" : "lost",
+    projectedReturn,
+    resultOrder,
+  };
+}
+
+function buildTicketResultOrder(
+  settledRace: RacingSettledRaceSnapshot,
+): RacingTicketResultEntry[] {
+  return [...settledRace.entries]
+    .sort((left, right) => left.finalRank - right.finalRank)
+    .map((entry) => ({
+      color: getHistoryHorseColor(entry.number),
+      finalRank: entry.finalRank,
+      number: entry.number,
+      raceEntryId: entry.raceEntryId,
+    }));
+}
+
+function getSettledTicketDetail(
+  ticket: RacingTicketItem,
+  settledRace: RacingSettledRaceSnapshot,
+  isWon: boolean,
+) {
+  const rankByRaceEntryId = new Map(
+    settledRace.entries.map((entry) => [entry.raceEntryId, entry.finalRank]),
+  );
+  const selectedRankText = ticket.selections
+    .map((selection) => {
+      const rank = rankByRaceEntryId.get(selection.raceEntryId);
+
+      return rank
+        ? `${selection.number}번 ${formatKoreanRank(rank)}`
+        : `${selection.number}번 -`;
+    })
+    .join(" / ");
+
+  return `${isWon ? "적중" : "미적중"}: ${selectedRankText || "선택 없음"}`;
+}
+
+function isWinningTicket(
+  ticket: RacingTicketItem,
+  settledRace: RacingSettledRaceSnapshot,
+) {
+  const rankByRaceEntryId = new Map(
+    settledRace.entries.map((entry) => [entry.raceEntryId, entry.finalRank]),
+  );
+  const selectedIds = ticket.selections.map(
+    (selection) => selection.raceEntryId,
+  );
+  const fieldSize = settledRace.entries.length;
+
+  if (ticket.betType === "WIN") {
+    return rankByRaceEntryId.get(selectedIds[0] ?? "") === 1;
+  }
+
+  if (ticket.betType === "PLACE") {
+    return (
+      selectedIds.length === 1 &&
+      (rankByRaceEntryId.get(selectedIds[0] ?? "") ??
+        Number.POSITIVE_INFINITY) <= getPlaceRank(fieldSize)
+    );
+  }
+
+  if (ticket.betType === "QUINELLA") {
+    return areTicketSelectionsWithinRank(selectedIds, rankByRaceEntryId, 2, 2);
+  }
+
+  if (ticket.betType === "QUINELLA_PLACE") {
+    return areTicketSelectionsWithinRank(selectedIds, rankByRaceEntryId, 3, 2);
+  }
+
+  if (ticket.betType === "TRIO") {
+    return areTicketSelectionsWithinRank(selectedIds, rankByRaceEntryId, 3, 3);
+  }
+
+  return (
+    selectedIds.length ===
+      getRacingBetTypeConfig(ticket.betType).requiredSelections &&
+    selectedIds.every(
+      (raceEntryId, index) => rankByRaceEntryId.get(raceEntryId) === index + 1,
+    )
+  );
+}
+
+function areTicketSelectionsWithinRank(
+  selectedRaceEntryIds: string[],
+  rankByRaceEntryId: Map<string, number>,
+  maxRank: number,
+  expectedSelectionCount: number,
+) {
+  return (
+    selectedRaceEntryIds.length === expectedSelectionCount &&
+    selectedRaceEntryIds.every(
+      (raceEntryId) =>
+        (rankByRaceEntryId.get(raceEntryId) ?? Number.POSITIVE_INFINITY) <=
+        maxRank,
+    )
+  );
+}
+
+function getTicketRaceNo(
+  raceId: string,
+  currentRace: RacingTableViewState["race"],
+  settledRaces: RacingSettledRaceSnapshot[],
+) {
+  if (currentRace?.raceId === raceId) {
+    return currentRace.raceNo;
+  }
+
+  return settledRaces.find((race) => race.raceId === raceId)?.raceNo ?? null;
+}
+
+function getTicketTimestamp(ticket: RacingTicketItem) {
+  const timestamp = new Date(ticket.createdAt).getTime();
+
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 function getRacingTicketEventKey(event: RacingTableEventPayload) {
@@ -2199,16 +2454,44 @@ function getRacingTableEventKey(event: RacingTableEventPayload) {
   ].join(":");
 }
 
-function getTicketStatusLabel(status: RacingTicketStatus) {
-  if (status === "accepted") {
-    return "Accepted";
+function getTicketHistoryClassName(status: RacingTicketOutcomeStatus) {
+  if (status === "won") {
+    return styles.ticketItemWon;
+  }
+
+  if (status === "lost") {
+    return styles.ticketItemLost;
   }
 
   if (status === "rejected") {
-    return "Rejected";
+    return styles.ticketItemRejected;
   }
 
-  return "Issuing";
+  if (status === "pending") {
+    return styles.ticketItemAwaiting;
+  }
+
+  return styles.ticketItemPending;
+}
+
+function getTicketHistoryStatusLabel(status: RacingTicketOutcomeStatus) {
+  if (status === "won") {
+    return "적중";
+  }
+
+  if (status === "lost") {
+    return "미적중";
+  }
+
+  if (status === "rejected") {
+    return "거절";
+  }
+
+  if (status === "pending") {
+    return "대기중";
+  }
+
+  return "발권중";
 }
 
 function formatTicketTime(value: string) {

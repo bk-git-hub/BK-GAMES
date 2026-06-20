@@ -1172,8 +1172,20 @@
   border-left-color: #66ef9b;
 }
 
+.ticketItemWon {
+  border-left-color: #66ef9b;
+}
+
 .ticketItemRejected {
   border-left-color: #ffb6a8;
+}
+
+.ticketItemLost {
+  border-left-color: #ffb6a8;
+}
+
+.ticketItemAwaiting {
+  border-left-color: #9fc5ff;
 }
 
 .ticketItemPending {
@@ -1192,8 +1204,20 @@
   color: #66ef9b;
 }
 
+.ticketItemWon .ticketItemTopline strong {
+  color: #66ef9b;
+}
+
 .ticketItemRejected .ticketItemTopline strong {
   color: #ffb6a8;
+}
+
+.ticketItemLost .ticketItemTopline strong {
+  color: #ffb6a8;
+}
+
+.ticketItemAwaiting .ticketItemTopline strong {
+  color: #9fc5ff;
 }
 
 .ticketItemPending .ticketItemTopline strong {
@@ -1244,6 +1268,69 @@
   font-weight: 700;
   line-height: 1.25;
   margin: 0;
+}
+
+.ticketResultLine {
+  align-items: center;
+  color: #c5d5cd;
+  display: flex;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: space-between;
+  line-height: 1.25;
+}
+
+.ticketResultLine span {
+  min-width: 0;
+}
+
+.ticketResultLine strong {
+  color: #fff4c4;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ticketResultOrder {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ticketResultOrder > span {
+  color: #9fb6aa;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.ticketResultChip {
+  align-items: center;
+  border-radius: 5px;
+  color: white;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 3px;
+  height: 24px;
+  justify-content: center;
+  min-width: 32px;
+  padding: 0 6px;
+}
+
+.ticketResultChip em {
+  background: rgb(0 0 0 / 22%);
+  border-radius: 999px;
+  color: white;
+  display: inline-flex;
+  font-size: 9px;
+  font-style: normal;
+  height: 14px;
+  justify-content: center;
+  min-width: 14px;
+  padding: 0 3px;
 }
 
 .raceHistoryDeck {

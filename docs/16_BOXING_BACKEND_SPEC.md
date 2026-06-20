@@ -60,8 +60,12 @@ Included:
 ```text
 single boxing table
 1v1 fictional boxing matches
-same weight class
+one MVP weight class
+at least 20 fictional boxer profiles in the MVP roster
 3 short rounds
+special title matches
+platform career records
+head-to-head records
 normal athletic fighter proportions in frontend assets
 server-authoritative live fight simulation
 Winner bet only
@@ -78,6 +82,7 @@ Excluded:
 real fighters
 real boxing organizations
 real fight records
+multiple weight classes
 player-controlled combat
 live betting
 method bets
@@ -313,6 +318,120 @@ acceptable later: 44% to 56%
 avoid for MVP: any matchup wider than 40% to 60%
 ```
 
+### 6.1 MVP Fighter Roster
+
+The MVP should ship with at least 20 fictional boxer profiles in one weight class.
+
+Recommended:
+
+```text
+20 to 24 active fighters
+1 MVP weight class
+5 fighting styles
+roughly 4 fighters per style
+similar overall rating band
+different stat distribution and personality
+```
+
+This creates enough variety for:
+
+```text
+normal match rotation
+rematches
+head-to-head history
+title contenders
+underdog stories
+style contrast
+```
+
+The roster must not use real fighter names, real records, or real organizations.
+
+Example public profile fields:
+
+```text
+display name
+nickname
+corner color preference
+style
+stance
+height/reach flavor text
+public stat card
+current ranking
+career record
+current streak
+title status
+```
+
+The initial roster may start with seeded fictional history for presentation, but it must be clearly system-owned fictional data.
+
+Recommended MVP approach:
+
+```text
+seed 20 fictional fighters
+seed basic fictional career records if desired
+start updating records from platform fights immediately
+never imply the records are real-world records
+```
+
+### 6.2 Public Career Records
+
+Career records are part of the product experience.
+
+Users should be able to see:
+
+```text
+total fights
+wins
+losses
+draws
+KO wins
+TKO wins
+decision wins
+KO losses
+TKO losses
+decision losses
+title fights
+title wins
+title losses
+title defenses
+current streak
+last fight result
+```
+
+These records should be updated only after a fight is settled.
+
+Do not update records during an active fight.
+
+Career records may be denormalized for fast display, but the source of truth should be fight results.
+
+### 6.3 Head-To-Head Records
+
+Head-to-head records track the history between two fighters.
+
+Users should be able to see:
+
+```text
+Fighter A vs Fighter B total fights
+Fighter A wins
+Fighter B wins
+draws
+KO/TKO wins by each fighter
+decision wins by each fighter
+last meeting result
+last meeting date
+```
+
+Important rule:
+
+```text
+head-to-head records are display/history data
+they do not automatically change the simulation result
+```
+
+If records affect odds later, that effect must be visible through public stats, ranking, or matchup modeling.
+
+Do not create hidden "rivalry advantage" modifiers in MVP.
+
 ---
 
 ## 7. Weight Classes
@@ -340,6 +459,102 @@ Suggested tendencies:
 Same weight-class fighters should share similar total stat budgets.
 
 Do not create hidden mismatches unless odds explicitly reflect the difference.
+
+### 7.1 MVP Single Weight Class
+
+The MVP should implement only one weight class.
+
+Recommendation:
+
+```text
+MVP weight class = Middleweight-style fictional class
+```
+
+Reason:
+
+```text
+one class is enough for 20+ fighters
+matchmaking is simpler
+title/ranking logic is simpler
+distribution testing is easier
+frontend asset reuse is easier
+```
+
+The system should keep `weight_class` fields in the data model so additional classes can be added later.
+
+### 7.2 Rankings
+
+Within the MVP weight class, maintain a simple ranking list.
+
+Recommended:
+
+```text
+champion
+rank 1 to rank 10 contenders
+unranked active roster
+```
+
+Ranking can initially be manually seeded and then adjusted by backend rules after settled fights.
+
+MVP ranking update can be simple:
+
+```text
+winner moves up if beating a higher-ranked fighter
+loser moves down if losing to a lower-ranked fighter
+champion changes only through title match result
+draw does not change champion
+```
+
+Ranking does not need to be perfect in MVP.
+
+It mainly supports better fight presentation and title-match scheduling.
+
+### 7.3 Title Matches
+
+Title matches are special match types inside the same simulation system.
+
+They should not use a separate fight engine.
+
+MVP title match behavior:
+
+```text
+same betting rules as normal fights
+same damage/KO/TKO/decision simulation
+same wallet settlement rules
+special match_type = TITLE
+champion and challenger are shown in UI
+title holder updates after settlement
+title fight record updates after settlement
+```
+
+Recommended title match settings:
+
+```text
+normal MVP fight = 3 short rounds
+title MVP fight = 5 short rounds, if frontend pacing allows
+```
+
+If 5 rounds feels too long for the product, keep title matches at 3 rounds in MVP and make them special through presentation, ranking, and records only.
+
+Title match result rules:
+
+```text
+champion loses by KO/TKO/Decision -> challenger becomes champion
+champion wins -> champion records a title defense
+draw -> champion retains title, Winner bets push if draw
+cancelled fight -> no title change
+```
+
+Title matches should be scheduled intentionally.
+
+Do not create title matches randomly every round.
+
+Recommended frequency:
+
+```text
+1 title match every 8 to 15 normal fights
+or manually scheduled by backend/admin later
+```
 
 ---
 
@@ -1590,8 +1805,11 @@ id
 name
 nickname
 weight_class
+stance
 style
 stats
+ranking
+is_champion
 portrait_asset_key
 sprite_asset_key
 is_active
@@ -1603,6 +1821,124 @@ These are fictional display/game fighters.
 
 No real fighter data.
 
+The `ranking` and `is_champion` fields may be denormalized for fast display.
+
+If rankings become complex later, move them into a separate ranking history table.
+
+### boxing_fighter_records
+
+Aggregated career record per fighter.
+
+```text
+id
+fighter_id
+weight_class
+total_fights
+wins
+losses
+draws
+ko_wins
+tko_wins
+decision_wins
+ko_losses
+tko_losses
+decision_losses
+title_fights
+title_wins
+title_losses
+title_draws
+title_defenses
+current_streak_type
+current_streak_count
+last_fight_id
+last_result
+updated_at
+created_at
+```
+
+This table is a display/cache table.
+
+It must be updated idempotently after fight settlement.
+
+### boxing_head_to_head_records
+
+Aggregated record for one pair of fighters.
+
+Store fighter ids in canonical order to avoid duplicate pair rows.
+
+```text
+id
+fighter_a_id
+fighter_b_id
+total_fights
+fighter_a_wins
+fighter_b_wins
+draws
+fighter_a_ko_tko_wins
+fighter_b_ko_tko_wins
+fighter_a_decision_wins
+fighter_b_decision_wins
+last_fight_id
+last_result
+updated_at
+created_at
+```
+
+Canonical pair rule:
+
+```text
+fighter_a_id = lexicographically smaller fighter id
+fighter_b_id = lexicographically larger fighter id
+unique fighter_a_id + fighter_b_id
+```
+
+### boxing_titles
+
+MVP can have one title for the single weight class.
+
+```text
+id
+weight_class
+name
+status
+current_champion_fighter_id
+current_reign_id
+created_at
+updated_at
+```
+
+Example:
+
+```text
+BK Middleweight Title
+```
+
+### boxing_title_reigns
+
+Track champion history.
+
+```text
+id
+title_id
+champion_fighter_id
+started_fight_id
+ended_fight_id
+started_at
+ended_at
+defense_count
+status
+created_at
+updated_at
+```
+
+When a challenger wins a title match:
+
+```text
+close previous active reign
+create new active reign
+update boxing_titles.current_champion_fighter_id
+```
+
 ### boxing_fights
 
 ```text
@@ -1611,6 +1947,8 @@ table_id
 fight_no
 status
 phase
+match_type
+title_id
 seed
 seed_locked_at
 weight_class
@@ -1628,6 +1966,22 @@ ending_time_ms
 scorecards
 created_at
 updated_at
+```
+
+`match_type` values:
+
+```text
+NORMAL
+TITLE
+REMATCH
+SHOWCASE
+```
+
+MVP only needs:
+
+```text
+NORMAL
+TITLE
 ```
 
 Seed rule:
@@ -1649,6 +2003,9 @@ corner
 display_name
 style
 stats_snapshot
+record_snapshot
+ranking_snapshot
+is_champion_at_fight_start
 temporary_condition
 final_result
 knockdowns
@@ -1657,6 +2014,33 @@ updated_at
 ```
 
 Betting should target this participant id, not the persistent fighter id.
+
+`record_snapshot` and `ranking_snapshot` preserve what users saw when betting.
+
+Do not recalculate historical fight display from current records.
+
+### boxing_record_updates
+
+Optional but recommended for audit/idempotency.
+
+```text
+id
+fight_id
+fighter_id
+record_type
+record_id
+payload
+idempotency_key
+created_at
+```
+
+Suggested idempotency:
+
+```text
+boxing:record:{fightId}:{fighterId}
+boxing:h2h:{fightId}:{canonicalPairId}
+boxing:title:{fightId}:{titleId}
+```
 
 ### boxing_bets
 
@@ -2001,6 +2385,9 @@ round settings
 exchange log
 final result
 scorecards
+career record updates
+head-to-head record updates
+title/reign updates
 settlement ledger ids
 ```
 
@@ -2102,6 +2489,8 @@ Before merging boxing backend work, verify:
 [ ] fight result comes from server simulation
 [ ] simulation runs server-side
 [ ] same weight-class matching is enforced
+[ ] MVP uses one weight class unless explicitly expanded
+[ ] at least 20 active fictional boxer profiles exist for MVP
 [ ] matchup distribution test runs 10,000+ simulations
 [ ] accepted bets are idempotent
 [ ] bet target is fight participant id, not persistent fighter id alone
@@ -2116,6 +2505,10 @@ Before merging boxing backend work, verify:
 [ ] TKO does not require failed count
 [ ] decision uses round score data
 [ ] judges are deterministic from seed
+[ ] career records update only after settlement
+[ ] head-to-head records update only after settlement
+[ ] title changes only after settled title fights
+[ ] cancelled fights do not update records or title holder
 [ ] reconnect receives a full current fight snapshot
 [ ] cancelled fights refund exactly once per bet
 [ ] server restart cancellation/refund path is tested
@@ -2139,11 +2532,13 @@ Before merging boxing backend work, verify:
 5. Add TKO condition unit tests.
 6. Add decision scoring and judge profile tests.
 7. Add 10,000+ fight distribution tests for each MVP matchup template.
-8. Add DB schema for boxing tables, fights, participants, bets, ticks, exchanges, and actions.
-9. Add `BOXING` to point ledger game type if not already supported.
-10. Add `placeBoxingWinnerBet` transaction helper with no cancellation/modification path.
-11. Add `settleBoxingFight` transaction helper using integer odds math.
-12. Add draw push/refund handling.
-13. Add server restart cancellation/refund recovery.
-14. Add `BoxingGateway` with live tick and exchange broadcast.
-15. Add reconnect full-snapshot state recovery.
+8. Seed at least 20 fictional boxer profiles for the MVP weight class.
+9. Add DB schema for boxing tables, fighters, fighter records, head-to-head records, titles, title reigns, fights, participants, bets, ticks, exchanges, and actions.
+10. Add `BOXING` to point ledger game type if not already supported.
+11. Add `placeBoxingWinnerBet` transaction helper with no cancellation/modification path.
+12. Add `settleBoxingFight` transaction helper using integer odds math.
+13. Add idempotent career record, head-to-head record, and title update helpers.
+14. Add draw push/refund handling.
+15. Add server restart cancellation/refund recovery.
+16. Add `BoxingGateway` with live tick and exchange broadcast.
+17. Add reconnect full-snapshot state recovery.

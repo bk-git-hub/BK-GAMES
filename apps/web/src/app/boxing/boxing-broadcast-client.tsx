@@ -41,6 +41,18 @@ type FeedItem = {
   time: string;
 };
 
+type MethodOption = {
+  id: "ko" | "decision" | "draw";
+  label: string;
+  odds: string;
+};
+
+type DistanceOption = {
+  id: "yes" | "no";
+  label: string;
+  odds: string;
+};
+
 const fighters: Fighter[] = [
   {
     age: 26,
@@ -120,6 +132,17 @@ const stats = [
 ] as const;
 
 const quickStakes = [20, 50, 100, 250];
+
+const methodOptions: MethodOption[] = [
+  { id: "ko", label: "KO / TKO", odds: "2.25" },
+  { id: "decision", label: "Decision", odds: "2.40" },
+  { id: "draw", label: "Draw", odds: "15.00" },
+];
+
+const distanceOptions: DistanceOption[] = [
+  { id: "yes", label: "Yes", odds: "1.95" },
+  { id: "no", label: "No", odds: "1.75" },
+];
 
 export function BoxingBroadcastClient() {
   const [selectedFighterId, setSelectedFighterId] = useState(fighters[0].id);
@@ -290,24 +313,11 @@ function StatBar({
 function RingStage({ activeFeed }: { activeFeed: FeedItem }) {
   return (
     <section className={styles.ringStage} aria-label="Live boxing ring">
-      <div className={styles.crowdLayer} aria-hidden="true">
-        {Array.from({ length: 56 }).map((_, index) => (
-          <i key={index} />
-        ))}
-      </div>
-      <div className={styles.lightBar} aria-hidden="true" />
-      <div className={styles.ropeLayer} aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </div>
-      <div className={styles.cornerPost} data-corner="red" aria-hidden="true" />
-      <div className={styles.cornerPost} data-corner="blue" aria-hidden="true" />
       <div className={styles.canvasLogo} aria-hidden="true">
         BK
       </div>
-      <FighterAvatar corner="red" pose="jab" />
-      <FighterAvatar corner="blue" pose="block" />
+      <SpriteFighter corner="red" />
+      <SpriteFighter corner="blue" />
       <div className={styles.impactBurst} data-corner={activeFeed.actor} aria-hidden="true">
         POW
       </div>
@@ -319,22 +329,11 @@ function RingStage({ activeFeed }: { activeFeed: FeedItem }) {
   );
 }
 
-function FighterAvatar({ corner, pose }: { corner: Corner; pose: "jab" | "block" }) {
+function SpriteFighter({ corner }: { corner: Corner }) {
   return (
-    <div className={styles.boxer} data-corner={corner} data-pose={pose}>
-      <div className={styles.boxerShadow} />
-      <div className={styles.backLeg} />
-      <div className={styles.frontLeg} />
-      <div className={styles.body} />
-      <div className={styles.head} />
-      <div className={styles.hair} />
-      <div className={styles.backArm} />
-      <div className={styles.frontArm}>
-        <span />
-      </div>
-      <div className={styles.shorts} />
-      <div className={styles.bootBack} />
-      <div className={styles.bootFront} />
+    <div className={styles.spriteFighter} data-corner={corner} aria-hidden="true">
+      <div className={styles.spriteShadow} />
+      <div className={styles.spriteSheet} />
     </div>
   );
 }
@@ -394,6 +393,17 @@ function BettingDesk({
   setStake: (stake: number) => void;
   stake: number;
 }) {
+  const [methodSelection, setMethodSelection] =
+    useState<MethodOption["id"]>("ko");
+  const [distanceSelection, setDistanceSelection] =
+    useState<DistanceOption["id"]>("no");
+  const selectedMethod =
+    methodOptions.find((option) => option.id === methodSelection) ??
+    methodOptions[0];
+  const selectedDistance =
+    distanceOptions.find((option) => option.id === distanceSelection) ??
+    distanceOptions[0];
+
   return (
     <section className={styles.bettingDesk} aria-label="Winner betting preview">
       <div className={styles.betIntro}>
@@ -404,7 +414,9 @@ function BettingDesk({
         </div>
       </div>
 
-      <div className={styles.winnerButtons}>
+      <div className={styles.marketPanel}>
+        <h3>Who will win?</h3>
+        <div className={styles.winnerButtons}>
         {fighters.map((fighter) => (
           <button
             className={selectedFighterId === fighter.id ? styles.selectedWinner : undefined}
@@ -418,14 +430,52 @@ function BettingDesk({
             <span>{fighter.odds}</span>
           </button>
         ))}
+        </div>
+      </div>
+
+      <div className={styles.methodMarket}>
+        <h3>How will it end?</h3>
+        <div className={styles.optionGrid}>
+          {methodOptions.map((option) => (
+            <button
+              className={
+                methodSelection === option.id ? styles.selectedMarketOption : undefined
+              }
+              disabled={isTicketLocked}
+              key={option.id}
+              onClick={() => setMethodSelection(option.id)}
+              type="button"
+            >
+              <strong>{option.label}</strong>
+              <span>{option.odds}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={styles.distanceMarket}>
+        <h3>Will it go the distance?</h3>
+        <div className={styles.optionGrid}>
+          {distanceOptions.map((option) => (
+            <button
+              className={
+                distanceSelection === option.id
+                  ? styles.selectedMarketOption
+                  : undefined
+              }
+              disabled={isTicketLocked}
+              key={option.id}
+              onClick={() => setDistanceSelection(option.id)}
+              type="button"
+            >
+              <strong>{option.label}</strong>
+              <span>{option.odds}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className={styles.stakePanel}>
-        <div className={styles.lockState} data-locked={isTicketLocked ? "true" : "false"}>
-          <Lock aria-hidden="true" />
-          <strong>{isTicketLocked ? "Betting Locked" : "Betting Open"}</strong>
-          <span>{isTicketLocked ? "Accepted odds copied to ticket" : "Winner market only"}</span>
-        </div>
         <div className={styles.stakeControls}>
           <span>Stake</span>
           <strong>{stake} P</strong>
@@ -467,7 +517,11 @@ function BettingDesk({
           </div>
           <div>
             <dt>Market</dt>
-            <dd>Winner</dd>
+            <dd>{selectedMethod.label}</dd>
+          </div>
+          <div>
+            <dt>Distance</dt>
+            <dd>{selectedDistance.label}</dd>
           </div>
         </dl>
       </div>

@@ -125,6 +125,17 @@ type RaceHistoryViewState = {
   status: RaceHistoryStatus;
 };
 
+type HorseRecord = {
+  averageRank: number | null;
+  color: AssetHorse["color"];
+  name: string;
+  number: number;
+  recentRanks: number[];
+  starts: number;
+  top3: number;
+  wins: number;
+};
+
 type GameTokenResponse = {
   expiresInSeconds: number;
   token: string;
@@ -996,7 +1007,10 @@ export default function BkDerbyPage() {
               validationReason={bettingValidation.reason}
               walletBalance={racing.walletBalance}
             />
-            <RaceHistoryList history={raceHistory} />
+            <div className={styles.raceHistoryDeck}>
+              <RaceHistoryList history={raceHistory} />
+              <HorseRecordViewer history={raceHistory} />
+            </div>
           </div>
         </div>
       </section>
@@ -1362,6 +1376,70 @@ function RacingBettingPanel({
         )}
       </section>
     </aside>
+  );
+}
+
+function HorseRecordViewer({ history }: { history: RaceHistoryViewState }) {
+  const records = buildHorseRecords(history.races);
+
+  return (
+    <section className={styles.horseRecordViewer} aria-label="Horse records">
+      <div className={styles.horseRecordHeader}>
+        <div>
+          <span>Horse records</span>
+          <strong>Recent form</strong>
+        </div>
+        <em>{records.length}</em>
+      </div>
+
+      {records.length > 0 ? (
+        <ol>
+          {records.map((record) => (
+            <li className={styles.horseRecordItem} key={record.number}>
+              <span
+                className={`${styles.horseRecordNumber} ${
+                  styles[record.color]
+                }`}
+              >
+                {record.number}
+              </span>
+              <div className={styles.horseRecordMain}>
+                <div className={styles.horseRecordTopline}>
+                  <strong>{record.name}</strong>
+                  <span>
+                    {record.averageRank === null
+                      ? "-"
+                      : record.averageRank.toFixed(1)}
+                  </span>
+                </div>
+                <div className={styles.horseRecordStats}>
+                  <span>{record.starts}R</span>
+                  <span>{record.wins}W</span>
+                  <span>{record.top3}T3</span>
+                </div>
+                <div className={styles.horseRecordRanks}>
+                  {record.recentRanks.length > 0 ? (
+                    record.recentRanks.map((rank, index) => (
+                      <span key={`${record.number}-${rank}-${index}`}>
+                        {rank}
+                      </span>
+                    ))
+                  ) : (
+                    <span>-</span>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className={styles.raceHistoryEmpty}>
+          {history.status === "loading"
+            ? "Loading records"
+            : (history.errorMessage ?? "No horse records yet")}
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -2153,6 +2231,66 @@ function getHistoryHorseColor(number: number): AssetHorse["color"] {
 
   return (
     assetHorses[(normalizedNumber - 1) % assetHorses.length]?.color ?? "red"
+  );
+}
+
+function buildHorseRecords(races: RacingSettledRaceSnapshot[]): HorseRecord[] {
+  const recordsByNumber = new Map<
+    number,
+    HorseRecord & { rankTotal: number }
+  >();
+
+  for (const horse of fallbackHorses) {
+    recordsByNumber.set(horse.number, {
+      averageRank: null,
+      color: horse.color,
+      name: horse.name,
+      number: horse.number,
+      rankTotal: 0,
+      recentRanks: [],
+      starts: 0,
+      top3: 0,
+      wins: 0,
+    });
+  }
+
+  for (const race of races) {
+    for (const entry of race.entries) {
+      const record = recordsByNumber.get(entry.number) ?? {
+        averageRank: null,
+        color: getHistoryHorseColor(entry.number),
+        name: entry.name,
+        number: entry.number,
+        rankTotal: 0,
+        recentRanks: [],
+        starts: 0,
+        top3: 0,
+        wins: 0,
+      };
+
+      record.name = entry.name;
+      record.starts += 1;
+      record.rankTotal += entry.finalRank;
+
+      if (entry.finalRank === 1) {
+        record.wins += 1;
+      }
+
+      if (entry.finalRank <= 3) {
+        record.top3 += 1;
+      }
+
+      if (record.recentRanks.length < 5) {
+        record.recentRanks.push(entry.finalRank);
+      }
+
+      record.averageRank = record.rankTotal / record.starts;
+      recordsByNumber.set(entry.number, record);
+    }
+  }
+
+  return [...recordsByNumber.values()].sort(
+    (left, right) => left.number - right.number,
   );
 }
 

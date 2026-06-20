@@ -1294,7 +1294,7 @@
   height: 181px;
   left: var(--runner-left, 1.2%);
   position: absolute;
-  top: var(--lane-top);
+  top: calc(var(--lane-top) + var(--runner-y-adjust, 30px));
   transform: translate3d(var(--runner-x, 0px), 0, 0);
   transition: transform 180ms linear;
   width: 206px;
@@ -1760,7 +1760,7 @@
   }
 
   .runner {
-    top: calc(var(--lane-top) + 12px);
+    --runner-y-adjust: -28px;
   }
 
   .bettingPanel {

@@ -742,7 +742,11 @@ export default function RacingAnimationPreviewPage() {
         </header>
 
         <div className={styles.raceFrame}>
-          <div className={styles.track}>
+          <div
+            className={`${styles.track} ${
+              !isVisuallyRunning ? styles.trackWithBetting : ""
+            }`}
+          >
             <div
               className={styles.raceViewport}
               aria-label="Live racing game"

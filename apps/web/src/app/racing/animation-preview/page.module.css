@@ -337,6 +337,27 @@
   position: absolute;
 }
 
+.trackWithBetting {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  contain: layout;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
+  overflow: visible;
+}
+
+.trackWithBetting .raceViewport {
+  background: #081315;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
+  height: 100%;
+  inset: auto;
+  position: relative;
+}
+
 .worldLayer {
   height: 100%;
   left: 0;
@@ -700,6 +721,16 @@
   position: absolute;
   width: min(430px, calc(100% - 36px));
   z-index: 74;
+}
+
+.trackWithBetting .bettingPanel {
+  align-self: stretch;
+  bottom: auto;
+  left: auto;
+  max-height: none;
+  max-width: none;
+  position: relative;
+  width: 100%;
 }
 
 .bettingPanelLocked {
@@ -1583,6 +1614,11 @@
     overflow: visible;
   }
 
+  .trackWithBetting {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
   .raceViewport {
     background: #081315;
     border: 1px solid rgb(255 255 255 / 12%);
@@ -1590,6 +1626,10 @@
     box-shadow: 0 16px 42px rgb(0 0 0 / 36%);
     height: clamp(320px, 47svh, 410px);
     position: relative;
+  }
+
+  .trackWithBetting .raceViewport {
+    height: clamp(320px, 47svh, 410px);
   }
 
   .startHud {

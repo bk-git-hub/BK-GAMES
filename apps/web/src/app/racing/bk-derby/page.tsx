@@ -1097,10 +1097,8 @@ function RacingBettingPanel({
   const isBettingOpen =
     tableState?.phase === "BETTING" && Boolean(tableState.race);
   const amountValue = parsePointAmountText(amount);
-  const estimatedOdds = getEstimatedOddsMultiplier(
-    selectedBetType,
-    tableState?.fieldSize ?? entries.length,
-  );
+  const fieldSize = tableState?.fieldSize ?? entries.length;
+  const estimatedOdds = getEstimatedOddsMultiplier(selectedBetType, fieldSize);
   const estimatedReturn =
     amountValue === null ? null : Math.floor(amountValue * estimatedOdds);
   const entryById = new Map(entries.map((entry) => [entry.raceEntryId, entry]));
@@ -1154,6 +1152,7 @@ function RacingBettingPanel({
           >
             <span>{config.shortLabel}</span>
             <strong>{config.label}</strong>
+            <em>{formatOddsMultiplier(config.type, fieldSize)}</em>
           </button>
         ))}
       </div>
@@ -1205,9 +1204,9 @@ function RacingBettingPanel({
             >
               <span className={styles.betHorseNumber}>{entry.number}</span>
               <span className={styles.betHorseName}>{entry.name}</span>
-              <span className={styles.betHorseMark}>
-                {selectedOrder ? `${selectedOrder}` : "odds"}
-              </span>
+              {selectedOrder ? (
+                <span className={styles.betHorseMark}>{selectedOrder}</span>
+              ) : null}
             </button>
           );
         })}
@@ -2171,6 +2170,10 @@ function formatPointText(value: string | null | undefined) {
 
 function formatPoints(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
+}
+
+function formatOddsMultiplier(betType: RacingBetType, fieldSize: number) {
+  return `x${getEstimatedOddsMultiplier(betType, fieldSize).toFixed(1)}`;
 }
 
 function getEstimatedOddsMultiplier(betType: RacingBetType, fieldSize: number) {

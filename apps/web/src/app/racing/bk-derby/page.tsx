@@ -987,7 +987,6 @@ export default function BkDerbyPage() {
               onSubmit={handleSubmitBet}
               onToggleEntry={handleToggleBetEntry}
               playerNickname={racing.player?.nickname ?? null}
-              raceHistory={raceHistory}
               recentTickets={recentTickets}
               selectedBetType={effectiveBetType}
               selectedEntryIds={activeSelectedBetEntryIds}
@@ -995,6 +994,7 @@ export default function BkDerbyPage() {
               validationReason={bettingValidation.reason}
               walletBalance={racing.walletBalance}
             />
+            <RaceHistoryList history={raceHistory} />
           </div>
         </div>
       </section>
@@ -1064,7 +1064,6 @@ function RacingBettingPanel({
   onSubmit,
   onToggleEntry,
   playerNickname,
-  raceHistory,
   recentTickets,
   selectedBetType,
   selectedEntryIds,
@@ -1085,7 +1084,6 @@ function RacingBettingPanel({
   onSubmit: () => void;
   onToggleEntry: (raceEntryId: string) => void;
   playerNickname: string | null;
-  raceHistory: RaceHistoryViewState;
   recentTickets: RacingTicketItem[];
   selectedBetType: RacingBetType;
   selectedEntryIds: string[];
@@ -1136,8 +1134,6 @@ function RacingBettingPanel({
           {walletBalance ? `${formatPointText(walletBalance)}P` : "Wallet"}
         </strong>
       </div>
-
-      <RaceHistoryList history={raceHistory} />
 
       <div className={styles.betTypeGrid} aria-label="Bet type">
         {availableBetTypes.map((config) => (
@@ -1387,19 +1383,22 @@ function RaceHistoryList({ history }: { history: RaceHistoryViewState }) {
 
             return (
               <li className={styles.raceHistoryItem} key={race.raceId}>
-                <div className={styles.raceHistoryItemHeader}>
-                  <span>Race {race.raceNo}</span>
-                  <time>{formatHistoryTime(race.settledAt)}</time>
-                </div>
-                <div className={styles.raceHistoryResultGrid}>
+                <span className={styles.raceHistoryRaceNo}>
+                  Race {race.raceNo}
+                </span>
+                <div
+                  className={styles.raceHistoryResultChips}
+                  aria-label={`Race ${race.raceNo} result order`}
+                >
                   {orderedEntries.map((entry) => (
                     <span
-                      className={styles.raceHistoryResult}
+                      className={`${styles.raceHistoryHorseChip} ${
+                        styles[getHistoryHorseColor(entry.number)]
+                      }`}
                       key={entry.raceEntryId}
+                      title={`${formatKoreanRank(entry.finalRank)} ${entry.number}번`}
                     >
-                      <strong>{entry.finalRank}</strong>
-                      <em>{entry.number}</em>
-                      <time>{formatFinishTime(entry.finishedAtMs)}</time>
+                      {entry.number}
                     </span>
                   ))}
                 </div>
@@ -2129,14 +2128,6 @@ function getTicketStatusLabel(status: RacingTicketStatus) {
   return "Issuing";
 }
 
-function formatHistoryTime(value: string | null) {
-  if (!value) {
-    return "--:--";
-  }
-
-  return formatTicketTime(value);
-}
-
 function formatTicketTime(value: string) {
   const date = new Date(value);
 
@@ -2150,6 +2141,14 @@ function formatTicketTime(value: string) {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function getHistoryHorseColor(number: number): AssetHorse["color"] {
+  const normalizedNumber = Math.max(1, Math.trunc(number));
+
+  return (
+    assetHorses[(normalizedNumber - 1) % assetHorses.length]?.color ?? "red"
+  );
 }
 
 function parsePointAmountText(value: string | null | undefined) {

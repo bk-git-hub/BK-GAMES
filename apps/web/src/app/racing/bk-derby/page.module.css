@@ -358,6 +358,10 @@
   position: relative;
 }
 
+.trackWithBetting .raceHistoryList {
+  grid-column: 1 / -1;
+}
+
 .worldLayer {
   height: 100%;
   left: 0;
@@ -1245,16 +1249,15 @@
 .raceHistoryList {
   background: rgb(255 255 255 / 5%);
   border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 6px;
+  border-radius: 8px;
   display: grid;
-  gap: 7px;
-  max-height: 238px;
+  gap: 8px;
+  max-height: 186px;
   overflow: auto;
-  padding: 8px;
+  padding: 10px;
 }
 
-.raceHistoryHeader,
-.raceHistoryItemHeader {
+.raceHistoryHeader {
   align-items: center;
   display: flex;
   justify-content: space-between;
@@ -1262,7 +1265,7 @@
 }
 
 .raceHistoryHeader span,
-.raceHistoryItemHeader span {
+.raceHistoryRaceNo {
   color: #9fb6aa;
   font-size: 10px;
   font-weight: 900;
@@ -1296,69 +1299,54 @@
 
 .raceHistoryList ol {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .raceHistoryItem {
+  align-items: center;
   background: rgb(255 255 255 / 6%);
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 6px;
   display: grid;
-  gap: 7px;
-  padding: 7px;
+  gap: 10px;
+  grid-template-columns: minmax(64px, max-content) minmax(0, 1fr);
+  min-height: 38px;
+  padding: 5px 7px;
 }
 
-.raceHistoryItemHeader time {
-  color: #c5d5cd;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.raceHistoryResultGrid {
-  display: grid;
-  gap: 5px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.raceHistoryResult {
-  align-items: center;
-  background: rgb(4 9 10 / 44%);
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 5px;
-  display: grid;
-  gap: 2px;
-  grid-template-columns: 16px 18px minmax(0, 1fr);
-  min-height: 27px;
-  padding: 3px 4px;
-}
-
-.raceHistoryResult strong,
-.raceHistoryResult em,
-.raceHistoryResult time {
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.raceHistoryResult strong {
-  color: #66ef9b;
-}
-
-.raceHistoryResult em {
-  color: #fff4c4;
-}
-
-.raceHistoryResult time {
-  color: #c5d5cd;
-  overflow: hidden;
-  text-align: right;
-  text-overflow: ellipsis;
+.raceHistoryRaceNo {
+  color: #dbe6df;
   white-space: nowrap;
+}
+
+.raceHistoryResultChips {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.raceHistoryHorseChip {
+  align-items: center;
+  border: 1px solid rgb(255 255 255 / 34%);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 22%),
+    0 6px 12px rgb(0 0 0 / 28%);
+  color: white;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  height: 28px;
+  justify-content: center;
+  min-width: 28px;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 58%);
+  width: 28px;
 }
 
 .raceHistoryEmpty {
@@ -1736,6 +1724,10 @@
 
 .green {
   background: #2ba65a;
+}
+
+.raceHistoryHorseChip.raceHistoryHorseChip {
+  color: white;
 }
 
 .spriteRows {

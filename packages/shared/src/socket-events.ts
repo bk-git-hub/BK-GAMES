@@ -480,6 +480,53 @@ export type RacingTablesResponse = {
   tables: RacingTableSummary[];
 };
 
+export type RacingSettledRaceEntrySnapshot = RacingRaceEntrySnapshot & {
+  finalRank: number;
+  finishedAtMs: number;
+};
+
+export type RacingSettledRaceSnapshot = Omit<RacingRaceSnapshot, "entries"> & {
+  entries: RacingSettledRaceEntrySnapshot[];
+};
+
+export type RacingRaceResultsResponse = {
+  tableId: string;
+  date: string;
+  limit: number;
+  races: RacingSettledRaceSnapshot[];
+};
+
+export type RacingHorseRecentResultSnapshot = {
+  raceId: string;
+  raceNo: number;
+  finalRank: number;
+  finishedAtMs: number;
+};
+
+export type RacingHorseStatsSnapshot = RacingHorseSnapshot & {
+  starts: number;
+  wins: number;
+  winRate: number;
+  top2: number;
+  top2Rate: number;
+  top3: number;
+  top3Rate: number;
+  averageRank: number | null;
+  averageFinishMs: number | null;
+  bestRank: number | null;
+  worstRank: number | null;
+  recentRanks: number[];
+  recentResults: RacingHorseRecentResultSnapshot[];
+};
+
+export type RacingHorseStatsResponse = {
+  tableId: string;
+  date: string;
+  limit: number;
+  raceCount: number;
+  horses: RacingHorseStatsSnapshot[];
+};
+
 export type RacingTableEventType =
   | "TABLE_JOINED"
   | "RACE_SCHEDULED"

@@ -1588,7 +1588,7 @@
     border: 1px solid rgb(255 255 255 / 12%);
     border-radius: 8px;
     box-shadow: 0 16px 42px rgb(0 0 0 / 36%);
-    height: clamp(286px, 42svh, 380px);
+    height: clamp(320px, 47svh, 410px);
     position: relative;
   }
 
@@ -1717,6 +1717,10 @@
     font-size: 10px;
     height: 20px;
     min-width: 20px;
+  }
+
+  .runner {
+    top: calc(var(--lane-top) + 12px);
   }
 
   .bettingPanel {

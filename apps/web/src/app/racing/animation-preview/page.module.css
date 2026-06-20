@@ -818,7 +818,7 @@
   color: #dbe6df;
   display: grid;
   gap: 2px;
-  min-height: 43px;
+  min-height: 48px;
   padding: 6px 4px;
 }
 
@@ -831,6 +831,14 @@
 
 .betTypeButton strong {
   font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.betTypeButton em {
+  color: #fff4c4;
+  font-size: 9px;
+  font-style: normal;
   font-weight: 900;
   line-height: 1;
 }
@@ -915,7 +923,7 @@
   color: white;
   display: grid;
   gap: 5px;
-  grid-template-columns: 26px minmax(0, 1fr) 30px;
+  grid-template-columns: 26px minmax(0, 1fr);
   min-height: 36px;
   padding: 4px;
   text-align: left;
@@ -937,6 +945,7 @@
 .betHorseSelected {
   border-color: rgb(255 244 196 / 78%);
   box-shadow: inset 0 0 0 1px rgb(255 244 196 / 34%);
+  grid-template-columns: 26px minmax(0, 1fr) 30px;
 }
 
 .betHorseNumber,
@@ -1088,6 +1097,276 @@
 
 .betFeedbackPending strong {
   color: #fff4c4;
+}
+
+.ticketList {
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 6px;
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+}
+
+.ticketListHeader,
+.ticketItemTopline,
+.ticketItemMain {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ticketListHeader span,
+.ticketItemTopline span {
+  color: #9fb6aa;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.ticketListHeader strong {
+  align-items: center;
+  background: rgb(255 244 196 / 14%);
+  border: 1px solid rgb(255 244 196 / 22%);
+  border-radius: 999px;
+  color: #fff4c4;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  height: 22px;
+  justify-content: center;
+  min-width: 22px;
+}
+
+.ticketList ol {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ticketItem {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 4%)),
+    repeating-linear-gradient(
+      90deg,
+      rgb(255 255 255 / 4%) 0 1px,
+      transparent 1px 12px
+    );
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-left: 3px solid rgb(255 244 196 / 44%);
+  border-radius: 6px;
+  display: grid;
+  gap: 6px;
+  padding: 7px;
+}
+
+.ticketItemAccepted {
+  border-left-color: #66ef9b;
+}
+
+.ticketItemRejected {
+  border-left-color: #ffb6a8;
+}
+
+.ticketItemPending {
+  border-left-color: #fff4c4;
+}
+
+.ticketItemTopline strong {
+  color: #dbe6df;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.ticketItemAccepted .ticketItemTopline strong {
+  color: #66ef9b;
+}
+
+.ticketItemRejected .ticketItemTopline strong {
+  color: #ffb6a8;
+}
+
+.ticketItemPending .ticketItemTopline strong {
+  color: #fff4c4;
+}
+
+.ticketItemMain strong {
+  color: #fff4c4;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.ticketItemMain span,
+.ticketItemMain time {
+  color: #c5d5cd;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ticketSelections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ticketSelection {
+  align-items: center;
+  background: rgb(255 255 255 / 10%);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 5px;
+  color: white;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  height: 24px;
+  justify-content: center;
+  min-width: 28px;
+  padding: 0 6px;
+}
+
+.ticketMessage,
+.ticketEmpty {
+  color: #9fb6aa;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.raceHistoryList {
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 6px;
+  display: grid;
+  gap: 7px;
+  max-height: 238px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.raceHistoryHeader,
+.raceHistoryItemHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.raceHistoryHeader span,
+.raceHistoryItemHeader span {
+  color: #9fb6aa;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.raceHistoryHeader strong {
+  color: #fff4c4;
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  margin-top: 4px;
+}
+
+.raceHistoryHeader em {
+  align-items: center;
+  background: rgb(102 239 155 / 12%);
+  border: 1px solid rgb(102 239 155 / 22%);
+  border-radius: 999px;
+  color: #66ef9b;
+  display: inline-flex;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  height: 22px;
+  justify-content: center;
+  min-width: 22px;
+}
+
+.raceHistoryList ol {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.raceHistoryItem {
+  background: rgb(255 255 255 / 6%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 6px;
+  display: grid;
+  gap: 7px;
+  padding: 7px;
+}
+
+.raceHistoryItemHeader time {
+  color: #c5d5cd;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.raceHistoryResultGrid {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.raceHistoryResult {
+  align-items: center;
+  background: rgb(4 9 10 / 44%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 5px;
+  display: grid;
+  gap: 2px;
+  grid-template-columns: 16px 18px minmax(0, 1fr);
+  min-height: 27px;
+  padding: 3px 4px;
+}
+
+.raceHistoryResult strong,
+.raceHistoryResult em,
+.raceHistoryResult time {
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.raceHistoryResult strong {
+  color: #66ef9b;
+}
+
+.raceHistoryResult em {
+  color: #fff4c4;
+}
+
+.raceHistoryResult time {
+  color: #c5d5cd;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raceHistoryEmpty {
+  color: #9fb6aa;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0;
 }
 
 .gameHud .socketError {

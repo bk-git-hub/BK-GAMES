@@ -17,7 +17,9 @@ import {
   type RacingJoinTablePayload,
   type RacingPlaceBetPayload,
   type RacingRaceEntrySnapshot,
+  type RacingRaceResultsResponse,
   type RacingRaceTickSnapshot,
+  type RacingSettledRaceSnapshot,
   type RacingSocketErrorPayload,
   type RacingTableEventPayload,
   type RacingTableSummary,
@@ -92,6 +94,37 @@ type BetFeedback = {
   title: string;
 };
 
+type RacingTicketStatus = "pending" | "accepted" | "rejected";
+
+type RacingTicketSelection = {
+  color: AssetHorse["color"];
+  name: string;
+  number: number;
+  raceEntryId: string;
+};
+
+type RacingTicketItem = {
+  amount: number | null;
+  betId: string | null;
+  betType: RacingBetType;
+  createdAt: string;
+  localId: string;
+  message: string | null;
+  raceId: string;
+  raceNo: number | null;
+  selections: RacingTicketSelection[];
+  status: RacingTicketStatus;
+};
+
+type RaceHistoryStatus = "loading" | "ready" | "error";
+
+type RaceHistoryViewState = {
+  date: string | null;
+  errorMessage: string | null;
+  races: RacingSettledRaceSnapshot[];
+  status: RaceHistoryStatus;
+};
+
 type GameTokenResponse = {
   expiresInSeconds: number;
   token: string;
@@ -139,6 +172,7 @@ const tableId = "main";
 const previewGuestUserId = "preview:racing-animation";
 const previewGuestNickname = "Racing Preview";
 const restPollMs = 1_000;
+const raceHistoryPollMs = 10_000;
 const localTickMs = 160;
 const minimumRaceRunDurationMs = 1_000;
 const minimumTickIntervalMs = 10;
@@ -157,6 +191,7 @@ const runnerFinishNoseOffsetPx = 185;
 const postFinishTrackOvershootRatio = 0.075;
 const maxVisualRaceProgress = 1 + postFinishTrackOvershootRatio;
 const maxRaceTimelineCacheEntries = 8;
+const maxRecentTicketItems = 8;
 const maxCameraTranslatePercent = ((worldScale - 1) / worldScale) * 100;
 const leaderViewportAnchorPercent = 50 / worldScale;
 const laneTops = ["14%", "23%", "32%", "41%", "50%", "57%", "64%", "71%"];
@@ -290,6 +325,7 @@ const fallbackHorses: DisplayHorse[] = assetHorses.map((horse, index) => ({
 
 export default function RacingAnimationPreviewPage() {
   const racing = useRacingTable();
+  const raceHistory = useRacingRaceHistory();
   const usesBackendState = Boolean(racing.tableState?.race);
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [persistedResultBoard, setPersistedResultBoard] =
@@ -305,6 +341,7 @@ export default function RacingAnimationPreviewPage() {
   const [selectedBetEntryIds, setSelectedBetEntryIds] = useState<string[]>([]);
   const [betAmount, setBetAmount] = useState("100");
   const [betFeedback, setBetFeedback] = useState<BetFeedback | null>(null);
+  const [localTickets, setLocalTickets] = useState<RacingTicketItem[]>([]);
   const [pendingBetRequest, setPendingBetRequest] = useState<{
     commandId: string;
     raceId: string;
@@ -413,6 +450,29 @@ export default function RacingAnimationPreviewPage() {
     selectedBetType: effectiveBetType,
     socketError: betSocketError,
   });
+  const recentTickets = useMemo(
+    () =>
+      buildRecentTickets({
+        acceptedEvents: racing.betEvents,
+        betSocketError,
+        currentRace: racing.tableState?.race ?? null,
+        entries: bettingHorses,
+        fallbackBetType: effectiveBetType,
+        localTickets,
+        pendingBetRequest,
+        playerId: racing.player?.id ?? null,
+      }),
+    [
+      betSocketError,
+      bettingHorses,
+      effectiveBetType,
+      localTickets,
+      pendingBetRequest,
+      racing.betEvents,
+      racing.player?.id,
+      racing.tableState?.race,
+    ],
+  );
   const bettingValidation = getBettingValidation({
     amountText: betAmount,
     connectionStatus: racing.connectionStatus,
@@ -687,7 +747,8 @@ export default function RacingAnimationPreviewPage() {
   };
 
   const handleSubmitBet = () => {
-    const raceId = racing.tableState?.race?.raceId;
+    const race = racing.tableState?.race;
+    const raceId = race?.raceId;
     const normalizedAmount = parsePointAmountText(betAmount);
 
     if (!raceId || !normalizedAmount || bettingValidation.reason) {
@@ -695,6 +756,22 @@ export default function RacingAnimationPreviewPage() {
     }
 
     const commandId = createRacingCommandId("racing-bet");
+    const ticketSelections = buildTicketSelections(
+      activeSelectedBetEntryIds,
+      bettingHorses,
+    );
+    const pendingTicket: RacingTicketItem = {
+      amount: normalizedAmount,
+      betId: null,
+      betType: effectiveBetType,
+      createdAt: new Date().toISOString(),
+      localId: commandId,
+      message: "Issuing ticket",
+      raceId,
+      raceNo: race?.raceNo ?? null,
+      selections: ticketSelections,
+      status: "pending",
+    };
 
     try {
       racing.placeBet({
@@ -709,17 +786,33 @@ export default function RacingAnimationPreviewPage() {
         commandId,
         raceId,
       });
+      setLocalTickets((currentTickets) =>
+        limitRecentTickets([
+          pendingTicket,
+          ...currentTickets.filter((ticket) => ticket.localId !== commandId),
+        ]),
+      );
       setBetFeedback({
         detail: `${activeBetTypeConfig.label} ${formatPoints(normalizedAmount)}P 발권 요청을 보냈습니다.`,
         title: "Issuing ticket",
         tone: "pending",
       });
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Bet request could not send.";
+
+      setLocalTickets((currentTickets) =>
+        limitRecentTickets([
+          {
+            ...pendingTicket,
+            message: errorMessage,
+            status: "rejected",
+          },
+          ...currentTickets,
+        ]),
+      );
       setBetFeedback({
-        detail:
-          error instanceof Error
-            ? error.message
-            : "Bet request could not send.",
+        detail: errorMessage,
         title: "Ticket rejected",
         tone: "error",
       });
@@ -742,11 +835,7 @@ export default function RacingAnimationPreviewPage() {
         </header>
 
         <div className={styles.raceFrame}>
-          <div
-            className={`${styles.track} ${
-              !isVisuallyRunning ? styles.trackWithBetting : ""
-            }`}
-          >
+          <div className={`${styles.track} ${styles.trackWithBetting}`}>
             <div
               className={styles.raceViewport}
               aria-label="Live racing game"
@@ -884,28 +973,28 @@ export default function RacingAnimationPreviewPage() {
               ) : null}
             </div>
 
-            {!isVisuallyRunning ? (
-              <RacingBettingPanel
-                amount={betAmount}
-                availableBetTypes={availableBetTypeConfigs}
-                entries={bettingHorses}
-                feedback={visibleBetFeedback}
-                isPending={isBetSubmissionPending}
-                onAddStake={handleAddStake}
-                onAmountChange={handleBetAmountChange}
-                onClearSelections={handleClearBetSlip}
-                onSelectBetType={handleSelectBetType}
-                onSetStake={handleSetStake}
-                onSubmit={handleSubmitBet}
-                onToggleEntry={handleToggleBetEntry}
-                playerNickname={racing.player?.nickname ?? null}
-                selectedBetType={effectiveBetType}
-                selectedEntryIds={activeSelectedBetEntryIds}
-                tableState={racing.tableState}
-                validationReason={bettingValidation.reason}
-                walletBalance={racing.walletBalance}
-              />
-            ) : null}
+            <RacingBettingPanel
+              amount={betAmount}
+              availableBetTypes={availableBetTypeConfigs}
+              entries={bettingHorses}
+              feedback={visibleBetFeedback}
+              isPending={isBetSubmissionPending}
+              onAddStake={handleAddStake}
+              onAmountChange={handleBetAmountChange}
+              onClearSelections={handleClearBetSlip}
+              onSelectBetType={handleSelectBetType}
+              onSetStake={handleSetStake}
+              onSubmit={handleSubmitBet}
+              onToggleEntry={handleToggleBetEntry}
+              playerNickname={racing.player?.nickname ?? null}
+              raceHistory={raceHistory}
+              recentTickets={recentTickets}
+              selectedBetType={effectiveBetType}
+              selectedEntryIds={activeSelectedBetEntryIds}
+              tableState={racing.tableState}
+              validationReason={bettingValidation.reason}
+              walletBalance={racing.walletBalance}
+            />
           </div>
         </div>
       </section>
@@ -975,6 +1064,8 @@ function RacingBettingPanel({
   onSubmit,
   onToggleEntry,
   playerNickname,
+  raceHistory,
+  recentTickets,
   selectedBetType,
   selectedEntryIds,
   tableState,
@@ -994,6 +1085,8 @@ function RacingBettingPanel({
   onSubmit: () => void;
   onToggleEntry: (raceEntryId: string) => void;
   playerNickname: string | null;
+  raceHistory: RaceHistoryViewState;
+  recentTickets: RacingTicketItem[];
   selectedBetType: RacingBetType;
   selectedEntryIds: string[];
   tableState: RacingTableViewState | null;
@@ -1028,7 +1121,7 @@ function RacingBettingPanel({
     >
       <div className={styles.betPanelHeader}>
         <div>
-          <span>Betting window</span>
+          <span>Ticket window</span>
           <strong>
             {tableState?.race ? `Race ${tableState.race.raceNo}` : "Race"}
           </strong>
@@ -1045,6 +1138,8 @@ function RacingBettingPanel({
           {walletBalance ? `${formatPointText(walletBalance)}P` : "Wallet"}
         </strong>
       </div>
+
+      <RaceHistoryList history={raceHistory} />
 
       <div className={styles.betTypeGrid} aria-label="Bet type">
         {availableBetTypes.map((config) => (
@@ -1201,8 +1296,187 @@ function RacingBettingPanel({
         <strong>{feedback?.title ?? "Ticket status"}</strong>
         <span>{feedback?.detail ?? validationReason ?? "Ready"}</span>
       </div>
+
+      <section className={styles.ticketList} aria-label="Recent tickets">
+        <div className={styles.ticketListHeader}>
+          <span>Recent tickets</span>
+          <strong>{recentTickets.length}</strong>
+        </div>
+        {recentTickets.length > 0 ? (
+          <ol>
+            {recentTickets.map((ticket) => {
+              const ticketConfig = getRacingBetTypeConfig(ticket.betType);
+
+              return (
+                <li
+                  className={`${styles.ticketItem} ${
+                    ticket.status === "accepted"
+                      ? styles.ticketItemAccepted
+                      : ticket.status === "rejected"
+                        ? styles.ticketItemRejected
+                        : styles.ticketItemPending
+                  }`}
+                  key={ticket.localId}
+                >
+                  <div className={styles.ticketItemTopline}>
+                    <span>
+                      {ticket.raceNo ? `Race ${ticket.raceNo}` : "Race"}
+                    </span>
+                    <strong>{getTicketStatusLabel(ticket.status)}</strong>
+                  </div>
+                  <div className={styles.ticketItemMain}>
+                    <strong>{ticketConfig.shortLabel}</strong>
+                    <span>
+                      {ticket.amount === null
+                        ? "Stake -"
+                        : `${formatPoints(ticket.amount)}P`}
+                    </span>
+                    <time>{formatTicketTime(ticket.createdAt)}</time>
+                  </div>
+                  <div
+                    className={styles.ticketSelections}
+                    aria-label="Ticket selections"
+                  >
+                    {ticket.selections.length > 0 ? (
+                      ticket.selections.map((selection, index) => (
+                        <span
+                          className={`${styles.ticketSelection} ${
+                            styles[selection.color]
+                          }`}
+                          key={`${ticket.localId}-${selection.raceEntryId}-${index}`}
+                        >
+                          {ticketConfig.ordered ? `${index + 1}.` : ""}
+                          {selection.number}
+                        </span>
+                      ))
+                    ) : (
+                      <span className={styles.ticketSelection}>-</span>
+                    )}
+                  </div>
+                  {ticket.message ? (
+                    <em className={styles.ticketMessage}>{ticket.message}</em>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          <p className={styles.ticketEmpty}>No tickets yet</p>
+        )}
+      </section>
     </aside>
   );
+}
+
+function RaceHistoryList({ history }: { history: RaceHistoryViewState }) {
+  return (
+    <section className={styles.raceHistoryList} aria-label="Race history">
+      <div className={styles.raceHistoryHeader}>
+        <div>
+          <span>Race history</span>
+          <strong>{history.date ?? "Today"}</strong>
+        </div>
+        <em>{history.races.length}</em>
+      </div>
+
+      {history.races.length > 0 ? (
+        <ol>
+          {history.races.map((race) => {
+            const orderedEntries = [...race.entries].sort(
+              (left, right) => left.finalRank - right.finalRank,
+            );
+
+            return (
+              <li className={styles.raceHistoryItem} key={race.raceId}>
+                <div className={styles.raceHistoryItemHeader}>
+                  <span>Race {race.raceNo}</span>
+                  <time>{formatHistoryTime(race.settledAt)}</time>
+                </div>
+                <div className={styles.raceHistoryResultGrid}>
+                  {orderedEntries.map((entry) => (
+                    <span
+                      className={styles.raceHistoryResult}
+                      key={entry.raceEntryId}
+                    >
+                      <strong>{entry.finalRank}</strong>
+                      <em>{entry.number}</em>
+                      <time>{formatFinishTime(entry.finishedAtMs)}</time>
+                    </span>
+                  ))}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className={styles.raceHistoryEmpty}>
+          {history.status === "loading"
+            ? "Loading results"
+            : (history.errorMessage ?? "No settled races yet")}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function useRacingRaceHistory(): RaceHistoryViewState {
+  const [history, setHistory] = useState<RaceHistoryViewState>({
+    date: null,
+    errorMessage: null,
+    races: [],
+    status: "loading",
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    let pollTimer: number | null = null;
+
+    async function loadRaceHistory() {
+      try {
+        const nextHistory = await requestRacingRaceHistory(controller.signal);
+
+        if (cancelled) {
+          return;
+        }
+
+        setHistory({
+          date: nextHistory.date,
+          errorMessage: null,
+          races: nextHistory.races,
+          status: "ready",
+        });
+      } catch (error) {
+        if (cancelled || controller.signal.aborted) {
+          return;
+        }
+
+        setHistory((currentHistory) => ({
+          ...currentHistory,
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : "Race history request failed.",
+          status: "error",
+        }));
+      }
+    }
+
+    void loadRaceHistory();
+    pollTimer = window.setInterval(() => {
+      void loadRaceHistory();
+    }, raceHistoryPollMs);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+      }
+    };
+  }, []);
+
+  return history;
 }
 
 function useRacingTable() {
@@ -1213,6 +1487,7 @@ function useRacingTable() {
     useState<ConnectionStatus>("requesting-token");
   const [latestTableEvent, setLatestTableEvent] =
     useState<RacingTableEventPayload | null>(null);
+  const [betEvents, setBetEvents] = useState<RacingTableEventPayload[]>([]);
   const [latestTick, setLatestTick] = useState<RacingRaceTickSnapshot | null>(
     null,
   );
@@ -1372,6 +1647,19 @@ function useRacingTable() {
         (payload: RacingTableEventPayload) => {
           setLatestTableEvent(payload);
 
+          if (payload.type === "BET_PLACED") {
+            const eventKey = getRacingTicketEventKey(payload);
+
+            setBetEvents((currentEvents) =>
+              [
+                payload,
+                ...currentEvents.filter(
+                  (event) => getRacingTicketEventKey(event) !== eventKey,
+                ),
+              ].slice(0, maxRecentTicketItems * 2),
+            );
+          }
+
           if (payload.type === "RACE_TICK" && payload.tick) {
             setLatestTick(payload.tick);
           }
@@ -1418,6 +1706,7 @@ function useRacingTable() {
   }, []);
 
   return {
+    betEvents,
     connectionStatus,
     latestTableEvent,
     latestTick,
@@ -1447,6 +1736,21 @@ async function requestRacingTableState(signal: AbortSignal) {
   }
 
   return table;
+}
+
+async function requestRacingRaceHistory(signal: AbortSignal) {
+  const url = new URL(`${resolveRacingServerUrl()}/racing/races`);
+
+  url.searchParams.set("tableId", tableId);
+  url.searchParams.set("limit", "8");
+
+  const response = await fetch(url, { signal });
+
+  if (!response.ok) {
+    throw new Error(`Racing history request failed (${response.status}).`);
+  }
+
+  return (await response.json()) as RacingRaceResultsResponse;
 }
 
 async function requestGameToken(signal: AbortSignal) {
@@ -1650,6 +1954,203 @@ function getVisibleBetFeedback(input: {
   }
 
   return input.fallback;
+}
+
+function buildRecentTickets(input: {
+  acceptedEvents: RacingTableEventPayload[];
+  betSocketError: RacingSocketErrorPayload | null;
+  currentRace: RacingTableViewState["race"];
+  entries: DisplayHorse[];
+  fallbackBetType: RacingBetType;
+  localTickets: RacingTicketItem[];
+  pendingBetRequest: { commandId: string; raceId: string } | null;
+  playerId: string | null;
+}) {
+  let mergedTickets = input.localTickets.map((ticket) =>
+    input.betSocketError &&
+    input.pendingBetRequest?.commandId === ticket.localId
+      ? {
+          ...ticket,
+          message: input.betSocketError.message,
+          status: "rejected" as const,
+        }
+      : ticket,
+  );
+
+  for (let index = input.acceptedEvents.length - 1; index >= 0; index -= 1) {
+    const event = input.acceptedEvents[index];
+    const raceId = event?.raceId;
+
+    if (
+      !event ||
+      event.type !== "BET_PLACED" ||
+      !input.playerId ||
+      event.actorUserId !== input.playerId ||
+      !raceId
+    ) {
+      continue;
+    }
+
+    mergedTickets = upsertAcceptedTicket(mergedTickets, {
+      amount: null,
+      betId: event.betId ?? null,
+      betType: event.betType ?? input.fallbackBetType,
+      createdAt: event.createdAt,
+      localId: event.betId ?? getRacingTicketEventKey(event),
+      message: null,
+      raceId,
+      raceNo:
+        input.currentRace?.raceId === raceId ? input.currentRace.raceNo : null,
+      selections: buildTicketSelections(
+        event.raceEntryIds ?? [],
+        input.entries,
+      ),
+      status: "accepted",
+    });
+  }
+
+  return limitRecentTickets(mergedTickets);
+}
+
+function buildTicketSelections(
+  raceEntryIds: string[],
+  entries: DisplayHorse[],
+): RacingTicketSelection[] {
+  const entryById = new Map(entries.map((entry) => [entry.raceEntryId, entry]));
+
+  return raceEntryIds.map((raceEntryId, index) => {
+    const entry = entryById.get(raceEntryId);
+    const fallback = fallbackHorses[index % fallbackHorses.length];
+
+    return {
+      color: entry?.color ?? fallback?.color ?? "red",
+      name: entry?.name ?? fallback?.name ?? `Entry ${index + 1}`,
+      number: entry?.number ?? fallback?.number ?? index + 1,
+      raceEntryId,
+    };
+  });
+}
+
+function upsertAcceptedTicket(
+  currentTickets: RacingTicketItem[],
+  acceptedTicket: RacingTicketItem,
+) {
+  const duplicateIndex = acceptedTicket.betId
+    ? currentTickets.findIndex(
+        (ticket) => ticket.betId === acceptedTicket.betId,
+      )
+    : -1;
+
+  if (duplicateIndex >= 0) {
+    const nextTickets = [...currentTickets];
+    const currentTicket = nextTickets[duplicateIndex];
+
+    nextTickets[duplicateIndex] = {
+      ...currentTicket,
+      ...acceptedTicket,
+      amount: currentTicket.amount ?? acceptedTicket.amount,
+      localId: currentTicket.localId,
+      message: null,
+      raceNo: acceptedTicket.raceNo ?? currentTicket.raceNo,
+      status: "accepted",
+    };
+
+    return limitRecentTickets(nextTickets);
+  }
+
+  const pendingIndex = currentTickets.findIndex(
+    (ticket) =>
+      ticket.status === "pending" &&
+      ticket.raceId === acceptedTicket.raceId &&
+      ticket.betType === acceptedTicket.betType &&
+      hasSameTicketSelections(ticket.selections, acceptedTicket.selections),
+  );
+
+  if (pendingIndex >= 0) {
+    const nextTickets = [...currentTickets];
+    const pendingTicket = nextTickets[pendingIndex];
+
+    nextTickets[pendingIndex] = {
+      ...pendingTicket,
+      ...acceptedTicket,
+      amount: pendingTicket.amount ?? acceptedTicket.amount,
+      createdAt: pendingTicket.createdAt,
+      localId: pendingTicket.localId,
+      message: null,
+      raceNo: acceptedTicket.raceNo ?? pendingTicket.raceNo,
+      status: "accepted",
+    };
+
+    return limitRecentTickets(nextTickets);
+  }
+
+  return limitRecentTickets([acceptedTicket, ...currentTickets]);
+}
+
+function hasSameTicketSelections(
+  leftSelections: RacingTicketSelection[],
+  rightSelections: RacingTicketSelection[],
+) {
+  if (leftSelections.length !== rightSelections.length) {
+    return false;
+  }
+
+  return leftSelections.every(
+    (selection, index) =>
+      selection.raceEntryId === rightSelections[index]?.raceEntryId,
+  );
+}
+
+function limitRecentTickets(tickets: RacingTicketItem[]) {
+  return tickets.slice(0, maxRecentTicketItems);
+}
+
+function getRacingTicketEventKey(event: RacingTableEventPayload) {
+  return (
+    event.betId ??
+    [
+      event.type,
+      event.actorUserId,
+      event.raceId ?? "race",
+      event.createdAt,
+      ...(event.raceEntryIds ?? []),
+    ].join(":")
+  );
+}
+
+function getTicketStatusLabel(status: RacingTicketStatus) {
+  if (status === "accepted") {
+    return "Accepted";
+  }
+
+  if (status === "rejected") {
+    return "Rejected";
+  }
+
+  return "Issuing";
+}
+
+function formatHistoryTime(value: string | null) {
+  if (!value) {
+    return "--:--";
+  }
+
+  return formatTicketTime(value);
+}
+
+function formatTicketTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "--:--";
+  }
+
+  return date.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 function parsePointAmountText(value: string | null | undefined) {

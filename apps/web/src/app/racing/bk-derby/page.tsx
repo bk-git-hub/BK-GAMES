@@ -169,8 +169,8 @@ type RacingBetTypeConfig = {
 };
 
 const tableId = "main";
-const previewGuestUserId = "preview:racing-animation";
-const previewGuestNickname = "Racing Preview";
+const previewGuestUserId = "preview:bk-derby";
+const previewGuestNickname = "BK Derby Guest";
 const restPollMs = 1_000;
 const raceHistoryPollMs = 10_000;
 const localTickMs = 160;
@@ -323,7 +323,7 @@ const fallbackHorses: DisplayHorse[] = assetHorses.map((horse, index) => ({
   startX: "10.5%",
 }));
 
-export default function RacingAnimationPreviewPage() {
+export default function BkDerbyPage() {
   const racing = useRacingTable();
   const raceHistory = useRacingRaceHistory();
   const usesBackendState = Boolean(racing.tableState?.race);
@@ -821,12 +821,12 @@ export default function RacingAnimationPreviewPage() {
 
   return (
     <main className={styles.page}>
-      <section className={styles.shell} aria-labelledby="preview-title">
+      <section className={styles.shell} aria-labelledby="derby-title">
         <header className={styles.header}>
           <div className={styles.brand}>
             <span className={styles.brandMark}>BK</span>
             <div>
-              <h1 id="preview-title">Racing Animation</h1>
+              <h1 id="derby-title">BK Derby</h1>
               <p>
                 {usesBackendState ? "Backend linked" : "Asset path preview"}
               </p>

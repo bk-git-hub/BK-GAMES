@@ -21,6 +21,13 @@ const games = [
     status: "Open",
   },
   {
+    description: "Live horse racing with tickets, camera chase, and results.",
+    href: "/racing/bk-derby",
+    kind: "derby",
+    name: "BK Derby",
+    status: "Open",
+  },
+  {
     description: "A preview of the live boxing broadcast table.",
     href: "/boxing",
     kind: "boxing",
@@ -37,7 +44,9 @@ export function GameList() {
           <Club className="size-4" />
           <CardTitle>Games</CardTitle>
         </div>
-        <CardDescription>Platform entries stay separate from game runtime.</CardDescription>
+        <CardDescription>
+          Platform entries stay separate from game runtime.
+        </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         {games.map((game) => (
@@ -63,6 +72,16 @@ export function GameList() {
                     width={420}
                   />
                 </>
+              ) : game.kind === "derby" ? (
+                <div className="grid h-20 w-full place-items-center overflow-hidden rounded-md border border-emerald-200/30 bg-[linear-gradient(180deg,#134e4a_0_54%,#365314_54%_100%)] px-2">
+                  <Image
+                    alt=""
+                    className="h-auto w-full drop-shadow-[0_10px_14px_rgba(0,0,0,0.45)]"
+                    height={181}
+                    src="/racing/generated-reference-style/horse-01-red-gallop-7f.png"
+                    width={1442}
+                  />
+                </div>
               ) : (
                 <div className="grid h-20 w-full place-items-center rounded-md border border-amber-200/30 bg-[linear-gradient(135deg,#7f1d1d_0_48%,#0c4a6e_48%_100%)] text-amber-100">
                   <Dumbbell className="size-10" />

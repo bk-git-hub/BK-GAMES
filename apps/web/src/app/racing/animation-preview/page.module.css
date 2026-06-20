@@ -1851,6 +1851,28 @@
     min-height: 340px;
   }
 
+  .track {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    contain: layout;
+    display: grid;
+    gap: 12px;
+    height: auto;
+    min-height: unset;
+    overflow: visible;
+  }
+
+  .trackWithBetting {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .trackWithBetting .raceViewport {
+    height: clamp(380px, 56svh, 560px);
+    width: 100%;
+  }
+
   .spriteRows {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

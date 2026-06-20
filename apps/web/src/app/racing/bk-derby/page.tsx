@@ -344,6 +344,7 @@ export default function BkDerbyPage() {
   const [localTickets, setLocalTickets] = useState<RacingTicketItem[]>([]);
   const [pendingBetRequest, setPendingBetRequest] = useState<{
     commandId: string;
+    previousAcceptedEventKeys: string[];
     raceId: string;
   } | null>(null);
   const bgmRef = useRef<HTMLAudioElement | null>(null);
@@ -430,7 +431,8 @@ export default function BkDerbyPage() {
   );
   const currentRaceId = racing.tableState?.race?.raceId ?? null;
   const acceptedBetEvent = getAcceptedBetEvent({
-    event: racing.latestTableEvent,
+    events: racing.betEvents,
+    ignoredEventKeys: pendingBetRequest?.previousAcceptedEventKeys ?? [],
     playerId: racing.player?.id ?? null,
     raceId: currentRaceId,
   });
@@ -476,7 +478,6 @@ export default function BkDerbyPage() {
   const bettingValidation = getBettingValidation({
     amountText: betAmount,
     connectionStatus: racing.connectionStatus,
-    hasAcceptedBet: Boolean(acceptedBetEvent),
     isPending: isBetSubmissionPending,
     player: racing.player,
     selectedCount: activeSelectedBetEntryIds.length,
@@ -784,6 +785,7 @@ export default function BkDerbyPage() {
       } satisfies RacingPlaceBetPayload);
       setPendingBetRequest({
         commandId,
+        previousAcceptedEventKeys: racing.betEvents.map(getRacingTableEventKey),
         raceId,
       });
       setLocalTickets((currentTickets) =>
@@ -1505,6 +1507,7 @@ function useRacingTable() {
       throw new Error("Racing socket is not connected.");
     }
 
+    setSocketError(null);
     socket.emit(RACING_CLIENT_EVENTS.BET_PLACE, payload);
   }, []);
 
@@ -1849,7 +1852,6 @@ function getRacingBetTypeConfig(betType: RacingBetType) {
 function getBettingValidation(input: {
   amountText: string;
   connectionStatus: ConnectionStatus;
-  hasAcceptedBet: boolean;
   isPending: boolean;
   player: GameTokenResponse["user"] | null;
   selectedCount: number;
@@ -1862,10 +1864,6 @@ function getBettingValidation(input: {
 
   if (input.isPending) {
     return { amount, reason: "Ticket is issuing." };
-  }
-
-  if (input.hasAcceptedBet) {
-    return { amount, reason: "Ticket already accepted." };
   }
 
   if (!input.player) {
@@ -1907,22 +1905,26 @@ function getBettingValidation(input: {
 }
 
 function getAcceptedBetEvent(input: {
-  event: RacingTableEventPayload | null;
+  events: RacingTableEventPayload[];
+  ignoredEventKeys: string[];
   playerId: string | null;
   raceId: string | null;
 }) {
-  if (
-    !input.event ||
-    input.event.type !== "BET_PLACED" ||
-    !input.playerId ||
-    !input.raceId ||
-    input.event.actorUserId !== input.playerId ||
-    input.event.raceId !== input.raceId
-  ) {
+  if (!input.playerId || !input.raceId) {
     return null;
   }
 
-  return input.event;
+  const ignoredEventKeys = new Set(input.ignoredEventKeys);
+
+  return (
+    input.events.find(
+      (event) =>
+        event.type === "BET_PLACED" &&
+        event.actorUserId === input.playerId &&
+        event.raceId === input.raceId &&
+        !ignoredEventKeys.has(getRacingTableEventKey(event)),
+    ) ?? null
+  );
 }
 
 function getVisibleBetFeedback(input: {
@@ -2104,16 +2106,19 @@ function limitRecentTickets(tickets: RacingTicketItem[]) {
 }
 
 function getRacingTicketEventKey(event: RacingTableEventPayload) {
-  return (
-    event.betId ??
-    [
-      event.type,
-      event.actorUserId,
-      event.raceId ?? "race",
-      event.createdAt,
-      ...(event.raceEntryIds ?? []),
-    ].join(":")
-  );
+  return event.betId ?? getRacingTableEventKey(event);
+}
+
+function getRacingTableEventKey(event: RacingTableEventPayload) {
+  return [
+    event.type,
+    event.actorUserId,
+    event.raceId ?? "race",
+    event.betId ?? "bet",
+    event.createdAt,
+    event.stateVersion,
+    ...(event.raceEntryIds ?? []),
+  ].join(":");
 }
 
 function getTicketStatusLabel(status: RacingTicketStatus) {

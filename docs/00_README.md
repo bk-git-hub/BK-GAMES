@@ -32,6 +32,7 @@
 | `13_BACCARAT_REALTIME_TABLE_SPEC.md` | 실시간 바카라 테이블 스펙 |
 | `14_BACCARAT_IMPLEMENTATION_PLAN.md` | 바카라 구현 순서와 작업 단위 |
 | `15_HORSE_RACING_BACKEND_SPEC.md` | 실시간 경마 백엔드 구현 사양 |
+| `16_BOXING_BACKEND_SPEC.md` | 실시간 복싱 백엔드 구현 사양 |
 
 `private/` 폴더의 문서는 개인 참고용이다.
 구현 에이전트는 `docs/` 문서와 `11_AI_AGENT_IMPLEMENTATION_DECISIONS.md`를 기준으로 작업한다.

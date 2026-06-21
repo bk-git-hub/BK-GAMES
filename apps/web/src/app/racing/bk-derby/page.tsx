@@ -108,6 +108,12 @@ type RacingTicketSelection = {
   raceEntryId: string;
 };
 
+type RacingTicketSelectionEntry = Pick<
+  RacingRaceEntrySnapshot,
+  "name" | "number" | "raceEntryId"
+> &
+  Partial<Pick<DisplayHorse, "color">>;
+
 type RacingTicketItem = {
   amount: number | null;
   betId: string | null;
@@ -2142,19 +2148,35 @@ function buildTicketHistory(input: {
       continue;
     }
 
+    const raceEntryIds = event.raceEntryIds ?? [];
+    const betType = event.betType ?? input.fallbackBetType;
+    const ticketSelectionEntries = getTicketSelectionEntriesForRace({
+      currentRace: input.currentRace,
+      fallbackEntries: input.entries,
+      raceEntryIds,
+      raceId,
+      settledRaces: input.settledRaces,
+    });
+    const existingSelections = findExistingTicketSelections(mergedTickets, {
+      betId: event.betId ?? null,
+      betType,
+      raceEntryIds,
+      raceId,
+    });
+
     mergedTickets = upsertAcceptedTicket(mergedTickets, {
       amount: null,
       betId: event.betId ?? null,
-      betType: event.betType ?? input.fallbackBetType,
+      betType,
       createdAt: event.createdAt,
       localId: event.betId ?? getRacingTicketEventKey(event),
       message: null,
       raceId,
       raceNo: getTicketRaceNo(raceId, input.currentRace, input.settledRaces),
-      selections: buildTicketSelections(
-        event.raceEntryIds ?? [],
-        input.entries,
-      ),
+      selections:
+        ticketSelectionEntries.length > 0
+          ? buildTicketSelections(raceEntryIds, ticketSelectionEntries)
+          : (existingSelections ?? buildTicketSelections(raceEntryIds, [])),
       status: "accepted",
     });
   }
@@ -2174,20 +2196,68 @@ function buildTicketHistory(input: {
     );
 }
 
+function getTicketSelectionEntriesForRace(input: {
+  currentRace: RacingTableViewState["race"];
+  fallbackEntries: RacingTicketSelectionEntry[];
+  raceEntryIds: string[];
+  raceId: string;
+  settledRaces: RacingSettledRaceSnapshot[];
+}): RacingTicketSelectionEntry[] {
+  if (input.currentRace?.raceId === input.raceId) {
+    return input.currentRace.entries;
+  }
+
+  const settledRace = input.settledRaces.find(
+    (race) => race.raceId === input.raceId,
+  );
+
+  if (settledRace) {
+    return settledRace.entries;
+  }
+
+  const raceEntryIdSet = new Set(input.raceEntryIds);
+
+  return input.fallbackEntries.filter((entry) =>
+    raceEntryIdSet.has(entry.raceEntryId),
+  );
+}
+
+function findExistingTicketSelections(
+  currentTickets: RacingTicketItem[],
+  input: {
+    betId: string | null;
+    betType: RacingBetType;
+    raceEntryIds: string[];
+    raceId: string;
+  },
+) {
+  const matchingTicket = input.betId
+    ? currentTickets.find((ticket) => ticket.betId === input.betId)
+    : currentTickets.find(
+        (ticket) =>
+          ticket.raceId === input.raceId &&
+          ticket.betType === input.betType &&
+          hasSameTicketSelectionIds(ticket.selections, input.raceEntryIds),
+      );
+
+  return matchingTicket?.selections ?? null;
+}
+
 function buildTicketSelections(
   raceEntryIds: string[],
-  entries: DisplayHorse[],
+  entries: RacingTicketSelectionEntry[],
 ): RacingTicketSelection[] {
   const entryById = new Map(entries.map((entry) => [entry.raceEntryId, entry]));
 
   return raceEntryIds.map((raceEntryId, index) => {
     const entry = entryById.get(raceEntryId);
     const fallback = fallbackHorses[index % fallbackHorses.length];
+    const number = entry?.number ?? fallback?.number ?? index + 1;
 
     return {
-      color: entry?.color ?? fallback?.color ?? "red",
+      color: entry?.color ?? getHistoryHorseColor(number),
       name: entry?.name ?? fallback?.name ?? `Entry ${index + 1}`,
-      number: entry?.number ?? fallback?.number ?? index + 1,
+      number,
       raceEntryId,
     };
   });
@@ -2260,6 +2330,19 @@ function hasSameTicketSelections(
   return leftSelections.every(
     (selection, index) =>
       selection.raceEntryId === rightSelections[index]?.raceEntryId,
+  );
+}
+
+function hasSameTicketSelectionIds(
+  selections: RacingTicketSelection[],
+  raceEntryIds: string[],
+) {
+  if (selections.length !== raceEntryIds.length) {
+    return false;
+  }
+
+  return selections.every(
+    (selection, index) => selection.raceEntryId === raceEntryIds[index],
   );
 }
 

@@ -1514,14 +1514,7 @@ function HorseRecordViewer({ history }: { history: RaceHistoryViewState }) {
 }
 
 function HorseRecordRankBadge({ rank }: { rank: number }) {
-  const medalLabel = getHorseRecordMedalLabel(rank);
-
-  return (
-    <span className={getHorseRecordRankClassName(rank)}>
-      {medalLabel ? <em>{medalLabel}</em> : null}
-      {rank}등
-    </span>
-  );
+  return <span className={getHorseRecordRankClassName(rank)}>{rank}등</span>;
 }
 
 function RaceHistoryList({ history }: { history: RaceHistoryViewState }) {
@@ -3711,22 +3704,6 @@ function formatKoreanRank(rank: number | null) {
   }
 
   return `${rank}등`;
-}
-
-function getHorseRecordMedalLabel(rank: number) {
-  if (rank === 1) {
-    return "금";
-  }
-
-  if (rank === 2) {
-    return "은";
-  }
-
-  if (rank === 3) {
-    return "동";
-  }
-
-  return null;
 }
 
 function getHorseRecordRankClassName(rank: number) {

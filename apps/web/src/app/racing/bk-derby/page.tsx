@@ -1426,7 +1426,7 @@ function HorseRecordViewer({ history }: { history: RaceHistoryViewState }) {
       <div className={styles.horseRecordHeader}>
         <div>
           <span>Horse records</span>
-          <strong>Recent form</strong>
+          <strong>말별 최근 성적</strong>
         </div>
         <em>{records.length}</em>
       </div>
@@ -1446,21 +1446,32 @@ function HorseRecordViewer({ history }: { history: RaceHistoryViewState }) {
                 <div className={styles.horseRecordTopline}>
                   <strong>{record.name}</strong>
                   <span>
+                    평균{" "}
                     {record.averageRank === null
                       ? "-"
-                      : record.averageRank.toFixed(1)}
+                      : `${record.averageRank.toFixed(1)}등`}
                   </span>
                 </div>
                 <div className={styles.horseRecordStats}>
-                  <span>{record.starts}R</span>
-                  <span>{record.wins}W</span>
-                  <span>{record.top3}T3</span>
+                  <span>
+                    <em>출전</em>
+                    <strong>{record.starts}회</strong>
+                  </span>
+                  <span>
+                    <em>1등</em>
+                    <strong>{record.wins}회</strong>
+                  </span>
+                  <span>
+                    <em>3등 내</em>
+                    <strong>{record.top3}회</strong>
+                  </span>
                 </div>
                 <div className={styles.horseRecordRanks}>
+                  <small>최근</small>
                   {record.recentRanks.length > 0 ? (
                     record.recentRanks.map((rank, index) => (
                       <span key={`${record.number}-${rank}-${index}`}>
-                        {rank}
+                        {rank}등
                       </span>
                     ))
                   ) : (

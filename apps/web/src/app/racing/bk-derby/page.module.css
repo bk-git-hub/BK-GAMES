@@ -345,6 +345,7 @@
   display: grid;
   gap: 14px;
   grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
+  height: auto;
   overflow: visible;
 }
 
@@ -353,7 +354,7 @@
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 8px;
   box-shadow: 0 24px 70px rgb(0 0 0 / 45%);
-  height: 100%;
+  height: 370px;
   inset: auto;
   position: relative;
 }
@@ -1733,12 +1734,44 @@
   z-index: 10;
 }
 
+.runnerLane1 {
+  --runner-lane-top: 82px;
+}
+
+.runnerLane2 {
+  --runner-lane-top: 116px;
+}
+
+.runnerLane3 {
+  --runner-lane-top: 149px;
+}
+
+.runnerLane4 {
+  --runner-lane-top: 182px;
+}
+
+.runnerLane5 {
+  --runner-lane-top: 215px;
+}
+
+.runnerLane6 {
+  --runner-lane-top: 241px;
+}
+
+.runnerLane7 {
+  --runner-lane-top: 267px;
+}
+
+.runnerLane8 {
+  --runner-lane-top: 293px;
+}
+
 .runner {
   contain: layout paint;
   height: 181px;
   left: var(--runner-left, 1.2%);
   position: absolute;
-  top: calc(var(--lane-top) + var(--runner-y-adjust, 30px));
+  top: var(--runner-lane-top, 82px);
   transform: translate3d(var(--runner-x, 0px), 0, 0);
   transition: transform 180ms linear;
   width: 206px;
@@ -2042,7 +2075,7 @@
   }
 
   .trackWithBetting .raceViewport {
-    height: clamp(380px, 56svh, 560px);
+    height: 370px;
     width: 100%;
   }
 
@@ -2102,12 +2135,12 @@
     border: 1px solid rgb(255 255 255 / 12%);
     border-radius: 8px;
     box-shadow: 0 16px 42px rgb(0 0 0 / 36%);
-    height: clamp(320px, 47svh, 410px);
+    height: 320px;
     position: relative;
   }
 
   .trackWithBetting .raceViewport {
-    height: clamp(320px, 47svh, 410px);
+    height: 320px;
   }
 
   .startHud {
@@ -2237,8 +2270,36 @@
     min-width: 20px;
   }
 
-  .runner {
-    --runner-y-adjust: -28px;
+  .runnerLane1 {
+    --runner-lane-top: 20px;
+  }
+
+  .runnerLane2 {
+    --runner-lane-top: 48px;
+  }
+
+  .runnerLane3 {
+    --runner-lane-top: 76px;
+  }
+
+  .runnerLane4 {
+    --runner-lane-top: 104px;
+  }
+
+  .runnerLane5 {
+    --runner-lane-top: 132px;
+  }
+
+  .runnerLane6 {
+    --runner-lane-top: 158px;
+  }
+
+  .runnerLane7 {
+    --runner-lane-top: 184px;
+  }
+
+  .runnerLane8 {
+    --runner-lane-top: 210px;
   }
 
   .bettingPanel {

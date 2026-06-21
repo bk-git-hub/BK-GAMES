@@ -42,7 +42,6 @@ type AssetHorse = {
 
 type DisplayHorse = AssetHorse & {
   lane: number;
-  laneTop: string;
   name: string;
   number: number;
   progress: number;
@@ -224,7 +223,6 @@ const maxVisualRaceProgress = 1 + postFinishTrackOvershootRatio;
 const maxRaceTimelineCacheEntries = 8;
 const maxCameraTranslatePercent = ((worldScale - 1) / worldScale) * 100;
 const leaderViewportAnchorPercent = 50 / worldScale;
-const laneTops = ["14%", "23%", "32%", "41%", "50%", "57%", "64%", "71%"];
 const startLaneTops = [
   "31%",
   "39.5%",
@@ -343,7 +341,6 @@ const raceTimelineCache = new Map<string, RacingTimeline>();
 const fallbackHorses: DisplayHorse[] = assetHorses.map((horse, index) => ({
   ...horse,
   lane: index + 1,
-  laneTop: laneTops[index] ?? laneTops[laneTops.length - 1],
   name: `${horse.color} runner`,
   number: index + 1,
   progress: 0,
@@ -1052,13 +1049,12 @@ const Runner = memo(function Runner({
 
   return (
     <div
-      className={`${styles.runner} ${
+      className={`${styles.runner} ${getRunnerLaneClassName(horse.lane)} ${
         !usesBackendState ? styles.previewRunner : styles.liveRunner
       } ${isLeader ? styles.leaderRunner : ""}`}
       style={
         {
           "--duration": horse.duration,
-          "--lane-top": horse.laneTop,
           "--offset": horse.offset,
           "--runner-left": runnerPosition.left,
           "--runner-x": runnerPosition.x,
@@ -2747,7 +2743,6 @@ function buildDisplayHorses(
     return {
       ...asset,
       lane: entry.lane,
-      laneTop: laneTops[laneIndex] ?? laneTops[laneTops.length - 1],
       name: entry.name,
       number: entry.number,
       progress: clamp(progress, 0, maxVisualRaceProgress),
@@ -3233,6 +3228,38 @@ function smoothStep(ratio: number) {
   const value = clamp(ratio, 0, 1);
 
   return value * value * (3 - 2 * value);
+}
+
+function getRunnerLaneClassName(lane: number) {
+  if (lane === 1) {
+    return styles.runnerLane1;
+  }
+
+  if (lane === 2) {
+    return styles.runnerLane2;
+  }
+
+  if (lane === 3) {
+    return styles.runnerLane3;
+  }
+
+  if (lane === 4) {
+    return styles.runnerLane4;
+  }
+
+  if (lane === 5) {
+    return styles.runnerLane5;
+  }
+
+  if (lane === 6) {
+    return styles.runnerLane6;
+  }
+
+  if (lane === 7) {
+    return styles.runnerLane7;
+  }
+
+  return styles.runnerLane8;
 }
 
 function getLeaderHorse(horses: DisplayHorse[]) {

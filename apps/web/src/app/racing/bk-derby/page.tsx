@@ -2104,8 +2104,8 @@ function getVisibleBetFeedback(input: {
     );
 
     return {
-      detail: `${acceptedConfig.label} ${input.acceptedEvent.raceEntryIds?.length ?? 0}두 마권이 접수되었습니다.`,
-      title: "Ticket accepted",
+      detail: `${acceptedConfig.label} 마권이 정상 접수되었습니다.`,
+      title: "마권 접수 완료",
       tone: "success",
     };
   }

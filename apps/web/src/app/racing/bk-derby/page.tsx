@@ -863,166 +863,176 @@ export default function BkDerbyPage() {
 
         <div className={styles.raceFrame}>
           <div className={`${styles.track} ${styles.trackWithBetting}`}>
-            <div
-              className={styles.raceViewport}
-              aria-label="Live racing game"
-              ref={trackRef}
-            >
+            <div className={styles.raceColumn}>
               <div
-                className={worldLayerClassName}
-                style={
-                  {
-                    "--camera-duration": leaderHorse?.duration ?? "4.2s",
-                    "--camera-offset": leaderHorse?.offset ?? "-2.7s",
-                    "--camera-x": `-${cameraTranslatePercent}%`,
-                  } as CSSProperties
-                }
+                className={styles.raceViewport}
+                aria-label="Live racing game"
+                ref={trackRef}
               >
-                <div className={styles.cameraTrack} aria-hidden="true">
-                  <div className={styles.cameraStartGate} />
-                  <div className={styles.cameraFinishPost} />
-                </div>
                 <div
-                  className={styles.straightLaneOverlay}
-                  aria-hidden="true"
-                />
-                <div className={styles.runnerLayer}>
-                  {displayHorses.map((horse) => (
-                    <Runner
-                      horse={horse}
-                      isLeader={leaderHorse?.raceEntryId === horse.raceEntryId}
-                      isRaceRunning={isRaceRunning}
-                      key={horse.raceEntryId}
-                      trackWidthPx={trackWidthPx}
-                      usesBackendState={usesBackendState}
-                    />
-                  ))}
-                </div>
-              </div>
-              <audio preload="auto" ref={bgmRef} src={raceBgmSrc} />
-
-              <div className={styles.gameHud} aria-label="Live race state">
-                <div className={styles.gameStatus}>
-                  <span>{statusLabel}</span>
-                  <strong>{statusDetail}</strong>
-                  <small>
-                    {isVisuallyRunning
-                      ? "Track"
-                      : getTimerLabel(racing.tableState)}
-                  </small>
-                  <em>
-                    {isVisuallyRunning
-                      ? "LIVE"
-                      : getTimerText(racing.tableState)}
-                  </em>
-                  <button
-                    aria-label={bgmButtonLabel}
-                    aria-pressed={isBgmUnlocked && !isBgmBlocked}
-                    className={`${styles.bgmButton} ${
-                      isBgmPlaying ? styles.bgmButtonActive : ""
-                    } ${isBgmBlocked ? styles.bgmButtonBlocked : ""}`}
-                    onClick={() => {
-                      void handleBgmEnable();
-                    }}
-                    type="button"
-                  >
-                    BGM
-                  </button>
-                </div>
-                <div
-                  className={styles.raceProgressBoard}
-                  aria-label="Live race progress"
+                  className={worldLayerClassName}
+                  style={
+                    {
+                      "--camera-duration": leaderHorse?.duration ?? "4.2s",
+                      "--camera-offset": leaderHorse?.offset ?? "-2.7s",
+                      "--camera-x": `-${cameraTranslatePercent}%`,
+                    } as CSSProperties
+                  }
                 >
-                  <div className={styles.progressLabels} aria-hidden="true">
-                    <span>START</span>
-                    <span>FINISH</span>
+                  <div className={styles.cameraTrack} aria-hidden="true">
+                    <div className={styles.cameraStartGate} />
+                    <div className={styles.cameraFinishPost} />
                   </div>
-                  <div className={styles.progressRail}>
-                    {progressHorses.map((horse, index) => (
-                      <span
-                        aria-label={`${horse.number}번 말 ${formatRank(
-                          horse.rank,
-                        )} ${Math.round(getRaceProgressPercent(horse.progress))}% 지점`}
-                        className={`${styles.progressHorse} ${
-                          styles[horse.color]
-                        }`}
+                  <div
+                    className={styles.straightLaneOverlay}
+                    aria-hidden="true"
+                  />
+                  <div className={styles.runnerLayer}>
+                    {displayHorses.map((horse) => (
+                      <Runner
+                        horse={horse}
+                        isLeader={
+                          leaderHorse?.raceEntryId === horse.raceEntryId
+                        }
+                        isRaceRunning={isRaceRunning}
                         key={horse.raceEntryId}
-                        style={getProgressHorseStyle(horse.progress, index)}
-                      >
-                        {horse.number}
-                      </span>
+                        trackWidthPx={trackWidthPx}
+                        usesBackendState={usesBackendState}
+                      />
                     ))}
                   </div>
                 </div>
-                {socketErrorMessage ? (
-                  <p className={styles.socketError}>{socketErrorMessage}</p>
+                <audio preload="auto" ref={bgmRef} src={raceBgmSrc} />
+
+                <div className={styles.gameHud} aria-label="Live race state">
+                  <div className={styles.gameStatus}>
+                    <span>{statusLabel}</span>
+                    <strong>{statusDetail}</strong>
+                    <small>
+                      {isVisuallyRunning
+                        ? "Track"
+                        : getTimerLabel(racing.tableState)}
+                    </small>
+                    <em>
+                      {isVisuallyRunning
+                        ? "LIVE"
+                        : getTimerText(racing.tableState)}
+                    </em>
+                    <button
+                      aria-label={bgmButtonLabel}
+                      aria-pressed={isBgmUnlocked && !isBgmBlocked}
+                      className={`${styles.bgmButton} ${
+                        isBgmPlaying ? styles.bgmButtonActive : ""
+                      } ${isBgmBlocked ? styles.bgmButtonBlocked : ""}`}
+                      onClick={() => {
+                        void handleBgmEnable();
+                      }}
+                      type="button"
+                    >
+                      BGM
+                    </button>
+                  </div>
+                  <div
+                    className={styles.raceProgressBoard}
+                    aria-label="Live race progress"
+                  >
+                    <div className={styles.progressLabels} aria-hidden="true">
+                      <span>START</span>
+                      <span>FINISH</span>
+                    </div>
+                    <div className={styles.progressRail}>
+                      {progressHorses.map((horse, index) => (
+                        <span
+                          aria-label={`${horse.number}번 말 ${formatRank(
+                            horse.rank,
+                          )} ${Math.round(getRaceProgressPercent(horse.progress))}% 지점`}
+                          className={`${styles.progressHorse} ${
+                            styles[horse.color]
+                          }`}
+                          key={horse.raceEntryId}
+                          style={getProgressHorseStyle(horse.progress, index)}
+                        >
+                          {horse.number}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {socketErrorMessage ? (
+                    <p className={styles.socketError}>{socketErrorMessage}</p>
+                  ) : null}
+                </div>
+
+                {startCountdownOverlay ? (
+                  <div
+                    aria-label={`${startCountdownOverlay.label} ${startCountdownOverlay.value}`}
+                    aria-live="polite"
+                    className={`${styles.startCountdown} ${
+                      startCountdownOverlay.isStartCue
+                        ? styles.startCountdownGo
+                        : ""
+                    }`}
+                    key={startCountdownOverlay.value}
+                  >
+                    <span>{startCountdownOverlay.label}</span>
+                    <strong>{startCountdownOverlay.value}</strong>
+                  </div>
+                ) : null}
+
+                {visibleResultBoard ? (
+                  <aside
+                    className={styles.resultBoard}
+                    aria-label="Race result"
+                  >
+                    <div className={styles.resultHeader}>
+                      <span>Race {visibleResultBoard.raceNo}</span>
+                      <strong>
+                        {visibleResultBoard.isComplete ? "Result" : "Finishing"}
+                      </strong>
+                    </div>
+                    <ol>
+                      {visibleResultBoard.entries.map((entry) => (
+                        <li key={entry.raceEntryId}>
+                          <span
+                            className={`${styles.badge} ${styles[entry.color]}`}
+                          >
+                            {entry.number}
+                          </span>
+                          <strong>{formatKoreanRank(entry.rank)}</strong>
+                          <time>{formatFinishTime(entry.finishedAtMs)}</time>
+                        </li>
+                      ))}
+                    </ol>
+                  </aside>
                 ) : null}
               </div>
 
-              {startCountdownOverlay ? (
-                <div
-                  aria-label={`${startCountdownOverlay.label} ${startCountdownOverlay.value}`}
-                  aria-live="polite"
-                  className={`${styles.startCountdown} ${
-                    startCountdownOverlay.isStartCue
-                      ? styles.startCountdownGo
-                      : ""
-                  }`}
-                  key={startCountdownOverlay.value}
-                >
-                  <span>{startCountdownOverlay.label}</span>
-                  <strong>{startCountdownOverlay.value}</strong>
-                </div>
-              ) : null}
-
-              {visibleResultBoard ? (
-                <aside className={styles.resultBoard} aria-label="Race result">
-                  <div className={styles.resultHeader}>
-                    <span>Race {visibleResultBoard.raceNo}</span>
-                    <strong>
-                      {visibleResultBoard.isComplete ? "Result" : "Finishing"}
-                    </strong>
-                  </div>
-                  <ol>
-                    {visibleResultBoard.entries.map((entry) => (
-                      <li key={entry.raceEntryId}>
-                        <span
-                          className={`${styles.badge} ${styles[entry.color]}`}
-                        >
-                          {entry.number}
-                        </span>
-                        <strong>{formatKoreanRank(entry.rank)}</strong>
-                        <time>{formatFinishTime(entry.finishedAtMs)}</time>
-                      </li>
-                    ))}
-                  </ol>
-                </aside>
-              ) : null}
+              <div className={styles.raceHistoryDeck}>
+                <RaceHistoryList history={raceHistory} />
+                <HorseRecordViewer history={raceHistory} />
+              </div>
             </div>
 
-            <RacingBettingPanel
-              amount={betAmount}
-              availableBetTypes={availableBetTypeConfigs}
-              entries={bettingHorses}
-              feedback={visibleBetFeedback}
-              isPending={isBetSubmissionPending}
-              onAddStake={handleAddStake}
-              onAmountChange={handleBetAmountChange}
-              onClearSelections={handleClearBetSlip}
-              onSelectBetType={handleSelectBetType}
-              onSetStake={handleSetStake}
-              onSubmit={handleSubmitBet}
-              onToggleEntry={handleToggleBetEntry}
-              playerNickname={racing.player?.nickname ?? null}
-              selectedBetType={effectiveBetType}
-              selectedEntryIds={activeSelectedBetEntryIds}
-              tableState={racing.tableState}
-              validationReason={bettingValidation.reason}
-              walletBalance={racing.walletBalance}
-            />
-            <div className={styles.raceHistoryDeck}>
-              <RaceHistoryList history={raceHistory} />
-              <HorseRecordViewer history={raceHistory} />
+            <div className={styles.betColumn}>
+              <RacingBettingPanel
+                amount={betAmount}
+                availableBetTypes={availableBetTypeConfigs}
+                entries={bettingHorses}
+                feedback={visibleBetFeedback}
+                isPending={isBetSubmissionPending}
+                onAddStake={handleAddStake}
+                onAmountChange={handleBetAmountChange}
+                onClearSelections={handleClearBetSlip}
+                onSelectBetType={handleSelectBetType}
+                onSetStake={handleSetStake}
+                onSubmit={handleSubmitBet}
+                onToggleEntry={handleToggleBetEntry}
+                playerNickname={racing.player?.nickname ?? null}
+                selectedBetType={effectiveBetType}
+                selectedEntryIds={activeSelectedBetEntryIds}
+                tableState={racing.tableState}
+                validationReason={bettingValidation.reason}
+                walletBalance={racing.walletBalance}
+              />
               <TicketHistoryPanel ticketHistory={ticketHistory} />
             </div>
           </div>

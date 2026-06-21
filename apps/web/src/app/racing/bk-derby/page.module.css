@@ -349,6 +349,14 @@
   overflow: visible;
 }
 
+.raceColumn,
+.betColumn {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
 .trackWithBetting .raceViewport {
   background: #081315;
   border: 1px solid rgb(255 255 255 / 12%);
@@ -357,10 +365,6 @@
   height: 370px;
   inset: auto;
   position: relative;
-}
-
-.trackWithBetting .raceHistoryDeck {
-  grid-column: 1 / -1;
 }
 
 .worldLayer {
@@ -1337,9 +1341,7 @@
 .raceHistoryDeck {
   display: grid;
   gap: 14px;
-  grid-template-columns:
-    minmax(360px, 1fr) minmax(280px, 330px)
-    minmax(320px, 390px);
+  grid-template-columns: minmax(360px, 1fr) minmax(280px, 330px);
 }
 
 .raceHistoryList,
@@ -2162,17 +2164,34 @@
     height: auto;
   }
 
+  .raceColumn,
+  .betColumn {
+    display: contents;
+  }
+
+  .trackWithBetting .raceViewport {
+    order: 1;
+  }
+
+  .trackWithBetting .bettingPanel {
+    order: 2;
+  }
+
+  .trackWithBetting .raceHistoryDeck {
+    order: 4;
+  }
+
+  .trackWithBetting .ticketHistoryPanel {
+    order: 3;
+  }
+
   .trackWithBetting .raceViewport {
     height: 370px;
     width: 100%;
   }
 
   .raceHistoryDeck {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
-  }
-
-  .raceHistoryList {
-    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 330px);
   }
 
   .spriteRows {

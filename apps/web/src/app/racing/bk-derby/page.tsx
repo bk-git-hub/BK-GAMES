@@ -1017,13 +1017,13 @@ export default function BkDerbyPage() {
               selectedBetType={effectiveBetType}
               selectedEntryIds={activeSelectedBetEntryIds}
               tableState={racing.tableState}
-              ticketHistory={ticketHistory}
               validationReason={bettingValidation.reason}
               walletBalance={racing.walletBalance}
             />
             <div className={styles.raceHistoryDeck}>
               <RaceHistoryList history={raceHistory} />
               <HorseRecordViewer history={raceHistory} />
+              <TicketHistoryPanel ticketHistory={ticketHistory} />
             </div>
           </div>
         </div>
@@ -1096,7 +1096,6 @@ function RacingBettingPanel({
   selectedBetType,
   selectedEntryIds,
   tableState,
-  ticketHistory,
   validationReason,
   walletBalance,
 }: {
@@ -1116,7 +1115,6 @@ function RacingBettingPanel({
   selectedBetType: RacingBetType;
   selectedEntryIds: string[];
   tableState: RacingTableViewState | null;
-  ticketHistory: RacingTicketHistoryItem[];
   validationReason: string | null;
   walletBalance: string | null;
 }) {
@@ -1320,101 +1318,112 @@ function RacingBettingPanel({
         <strong>{feedback?.title ?? "Ticket status"}</strong>
         <span>{feedback?.detail ?? validationReason ?? "Ready"}</span>
       </div>
-
-      <section className={styles.ticketList} aria-label="Ticket history">
-        <div className={styles.ticketListHeader}>
-          <span>Ticket history</span>
-          <strong>{ticketHistory.length}</strong>
-        </div>
-        {ticketHistory.length > 0 ? (
-          <ol>
-            {ticketHistory.map((ticket) => {
-              const ticketConfig = getRacingBetTypeConfig(ticket.betType);
-
-              return (
-                <li
-                  className={`${styles.ticketItem} ${getTicketHistoryClassName(
-                    ticket.outcomeStatus,
-                  )}`}
-                  key={ticket.localId}
-                >
-                  <div className={styles.ticketItemTopline}>
-                    <span>
-                      {ticket.raceNo ? `Race ${ticket.raceNo}` : "Race"}
-                    </span>
-                    <strong>
-                      {getTicketHistoryStatusLabel(ticket.outcomeStatus)}
-                    </strong>
-                  </div>
-                  <div className={styles.ticketItemMain}>
-                    <strong>{ticketConfig.shortLabel}</strong>
-                    <span>
-                      {ticket.amount === null
-                        ? "Stake -"
-                        : `${formatPoints(ticket.amount)}P`}
-                    </span>
-                    <time>{formatTicketTime(ticket.createdAt)}</time>
-                  </div>
-                  <div
-                    className={styles.ticketSelections}
-                    aria-label="Ticket selections"
-                  >
-                    {ticket.selections.length > 0 ? (
-                      ticket.selections.map((selection, index) => (
-                        <span
-                          className={`${styles.ticketSelection} ${
-                            styles[selection.color]
-                          }`}
-                          key={`${ticket.localId}-${selection.raceEntryId}-${index}`}
-                        >
-                          {ticketConfig.ordered ? `${index + 1}.` : ""}
-                          {selection.number}
-                        </span>
-                      ))
-                    ) : (
-                      <span className={styles.ticketSelection}>-</span>
-                    )}
-                  </div>
-                  {ticket.message ? (
-                    <em className={styles.ticketMessage}>{ticket.message}</em>
-                  ) : null}
-                  <div className={styles.ticketResultLine}>
-                    <span>{ticket.outcomeDetail}</span>
-                    {ticket.projectedReturn !== null ? (
-                      <strong>
-                        예상 {formatPoints(ticket.projectedReturn)}P
-                      </strong>
-                    ) : null}
-                  </div>
-                  {ticket.resultOrder.length > 0 ? (
-                    <div
-                      className={styles.ticketResultOrder}
-                      aria-label="Race result order"
-                    >
-                      <span>Result</span>
-                      {ticket.resultOrder.map((entry) => (
-                        <strong
-                          className={`${styles.ticketResultChip} ${
-                            styles[entry.color]
-                          }`}
-                          key={`${ticket.localId}-result-${entry.raceEntryId}`}
-                          title={`${formatKoreanRank(entry.finalRank)} ${entry.number}번`}
-                        >
-                          {entry.number}
-                          <em>{entry.finalRank}</em>
-                        </strong>
-                      ))}
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
-        ) : (
-          <p className={styles.ticketEmpty}>No ticket history yet</p>
-        )}
-      </section>
     </aside>
+  );
+}
+
+function TicketHistoryPanel({
+  ticketHistory,
+}: {
+  ticketHistory: RacingTicketHistoryItem[];
+}) {
+  return (
+    <section
+      className={`${styles.ticketList} ${styles.ticketHistoryPanel}`}
+      aria-label="My ticket history"
+    >
+      <div className={styles.ticketListHeader}>
+        <span>내 티켓 히스토리</span>
+        <strong>{ticketHistory.length}</strong>
+      </div>
+      {ticketHistory.length > 0 ? (
+        <ol>
+          {ticketHistory.map((ticket) => {
+            const ticketConfig = getRacingBetTypeConfig(ticket.betType);
+
+            return (
+              <li
+                className={`${styles.ticketItem} ${getTicketHistoryClassName(
+                  ticket.outcomeStatus,
+                )}`}
+                key={ticket.localId}
+              >
+                <div className={styles.ticketItemTopline}>
+                  <span>
+                    {ticket.raceNo ? `Race ${ticket.raceNo}` : "Race"}
+                  </span>
+                  <strong>
+                    {getTicketHistoryStatusLabel(ticket.outcomeStatus)}
+                  </strong>
+                </div>
+                <div className={styles.ticketItemMain}>
+                  <strong>{ticketConfig.shortLabel}</strong>
+                  <span>
+                    {ticket.amount === null
+                      ? "Stake -"
+                      : `${formatPoints(ticket.amount)}P`}
+                  </span>
+                  <time>{formatTicketTime(ticket.createdAt)}</time>
+                </div>
+                <div
+                  className={styles.ticketSelections}
+                  aria-label="Ticket selections"
+                >
+                  {ticket.selections.length > 0 ? (
+                    ticket.selections.map((selection, index) => (
+                      <span
+                        className={`${styles.ticketSelection} ${
+                          styles[selection.color]
+                        }`}
+                        key={`${ticket.localId}-${selection.raceEntryId}-${index}`}
+                      >
+                        {ticketConfig.ordered ? `${index + 1}.` : ""}
+                        {selection.number}
+                      </span>
+                    ))
+                  ) : (
+                    <span className={styles.ticketSelection}>-</span>
+                  )}
+                </div>
+                {ticket.message ? (
+                  <em className={styles.ticketMessage}>{ticket.message}</em>
+                ) : null}
+                <div className={styles.ticketResultLine}>
+                  <span>{ticket.outcomeDetail}</span>
+                  {ticket.projectedReturn !== null ? (
+                    <strong>
+                      예상 {formatPoints(ticket.projectedReturn)}P
+                    </strong>
+                  ) : null}
+                </div>
+                {ticket.resultOrder.length > 0 ? (
+                  <div
+                    className={styles.ticketResultOrder}
+                    aria-label="Race result order"
+                  >
+                    <span>Result</span>
+                    {ticket.resultOrder.map((entry) => (
+                      <strong
+                        className={`${styles.ticketResultChip} ${
+                          styles[entry.color]
+                        }`}
+                        key={`${ticket.localId}-result-${entry.raceEntryId}`}
+                        title={`${formatKoreanRank(entry.finalRank)} ${entry.number}번`}
+                      >
+                        {entry.number}
+                        <em>{entry.finalRank}</em>
+                      </strong>
+                    ))}
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className={styles.ticketEmpty}>아직 티켓 히스토리가 없습니다</p>
+      )}
+    </section>
   );
 }
 

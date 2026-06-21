@@ -1337,11 +1337,14 @@
 .raceHistoryDeck {
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+  grid-template-columns:
+    minmax(360px, 1fr) minmax(280px, 330px)
+    minmax(320px, 390px);
 }
 
 .raceHistoryList,
-.horseRecordViewer {
+.horseRecordViewer,
+.ticketHistoryPanel {
   background: rgb(255 255 255 / 5%);
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 8px;
@@ -1397,7 +1400,8 @@
 }
 
 .raceHistoryList ol,
-.horseRecordViewer ol {
+.horseRecordViewer ol,
+.ticketHistoryPanel ol {
   display: grid;
   gap: 5px;
   list-style: none;
@@ -2105,6 +2109,14 @@
   .trackWithBetting .raceViewport {
     height: 370px;
     width: 100%;
+  }
+
+  .raceHistoryDeck {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
+  }
+
+  .raceHistoryList {
+    grid-column: 1 / -1;
   }
 
   .spriteRows {

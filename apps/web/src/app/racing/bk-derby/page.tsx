@@ -241,7 +241,7 @@ const quickStakeAmounts = [100, 500, 1_000, 5_000] as const;
 
 const racingBetTypeConfigs: RacingBetTypeConfig[] = [
   {
-    description: "1착",
+    description: "1등",
     label: "단승",
     ordered: true,
     requiredSelections: 1,
@@ -249,7 +249,7 @@ const racingBetTypeConfigs: RacingBetTypeConfig[] = [
     type: "WIN",
   },
   {
-    description: "2착 이내",
+    description: "2등 이내",
     label: "연승",
     ordered: false,
     requiredSelections: 1,
@@ -257,7 +257,7 @@ const racingBetTypeConfigs: RacingBetTypeConfig[] = [
     type: "PLACE",
   },
   {
-    description: "1-2착 조합",
+    description: "1등-2등 조합",
     label: "복승",
     ordered: false,
     requiredSelections: 2,
@@ -265,7 +265,7 @@ const racingBetTypeConfigs: RacingBetTypeConfig[] = [
     type: "QUINELLA",
   },
   {
-    description: "1-2착 순서",
+    description: "1등-2등 순서",
     label: "쌍승",
     ordered: true,
     requiredSelections: 2,
@@ -273,7 +273,7 @@ const racingBetTypeConfigs: RacingBetTypeConfig[] = [
     type: "EXACTA",
   },
   {
-    description: "3착 내 2두",
+    description: "3등 내 2두",
     label: "복연승",
     ordered: false,
     requiredSelections: 2,
@@ -281,7 +281,7 @@ const racingBetTypeConfigs: RacingBetTypeConfig[] = [
     type: "QUINELLA_PLACE",
   },
   {
-    description: "1-3착 조합",
+    description: "1등-3등 조합",
     label: "삼복승",
     ordered: false,
     requiredSelections: 3,
@@ -289,7 +289,7 @@ const racingBetTypeConfigs: RacingBetTypeConfig[] = [
     type: "TRIO",
   },
   {
-    description: "1-3착 순서",
+    description: "1등-3등 순서",
     label: "삼쌍승",
     ordered: true,
     requiredSelections: 3,
@@ -2638,10 +2638,10 @@ function getEstimatedOddsMultiplier(betType: RacingBetType, fieldSize: number) {
 
 function getSelectionSlotLabel(config: RacingBetTypeConfig, index: number) {
   if (!config.ordered) {
-    return `SEL ${index + 1}`;
+    return `선택 ${index + 1}`;
   }
 
-  return `${index + 1}${index === 0 ? "ST" : index === 1 ? "ND" : "RD"}`;
+  return `${index + 1}등`;
 }
 
 function getBettingPhaseLabel(tableState: RacingTableViewState | null) {
@@ -3641,7 +3641,7 @@ function formatKoreanRank(rank: number | null) {
     return "-";
   }
 
-  return `${rank}위`;
+  return `${rank}등`;
 }
 
 function formatFinishTime(finishedAtMs: number | null) {

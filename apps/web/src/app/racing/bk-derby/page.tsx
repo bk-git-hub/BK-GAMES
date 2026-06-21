@@ -1479,9 +1479,10 @@ function HorseRecordViewer({ history }: { history: RaceHistoryViewState }) {
                   <small>최근</small>
                   {record.recentRanks.length > 0 ? (
                     record.recentRanks.map((rank, index) => (
-                      <span key={`${record.number}-${rank}-${index}`}>
-                        {rank}등
-                      </span>
+                      <HorseRecordRankBadge
+                        key={`${record.number}-${rank}-${index}`}
+                        rank={rank}
+                      />
                     ))
                   ) : (
                     <span>-</span>
@@ -1499,6 +1500,17 @@ function HorseRecordViewer({ history }: { history: RaceHistoryViewState }) {
         </p>
       )}
     </section>
+  );
+}
+
+function HorseRecordRankBadge({ rank }: { rank: number }) {
+  const medalLabel = getHorseRecordMedalLabel(rank);
+
+  return (
+    <span className={getHorseRecordRankClassName(rank)}>
+      {medalLabel ? <em>{medalLabel}</em> : null}
+      {rank}등
+    </span>
   );
 }
 
@@ -3689,6 +3701,38 @@ function formatKoreanRank(rank: number | null) {
   }
 
   return `${rank}등`;
+}
+
+function getHorseRecordMedalLabel(rank: number) {
+  if (rank === 1) {
+    return "금";
+  }
+
+  if (rank === 2) {
+    return "은";
+  }
+
+  if (rank === 3) {
+    return "동";
+  }
+
+  return null;
+}
+
+function getHorseRecordRankClassName(rank: number) {
+  if (rank === 1) {
+    return `${styles.horseRecordRank} ${styles.horseRecordGold}`;
+  }
+
+  if (rank === 2) {
+    return `${styles.horseRecordRank} ${styles.horseRecordSilver}`;
+  }
+
+  if (rank === 3) {
+    return `${styles.horseRecordRank} ${styles.horseRecordBronze}`;
+  }
+
+  return styles.horseRecordRank;
 }
 
 function formatFinishTime(finishedAtMs: number | null) {

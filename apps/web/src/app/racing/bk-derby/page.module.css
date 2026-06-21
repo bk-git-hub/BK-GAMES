@@ -1357,6 +1357,14 @@
   padding: 10px;
 }
 
+@media (min-width: 1101px) {
+  .raceHistoryList,
+  .horseRecordViewer {
+    height: clamp(260px, calc(100vh - 440px), 340px);
+    max-height: clamp(260px, calc(100vh - 440px), 340px);
+  }
+}
+
 .raceHistoryHeader,
 .horseRecordHeader {
   align-items: center;

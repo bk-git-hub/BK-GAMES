@@ -39,7 +39,7 @@ describe('buildRaceTick', () => {
     const state = createRunningState({
       startedAt: '2026-06-18T12:00:00.000Z',
     });
-    const tick = buildTickAtElapsedMs(state, 43_000);
+    const tick = buildTickAtElapsedMs(state, 25_000);
 
     expect(tick.positions.every((position) => position.progress === 1)).toBe(
       true,
@@ -145,7 +145,7 @@ function createRunningState(input: { startedAt: string }): RacingTableState {
       bettingCloseBeforeStartSeconds: 30,
       tickIntervalMs: 100,
       raceDistanceM: 1200,
-      roundEndDelaySeconds: 17,
+      roundEndDelaySeconds: 35,
     },
     horses: entries.map((entry) => ({
       horseId: entry.horseId,

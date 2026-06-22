@@ -596,3 +596,7 @@ Prefer adding dated entries under `Work History` and updating `Current Repositor
 ### 2026-06-20
 
 - Horse racing today-history APIs were added. `GET /racing/races?tableId=main&limit=50&date=YYYY-MM-DD` returns settled race results for the requested KST calendar date, defaulting to today. `GET /racing/horses/stats?tableId=main&limit=50&date=YYYY-MM-DD` returns per-horse stats over the same date-bounded recent races: starts, wins, win/top2/top3 rates, average rank, average finish time, best/worst rank, recent rank form, and detailed `recentResults` entries with race id/no, rank, and finish ms. Shared response types were added in `packages/shared/src/socket-events.ts`. Impact: frontend should use these REST APIs for today's history/stats instead of trying to infer history from the current table state.
+
+### 2026-06-22
+
+- Main horse racing run timing now matches the faster visual pace at the server source of truth. `packages/db/src/racing-seed.ts` sets `roundEndDelaySeconds` to 35 for both standard and shortcut timing, so the 60-second race/result window contains about 25 seconds of actual race movement and 35 seconds of result display. Impact: frontend should remove gameplay-level 1.7x elapsed-time scaling and render from server `RACE_TICK`; visual-only sprite/camera easing can still be tuned independently.

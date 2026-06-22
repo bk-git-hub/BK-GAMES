@@ -42,6 +42,7 @@ const standardMainRacingTiming = {
   raceIntervalSeconds: 240,
   raceAndResultSeconds: 60,
   bettingCloseBeforeStartSeconds: 30,
+  roundEndDelaySeconds: 35,
 };
 
 const developmentMainRacingTiming = {
@@ -49,6 +50,7 @@ const developmentMainRacingTiming = {
   raceIntervalSeconds: 90,
   raceAndResultSeconds: 60,
   bettingCloseBeforeStartSeconds: 0,
+  roundEndDelaySeconds: 35,
 };
 
 const activeMainRacingTiming = standardMainRacingTiming;
@@ -68,6 +70,7 @@ const mainRacingRules = {
   oddsDenominator: 10_000,
   raceIntervalSeconds: activeMainRacingTiming.raceIntervalSeconds,
   raceAndResultSeconds: activeMainRacingTiming.raceAndResultSeconds,
+  roundEndDelaySeconds: activeMainRacingTiming.roundEndDelaySeconds,
   bettingCloseBeforeStartSeconds:
     activeMainRacingTiming.bettingCloseBeforeStartSeconds,
   developmentTiming: {
@@ -90,7 +93,7 @@ const mainRacingTableValues = {
     activeMainRacingTiming.bettingCloseBeforeStartSeconds,
   tickIntervalMs: 100,
   raceDistanceM: 1200,
-  roundEndDelaySeconds: 17,
+  roundEndDelaySeconds: activeMainRacingTiming.roundEndDelaySeconds,
   rules: mainRacingRules,
 };
 

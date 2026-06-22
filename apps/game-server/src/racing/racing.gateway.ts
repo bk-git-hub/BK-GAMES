@@ -35,6 +35,7 @@ import { buildRaceTick } from './racing-race-tick';
 
 const racingLobbyTableIds = ['main'] as const;
 const racingScheduleSyncIntervalMs = 5_000;
+const minimumRaceTickIntervalMs = 10;
 
 @WebSocketGateway({
   namespace: RACING_NAMESPACE,
@@ -48,6 +49,7 @@ export class RacingGateway implements OnModuleDestroy {
   server!: Server;
 
   private scheduleSyncTimer?: NodeJS.Timeout;
+  private readonly raceTickTimers = new Map<string, RacingTickTimer>();
 
   constructor(
     private readonly tableConfigService: RacingTableConfigService,
@@ -68,6 +70,12 @@ export class RacingGateway implements OnModuleDestroy {
       clearInterval(this.scheduleSyncTimer);
       this.scheduleSyncTimer = undefined;
     }
+
+    for (const timer of this.raceTickTimers.values()) {
+      clearInterval(timer.handle);
+    }
+
+    this.raceTickTimers.clear();
   }
 
   handleDisconnect(socket: Socket) {
@@ -194,7 +202,7 @@ export class RacingGateway implements OnModuleDestroy {
         this.emitTableUpdate(update);
       }
 
-      this.emitRaceTickIfRunning(
+      this.ensureRaceTickLoop(
         update?.state ?? this.tableService.getTableState(tableId),
       );
     } catch (error) {
@@ -250,11 +258,68 @@ export class RacingGateway implements OnModuleDestroy {
     }
   }
 
-  private emitRaceTickIfRunning(state: RacingTableState) {
-    if (state.phase !== 'RUNNING' || !state.race) {
+  private ensureRaceTickLoop(state: RacingTableState) {
+    const activeRace = getActiveRunningRace(state);
+
+    if (!activeRace) {
+      this.stopRaceTickLoop(state.tableId);
       return;
     }
 
+    const intervalMs = normalizeRaceTickIntervalMs(state.timing.tickIntervalMs);
+    const existing = this.raceTickTimers.get(state.tableId);
+
+    if (
+      existing?.raceId === activeRace.raceId &&
+      existing.intervalMs === intervalMs
+    ) {
+      return;
+    }
+
+    this.stopRaceTickLoop(state.tableId);
+
+    const handle = setInterval(() => {
+      this.emitRaceTickForTable(state.tableId);
+    }, intervalMs);
+
+    handle.unref?.();
+    this.raceTickTimers.set(state.tableId, {
+      handle,
+      intervalMs,
+      raceId: activeRace.raceId,
+    });
+
+    this.emitRaceTickFromState(state);
+  }
+
+  private stopRaceTickLoop(tableId: string) {
+    const existing = this.raceTickTimers.get(tableId);
+
+    if (!existing) {
+      return;
+    }
+
+    clearInterval(existing.handle);
+    this.raceTickTimers.delete(tableId);
+  }
+
+  private emitRaceTickForTable(tableId: string) {
+    try {
+      const state = this.tableService.getTableState(tableId);
+
+      if (!getActiveRunningRace(state)) {
+        this.stopRaceTickLoop(tableId);
+        return;
+      }
+
+      this.emitRaceTickFromState(state);
+    } catch (error) {
+      this.stopRaceTickLoop(tableId);
+      this.emitTableError(tableId, error, 'Unexpected racing tick error.');
+    }
+  }
+
+  private emitRaceTickFromState(state: RacingTableState) {
     const tick = buildRaceTick(state);
     const update = this.tableService.recordRaceTick({
       tableId: state.tableId,
@@ -351,6 +416,12 @@ type SocketAuthShape = {
   role?: unknown;
 };
 
+type RacingTickTimer = {
+  handle: NodeJS.Timeout;
+  intervalMs: number;
+  raceId: string;
+};
+
 class RacingGatewayError extends Error {
   constructor(
     readonly code: RacingSocketErrorPayload['code'],
@@ -422,6 +493,22 @@ const socketErrorCodes = new Set<string>([
   'INVALID_SETTLEMENT',
   'SETTLEMENT_CONFLICT',
 ]);
+
+function getActiveRunningRace(state: RacingTableState) {
+  if (state.phase !== 'RUNNING' || !state.race) {
+    return null;
+  }
+
+  return state.race;
+}
+
+function normalizeRaceTickIntervalMs(tickIntervalMs: number) {
+  if (!Number.isFinite(tickIntervalMs)) {
+    return minimumRaceTickIntervalMs;
+  }
+
+  return Math.max(minimumRaceTickIntervalMs, Math.trunc(tickIntervalMs));
+}
 
 function parsePointAmount(amount: unknown) {
   if (typeof amount !== 'string' || !/^[1-9]\d*$/.test(amount.trim())) {

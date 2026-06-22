@@ -1,5 +1,22 @@
 import type { RacingTableState } from '@bk-games/shared';
 import { buildRaceTick } from './racing-race-tick';
+import { RacingGateway } from './racing.gateway';
+
+jest.mock('@bk-games/shared', () => ({
+  RACING_CLIENT_EVENTS: {
+    BET_PLACE: 'bet:place',
+    TABLE_JOIN: 'table:join',
+  },
+  RACING_NAMESPACE: '/racing',
+  RACING_SERVER_EVENTS: {
+    ERROR: 'error',
+    TABLE_EVENT: 'table:event',
+    TABLE_STATE: 'table:state',
+    WALLET_UPDATED: 'wallet:updated',
+  },
+  racingTableRoom: (tableId: string) => `racing:table:${tableId}`,
+  racingUserRoom: (userId: string) => `racing:user:${userId}`,
+}));
 
 describe('buildRaceTick', () => {
   afterEach(() => {
@@ -30,6 +47,56 @@ describe('buildRaceTick', () => {
     expect(tick.positions.map((position) => position.rank)).toEqual([
       1, 2, 3, 4, 5, 6,
     ]);
+  });
+});
+
+describe('RacingGateway race tick loop', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-06-18T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  it('emits running race ticks at the table tick interval', () => {
+    const state = createRunningState({
+      startedAt: '2026-06-18T12:00:00.000Z',
+    });
+    const tableService = createTableServiceMock(state);
+    const { emit, server } = createServerMock();
+    const gateway = new RacingGateway(
+      {} as never,
+      tableService as never,
+      {} as never,
+      {} as never,
+    );
+    gateway.server = server;
+
+    getGatewayHarness(gateway).ensureRaceTickLoop(state);
+
+    expect(tableService.recordRaceTick).toHaveBeenCalledTimes(1);
+
+    jest.advanceTimersByTime(350);
+
+    expect(tableService.recordRaceTick).toHaveBeenCalledTimes(4);
+
+    const tickEvents = emit.mock.calls
+      .filter(([eventName]) => eventName === 'table:event')
+      .map(([, payload]) => payload)
+      .filter((payload) => payload.type === 'RACE_TICK');
+
+    expect(tickEvents).toHaveLength(4);
+    expect(tickEvents.map((event) => event.tick.elapsedMs)).toEqual([
+      0, 100, 200, 300,
+    ]);
+
+    gateway.onModuleDestroy();
+    jest.advanceTimersByTime(300);
+
+    expect(tableService.recordRaceTick).toHaveBeenCalledTimes(4);
   });
 });
 
@@ -121,4 +188,41 @@ function buildTickAtElapsedMs(state: RacingTableState, elapsedMs: number) {
   jest.spyOn(Date, 'now').mockReturnValue(startedAt + elapsedMs);
 
   return buildRaceTick(state);
+}
+
+function createTableServiceMock(state: RacingTableState) {
+  const recordRaceTick = jest.fn(
+    (input: { tick: ReturnType<typeof buildRaceTick> }) => ({
+      state,
+      event: {
+        tableId: state.tableId,
+        type: 'RACE_TICK',
+        actorUserId: 'SYSTEM',
+        raceId: input.tick.raceId,
+        tick: input.tick,
+        stateVersion: state.version,
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  );
+
+  return {
+    getTableState: jest.fn(() => state),
+    recordRaceTick,
+  };
+}
+
+function createServerMock() {
+  const emit = jest.fn();
+  const server = {
+    to: jest.fn(() => ({ emit })),
+  } as never;
+
+  return { emit, server };
+}
+
+function getGatewayHarness(gateway: RacingGateway) {
+  return gateway as unknown as {
+    ensureRaceTickLoop(state: RacingTableState): void;
+  };
 }

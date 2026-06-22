@@ -219,7 +219,7 @@ const startCountdownHoldMs = 1_400;
 const raceBgmLeadMs = 14_000;
 const raceBgmVolume = 0.58;
 const raceBgmSrc = "/racing/audio/william-tell-overture-remix.mp3";
-const visualRaceSpeedMultiplier = 1.7;
+const visualRaceSpeedMultiplier = 1;
 const worldScale = 7.2;
 const trackStartPercent = 1.2;
 const trackFinishPercent = 91.5;
@@ -383,27 +383,43 @@ export default function BkDerbyPage() {
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const bgmRaceIdRef = useRef<string | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const latestTickRef = useRef<RacingRaceTickSnapshot | null>(null);
   const tableStateRef = useRef<RacingTableViewState | null>(null);
   const visualRaceStartRef = useRef<VisualRaceStart | null>(null);
   const isVisuallyRunning = isRaceVisuallyRunning(racing.tableState, clockMs);
   const isRaceRunning = !usesBackendState || isVisuallyRunning;
+  const serverTick = useMemo(
+    () =>
+      racing.latestTick?.raceId === racing.tableState?.race?.raceId
+        ? racing.latestTick
+        : null,
+    [racing.latestTick, racing.tableState?.race?.raceId],
+  );
   const localTick = useMemo(
     () =>
-      buildLocalRaceTick(
-        racing.tableState,
-        clockMs,
-        visualRaceStart,
-        isVisuallyRunning,
-      ),
-    [clockMs, isVisuallyRunning, racing.tableState, visualRaceStart],
+      serverTick
+        ? null
+        : buildLocalRaceTick(
+            racing.tableState,
+            clockMs,
+            visualRaceStart,
+            isVisuallyRunning,
+          ),
+    [
+      clockMs,
+      isVisuallyRunning,
+      racing.tableState,
+      serverTick,
+      visualRaceStart,
+    ],
   );
   const displayTick = useMemo<DisplayRaceTickSnapshot | null>(
-    () => localTick ?? racing.latestTick,
-    [localTick, racing.latestTick],
+    () => serverTick ?? localTick,
+    [localTick, serverTick],
   );
   const currentResultBoard = useMemo(
-    () => buildRaceResultBoard(racing.tableState, localTick ?? displayTick),
-    [displayTick, localTick, racing.tableState],
+    () => buildRaceResultBoard(racing.tableState, displayTick),
+    [displayTick, racing.tableState],
   );
   const visibleResultBoard = chooseVisibleResultBoard(
     currentResultBoard,
@@ -535,6 +551,10 @@ export default function BkDerbyPage() {
   useEffect(() => {
     tableStateRef.current = racing.tableState;
   }, [racing.tableState]);
+
+  useEffect(() => {
+    latestTickRef.current = racing.latestTick;
+  }, [racing.latestTick]);
 
   useEffect(() => {
     const audio = bgmRef.current;
@@ -673,21 +693,28 @@ export default function BkDerbyPage() {
         const tableState = tableStateRef.current;
         const raceId = tableState?.race?.raceId ?? null;
         const isLocalRaceRunning = isRaceVisuallyRunning(tableState, nowMs);
-        const localResultBoard = buildRaceResultBoard(
+        const latestTick =
+          latestTickRef.current?.raceId === raceId
+            ? latestTickRef.current
+            : null;
+        const fallbackTick = latestTick
+          ? null
+          : buildLocalRaceTick(
+              tableState,
+              nowMs,
+              visualRaceStartRef.current,
+              isLocalRaceRunning,
+            );
+        const nextResultBoard = buildRaceResultBoard(
           tableState,
-          buildLocalRaceTick(
-            tableState,
-            nowMs,
-            visualRaceStartRef.current,
-            isLocalRaceRunning,
-          ),
+          latestTick ?? fallbackTick,
         );
 
         if (isLocalRaceRunning && current?.raceId !== raceId) {
           return null;
         }
 
-        return choosePersistedResultBoard(current, localResultBoard);
+        return choosePersistedResultBoard(current, nextResultBoard);
       });
     }, localTickMs);
 
@@ -2945,14 +2972,6 @@ function chooseVisibleResultBoard(
   currentResultBoard: RaceResultBoard | null,
   persistedResultBoard: RaceResultBoard | null,
 ) {
-  if (
-    currentResultBoard?.source === "server" &&
-    persistedResultBoard?.source === "local" &&
-    persistedResultBoard.raceId === currentResultBoard.raceId
-  ) {
-    return persistedResultBoard;
-  }
-
   return currentResultBoard ?? persistedResultBoard;
 }
 
@@ -2961,14 +2980,6 @@ function choosePersistedResultBoard(
   next: RaceResultBoard | null,
 ) {
   if (!next) {
-    return current;
-  }
-
-  if (
-    next.source === "server" &&
-    current?.source === "local" &&
-    current.raceId === next.raceId
-  ) {
     return current;
   }
 
@@ -3464,14 +3475,14 @@ function getStatusDetail(
     return "Demo fallback";
   }
 
+  if (latestTick?.raceId === tableState.race.raceId) {
+    return `${formatLiveElapsedMs(latestTick.elapsedMs)}s live`;
+  }
+
   if (isVisuallyRunning) {
     return `${formatLiveElapsedMs(
       getRaceClockElapsedMs(tableState, nowMs, visualRaceStart),
     )}s live`;
-  }
-
-  if (latestTick?.raceId === tableState.race.raceId) {
-    return `${formatLiveElapsedMs(latestTick.elapsedMs)}s live`;
   }
 
   return `Race ${tableState.race.raceNo}`;
@@ -3810,7 +3821,7 @@ function formatFinishTime(finishedAtMs: number | null) {
     return "--.--s";
   }
 
-  return `${(finishedAtMs / visualRaceSpeedMultiplier / 1000).toFixed(2)}s`;
+  return `${(finishedAtMs / 1000).toFixed(2)}s`;
 }
 
 function clamp(value: number, min: number, max: number) {

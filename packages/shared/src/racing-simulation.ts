@@ -38,6 +38,8 @@ type RacingSimulationState = RacingSimulationEntryInput & {
 
 const minimumRaceRunDurationMs = 1_000;
 const minimumTickIntervalMs = 10;
+// Keep natural pace faster than the race window so final results do not need a hard deadline push.
+const naturalFinishPaceRatio = 0.82;
 
 export function buildRacingSimulationSeed(input: {
   raceId: string;
@@ -63,7 +65,7 @@ export function buildRacingSimulationFinal(
   return simulation.positions.map((position, index) => ({
     raceEntryId: position.raceEntryId,
     finalRank: index + 1,
-    finishedAtMs: position.finishedAtMs ?? input.runDurationMs,
+    finishedAtMs: requireFinishedAtMs(position),
   }));
 }
 
@@ -143,7 +145,8 @@ function advanceSimulationStep(input: {
   distanceM: number;
   runDurationMs: number;
 }) {
-  const baseSpeedMPerMs = input.distanceM / input.runDurationMs;
+  const baseSpeedMPerMs =
+    input.distanceM / (input.runDurationMs * naturalFinishPaceRatio);
 
   for (const state of input.states) {
     if (state.finishedAtMs !== null) {
@@ -208,26 +211,22 @@ function calculateStepSpeed(input: {
   const stumble = stumbleRoll < 0.055 ? -lerp(0.05, 0.18, 1 - stumbleRoll) : 0;
   const fatigue =
     ratio <= stamina ? 1 : Math.max(0.88, 1 - (ratio - stamina) * 0.34);
-  let speedMPerMs =
+  const speedMPerMs =
     input.baseSpeedMPerMs *
     Math.max(0.28, phasePace + tickNoise + burst + stumble) *
     fatigue;
 
-  const remainingMs = Math.max(1, input.runDurationMs - input.stepEndMs);
-  const remainingM = Math.max(0, input.distanceM - input.state.distanceM);
+  return speedMPerMs;
+}
 
-  if (ratio >= 0.72 || remainingMs <= 8_000) {
-    const requiredSpeedMPerMs = remainingM / remainingMs;
-    const closingPush = lerp(
-      1.005,
-      1.04,
-      unitRandom(`${entrySeed}:close:${input.step}`),
+function requireFinishedAtMs(position: RacingSimulationPosition) {
+  if (position.finishedAtMs === null) {
+    throw new Error(
+      `Racing simulation did not finish entry ${position.raceEntryId}.`,
     );
-
-    speedMPerMs = Math.max(speedMPerMs, requiredSpeedMPerMs * closingPush);
   }
 
-  return speedMPerMs;
+  return position.finishedAtMs;
 }
 
 function rankSimulationStates(

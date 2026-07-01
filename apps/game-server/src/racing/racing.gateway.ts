@@ -25,7 +25,10 @@ import { Server, Socket } from 'socket.io';
 import { GameTokenService } from '../auth/game-token.service';
 import { WalletService } from '../wallet/wallet.service';
 import { RacingTableConfigService } from './racing-table-config.service';
-import type { RacingSettlementResult } from './racing-table-config.service';
+import type {
+  RacingCancellationResult,
+  RacingSettlementResult,
+} from './racing-table-config.service';
 import {
   RacingTableError,
   RacingTableService,
@@ -195,6 +198,7 @@ export class RacingGateway implements OnModuleDestroy {
       const lifecycle =
         await this.tableConfigService.advanceRaceLifecycle(tableId);
       this.emitSettlementWalletUpdates(lifecycle.settled);
+      this.emitCancellationWalletUpdates(lifecycle.cancelled);
 
       const update = await this.configureRuntimeTable(tableId);
 
@@ -253,6 +257,23 @@ export class RacingGateway implements OnModuleDestroy {
         balance: bet.walletMutation.wallet.balance.toString(),
         delta: bet.walletMutation.ledger.delta.toString(),
         reason: 'PAYOUT',
+        ledgerId: bet.walletMutation.ledger.id,
+      });
+    }
+  }
+
+  private emitCancellationWalletUpdates(
+    cancellation: RacingCancellationResult | null,
+  ) {
+    if (!cancellation) {
+      return;
+    }
+
+    for (const bet of cancellation.bets) {
+      this.emitWalletUpdated(bet.userId, {
+        balance: bet.walletMutation.wallet.balance.toString(),
+        delta: bet.walletMutation.ledger.delta.toString(),
+        reason: 'CANCEL_REFUND',
         ledgerId: bet.walletMutation.ledger.id,
       });
     }

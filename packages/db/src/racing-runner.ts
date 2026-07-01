@@ -12,6 +12,8 @@ import {
   racingTables,
 } from "./schema.js";
 import {
+  cancelRacingRace,
+  type CancelRacingRaceResult,
   settleRacingRace,
   type SettleRacingRaceResult,
 } from "./racing-betting.js";
@@ -24,6 +26,7 @@ export type AdvanceRacingRaceLifecycleInput = {
 export type AdvanceRacingRaceLifecycleResult = {
   started: RacingLifecycleRace | null;
   settled: SettleRacingRaceResult | null;
+  cancelled: CancelRacingRaceResult | null;
   roundEnded: RacingLifecycleRace | null;
 };
 
@@ -50,12 +53,13 @@ export async function advanceRacingRaceLifecycle(
 ): Promise<AdvanceRacingRaceLifecycleResult> {
   const normalizedInput = normalizeAdvanceInput(input);
   const roundEnded = await endDueSettledRace(normalizedInput);
-  const settled = await settleDueRunningRace(normalizedInput);
+  const resolved = await resolveDueRunningRace(normalizedInput);
   const started = await startDueRacingRace(normalizedInput);
 
   return {
     started,
-    settled,
+    settled: resolved.settled,
+    cancelled: resolved.cancelled,
     roundEnded,
   };
 }
@@ -114,19 +118,69 @@ async function startDueRacingRace(
   });
 }
 
-async function settleDueRunningRace(
+async function resolveDueRunningRace(
   input: Required<AdvanceRacingRaceLifecycleInput>,
 ) {
-  const dueRace = await findDueRunningRace(input);
+  const runningRace = await findRunningRaceForResolution(input);
 
-  if (!dueRace) {
-    return null;
+  if (!runningRace) {
+    return {
+      settled: null,
+      cancelled: null,
+    };
   }
 
-  return settleRacingRace({
-    raceId: dueRace.id,
-    entries: buildSimulationResult(dueRace),
-  });
+  const elapsedMs = input.now.getTime() - getRaceStartAt(runningRace).getTime();
+
+  if (elapsedMs < 0) {
+    return {
+      settled: null,
+      cancelled: null,
+    };
+  }
+
+  const raceRunDurationMs = getRaceRunDurationMs(runningRace.table);
+
+  try {
+    const entries = buildSimulationResult(runningRace);
+    const maxFinishedAtMs = Math.max(
+      ...entries.map((entry) => entry.finishedAtMs),
+    );
+
+    if (elapsedMs < maxFinishedAtMs) {
+      return {
+        settled: null,
+        cancelled: null,
+      };
+    }
+
+    return {
+      settled: await settleRacingRace({
+        raceId: runningRace.id,
+        entries,
+      }),
+      cancelled: null,
+    };
+  } catch (error) {
+    if (!isSimulationUnfinishedError(error)) {
+      throw error;
+    }
+
+    if (elapsedMs < raceRunDurationMs) {
+      return {
+        settled: null,
+        cancelled: null,
+      };
+    }
+
+    return {
+      settled: null,
+      cancelled: await cancelRacingRace({
+        raceId: runningRace.id,
+        reason: "RACING_SIMULATION_TIMEOUT",
+      }),
+    };
+  }
 }
 
 async function endDueSettledRace(
@@ -163,12 +217,12 @@ async function endDueSettledRace(
   });
 }
 
-async function findDueRunningRace(
+async function findRunningRaceForResolution(
   input: Required<AdvanceRacingRaceLifecycleInput>,
 ) {
   return db.transaction(async (tx) => {
     const table = await lockRacingTableByCode(tx, input.tableCode);
-    const raceId = await findDueRunningRaceIdForSettlement(
+    const raceId = await findRunningRaceIdForResolution(
       tx,
       table,
       input.now,
@@ -255,20 +309,19 @@ async function findDueRaceIdForStart(
   return row?.id ?? null;
 }
 
-async function findDueRunningRaceIdForSettlement(
+async function findRunningRaceIdForResolution(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   table: RacingRunnerTable,
   now: Date,
 ) {
-  const settleAt = new Date(now.getTime() - getRaceRunDurationMs(table));
   const result = await tx.execute(sql<RaceIdRow>`
     select id
     from racing_races
     where table_id = ${table.id}
       and phase = 'RUNNING'
       and coalesce(scheduled_start_at, started_at) is not null
-      and coalesce(scheduled_start_at, started_at) <= ${settleAt}
-    order by coalesce(scheduled_start_at, started_at) asc
+      and coalesce(started_at, scheduled_start_at) <= ${now}
+    order by coalesce(started_at, scheduled_start_at) asc
     limit 1
     for update
   `);
@@ -415,6 +468,17 @@ function getRaceRunDurationMs(table: RacingRunnerTable) {
   return Math.max(
     1_000,
     getRaceAndResultDurationMs(table) - table.roundEndDelaySeconds * 1000,
+  );
+}
+
+function getRaceStartAt(race: RacingLifecycleRace) {
+  return race.startedAt ?? race.scheduledStartAt ?? new Date(0);
+}
+
+function isSimulationUnfinishedError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.startsWith("Racing simulation did not finish entry ")
   );
 }
 

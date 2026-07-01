@@ -154,6 +154,7 @@ type RacingScheduledRaceEntry = {
 type RacingLifecycleAdvanceResult = {
   started: unknown;
   settled: RacingSettlementResult | null;
+  cancelled: RacingCancellationResult | null;
   roundEnded: unknown;
 };
 
@@ -178,6 +179,26 @@ export type RacingSettlementBetResult = {
       type?: 'PAYOUT';
     };
   } | null;
+};
+
+export type RacingCancellationResult = {
+  raceId: string;
+  bets: RacingCancellationBetResult[];
+};
+
+export type RacingCancellationBetResult = {
+  betId: string;
+  userId: string;
+  betType: RacingBetType;
+  refundAmount: bigint | string;
+  walletMutation: {
+    wallet: { balance: bigint | string };
+    ledger: {
+      id: string;
+      delta: bigint | string;
+      type?: 'CANCEL_REFUND';
+    };
+  };
 };
 
 function readBetTypes(rules: Record<string, unknown>): RacingBetType[] {

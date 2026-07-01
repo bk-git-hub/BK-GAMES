@@ -42,7 +42,7 @@ const standardMainRacingTiming = {
   raceIntervalSeconds: 240,
   raceAndResultSeconds: 60,
   bettingCloseBeforeStartSeconds: 30,
-  roundEndDelaySeconds: 30,
+  roundEndDelaySeconds: 10,
 };
 
 const developmentMainRacingTiming = {
@@ -50,7 +50,7 @@ const developmentMainRacingTiming = {
   raceIntervalSeconds: 90,
   raceAndResultSeconds: 60,
   bettingCloseBeforeStartSeconds: 0,
-  roundEndDelaySeconds: 30,
+  roundEndDelaySeconds: 10,
 };
 
 const activeMainRacingTiming = standardMainRacingTiming;

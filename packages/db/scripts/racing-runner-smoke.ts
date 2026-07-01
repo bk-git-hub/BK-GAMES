@@ -177,13 +177,15 @@ try {
     tableCode,
     now,
   });
+  const settledAt = new Date(now.getTime() + 5_000);
   const settled = await advanceRacingRaceLifecycle({
     tableCode,
-    now,
+    now: settledAt,
   });
+  const roundEndedAt = new Date(now.getTime() + 7_000);
   const roundEnded = await advanceRacingRaceLifecycle({
     tableCode,
-    now,
+    now: roundEndedAt,
   });
   const [finishedRace] = await db
     .select()

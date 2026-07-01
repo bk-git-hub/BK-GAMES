@@ -381,15 +381,16 @@ function GameVisual({
       <div
         className={cn(
           sizeClassName,
-          "relative grid place-items-center overflow-hidden rounded-2xl bg-[#c8272e]",
+          "relative overflow-hidden rounded-2xl bg-[#c8272e]",
         )}
       >
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[#f5c95f]" />
+        <div className="absolute inset-x-0 bottom-[34%] h-1 bg-[#111827]/20" />
         <Image
           alt=""
           className={cn(
-            "relative z-10 h-auto w-[92%] drop-shadow-[0_14px_12px_rgba(7,28,63,0.35)]",
-            compact && "w-[110%]",
+            "absolute top-1/2 left-1/2 z-10 h-auto w-[720%] max-w-none -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_16px_14px_rgba(7,28,63,0.42)]",
+            compact && "w-[780%]",
           )}
           height={181}
           src="/racing/generated-reference-style/horse-01-red-gallop-7f.png"

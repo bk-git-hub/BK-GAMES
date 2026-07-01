@@ -1,34 +1,34 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Club, Dumbbell } from "lucide-react";
+import { ArrowRight, Club, Dumbbell, Trophy } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+type Game = {
+  description: string;
+  href: string;
+  kind: "cards" | "derby" | "boxing";
+  name: string;
+  status: string;
+};
 
-const games = [
+const games: Game[] = [
   {
-    description: "The first real-time table game for BK Games.",
+    description:
+      "Real-time table rounds with multiplayer seats and live wallet updates.",
     href: "/blackjack",
     kind: "cards",
     name: "Blackjack",
     status: "Open",
   },
   {
-    description: "Live horse racing with tickets, camera chase, and results.",
+    description: "Track-side racing tickets, camera chase, and result boards.",
     href: "/racing/bk-derby",
     kind: "derby",
     name: "BK Derby",
     status: "Open",
   },
   {
-    description: "A preview of the live boxing broadcast table.",
+    description:
+      "A broadcast-style fight preview for the next live game format.",
     href: "/boxing",
     kind: "boxing",
     name: "Boxing",
@@ -38,80 +38,108 @@ const games = [
 
 export function GameList() {
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Club className="size-4" />
-          <CardTitle>Games</CardTitle>
+    <section className="rounded-[1.35rem] border-[2px] border-[#111827] bg-[#fff8ed] p-5 shadow-[8px_9px_0_#0b3b73] sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <Club className="size-5 text-[#c8272e]" />
+            <h2 className="text-3xl font-black tracking-normal text-[#111827]">
+              Games
+            </h2>
+          </div>
+          <p className="mt-2 max-w-2xl text-sm leading-6 font-bold text-[#4b5874]">
+            Pick a game and play with the same free points wallet.
+          </p>
         </div>
-        <CardDescription>
-          Platform entries stay separate from game runtime.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3">
+      </div>
+
+      <div className="mt-6 grid gap-5 lg:grid-cols-3">
         {games.map((game) => (
-          <article
-            key={game.name}
-            className="grid gap-4 rounded-lg border p-3 sm:grid-cols-[96px_1fr]"
-          >
-            <div className="flex min-h-28 items-center justify-center gap-1 rounded-md bg-neutral-950 p-3">
-              {game.kind === "cards" ? (
-                <>
-                  <Image
-                    alt=""
-                    className="h-20 w-auto rotate-[-6deg]"
-                    height={588}
-                    src="/cards/royal-noir/AS.svg"
-                    width={420}
-                  />
-                  <Image
-                    alt=""
-                    className="h-20 w-auto rotate-[6deg]"
-                    height={588}
-                    src="/cards/royal-noir/KH.svg"
-                    width={420}
-                  />
-                </>
-              ) : game.kind === "derby" ? (
-                <div className="grid h-20 w-full place-items-center overflow-hidden rounded-md border border-emerald-200/30 bg-[linear-gradient(180deg,#134e4a_0_54%,#365314_54%_100%)] px-2">
-                  <Image
-                    alt=""
-                    className="h-auto w-full drop-shadow-[0_10px_14px_rgba(0,0,0,0.45)]"
-                    height={181}
-                    src="/racing/generated-reference-style/horse-01-red-gallop-7f.png"
-                    width={1442}
-                  />
-                </div>
-              ) : (
-                <div className="grid h-20 w-full place-items-center rounded-md border border-amber-200/30 bg-[linear-gradient(135deg,#7f1d1d_0_48%,#0c4a6e_48%_100%)] text-amber-100">
-                  <Dumbbell className="size-10" />
-                </div>
-              )}
-            </div>
-            <div className="flex min-w-0 flex-col justify-between gap-4">
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base font-semibold">{game.name}</h2>
-                  <Badge variant="secondary">{game.status}</Badge>
-                </div>
-                <p className="text-muted-foreground text-sm leading-6">
-                  {game.description}
-                </p>
-              </div>
-              <Link
-                href={game.href}
-                className={buttonVariants({
-                  className: "w-full sm:w-fit",
-                  variant: "default",
-                })}
-              >
-                Open table
-                <ArrowRight />
-              </Link>
-            </div>
-          </article>
+          <GameCard game={game} key={game.name} />
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
+  );
+}
+
+function GameCard({ game }: { game: Game }) {
+  return (
+    <article className="group overflow-hidden rounded-[1.25rem] border-[2px] border-[#111827] bg-[#fffaf0] shadow-[6px_7px_0_#0b3b73] transition hover:-translate-y-1 hover:shadow-[8px_10px_0_#c8272e]">
+      <div className="border-b border-[#d8c09a] bg-white p-4">
+        <GameVisual game={game} />
+      </div>
+      <div className="p-5">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-2xl font-black tracking-normal text-[#111827]">
+            {game.name}
+          </h3>
+          <span className="rounded-full border border-[#0b3b73] bg-[#d8ecff] px-3 py-1 text-xs font-black tracking-normal text-[#0b3b73] uppercase">
+            {game.status}
+          </span>
+        </div>
+        <p className="mt-3 min-h-16 text-sm leading-6 text-[#4b5874]">
+          {game.description}
+        </p>
+        <Link
+          href={game.href}
+          className="mt-5 inline-flex items-center gap-2 text-sm font-black tracking-normal text-[#c8272e] uppercase transition group-hover:gap-3"
+        >
+          Open
+          <ArrowRight className="size-4" />
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function GameVisual({ game }: { game: Game }) {
+  if (game.kind === "cards") {
+    return (
+      <div className="relative grid h-44 place-items-center overflow-hidden rounded-2xl bg-[#071c3f]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(216,236,255,0.28),transparent_35%),radial-gradient(circle_at_80%_10%,rgba(200,39,46,0.38),transparent_28%)]" />
+        <div className="relative flex items-center justify-center gap-2">
+          <Image
+            alt=""
+            className="h-auto w-20 rotate-[-8deg]"
+            height={588}
+            src="/cards/royal-noir/AS.svg"
+            width={420}
+          />
+          <Image
+            alt=""
+            className="h-auto w-20 rotate-[8deg]"
+            height={588}
+            src="/cards/royal-noir/KH.svg"
+            width={420}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (game.kind === "derby") {
+    return (
+      <div className="relative h-44 overflow-hidden rounded-2xl bg-[#c8272e]">
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[#f5c95f]" />
+        <div className="absolute inset-x-0 bottom-[34%] h-1 bg-[#111827]/20" />
+        <Image
+          alt=""
+          className="absolute top-1/2 left-1/2 z-10 h-auto w-[720%] max-w-none -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_16px_14px_rgba(7,28,63,0.42)]"
+          height={181}
+          src="/racing/generated-reference-style/horse-01-red-gallop-7f.png"
+          width={1442}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative grid h-44 place-items-center overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#c8272e_0_48%,#0b3b73_48%_100%)]">
+      <div className="absolute inset-4 rounded-2xl border border-white/35" />
+      <div className="relative grid size-20 place-items-center rounded-full bg-[#fff8ed] text-[#0b3b73] shadow-[0_9px_0_rgba(7,28,63,0.25)]">
+        <Dumbbell className="size-10" />
+      </div>
+      <Trophy className="absolute right-4 bottom-4 size-5 text-[#d8ecff]" />
+    </div>
   );
 }

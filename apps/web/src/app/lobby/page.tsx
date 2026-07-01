@@ -6,10 +6,7 @@ import {
   getDailyRewardClaimDate,
 } from "@bk-games/db";
 
-import {
-  DailyRewardCard,
-  type DailyRewardFeedback,
-} from "./daily-reward-card";
+import { DailyRewardCard, type DailyRewardFeedback } from "./daily-reward-card";
 import { GameList } from "./game-list";
 import { LobbyShell } from "./lobby-shell";
 import { WalletSummary } from "./wallet-summary";
@@ -41,8 +38,8 @@ export default async function LobbyPage({ searchParams }: LobbyPageProps) {
 
   return (
     <LobbyShell userEmail={session.user.email} userName={session.user.name}>
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <div className="flex flex-col gap-4">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="flex flex-col gap-6">
           <WalletSummary
             balance={gameAccount.wallet.balance}
             status={gameAccount.wallet.status}

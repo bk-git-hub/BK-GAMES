@@ -1,12 +1,4 @@
-import { WalletCards } from "lucide-react";
-
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { BadgeCheck, Coins, WalletCards } from "lucide-react";
 
 type WalletSummaryProps = {
   balance: bigint;
@@ -17,29 +9,54 @@ const pointsFormatter = new Intl.NumberFormat("en-US");
 
 export function WalletSummary({ balance, status }: WalletSummaryProps) {
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <WalletCards className="size-4" />
-          <CardTitle>Wallet</CardTitle>
+    <section className="overflow-hidden rounded-[1.35rem] border-[2px] border-[#111827] bg-[#0b3b73] text-white shadow-[8px_9px_0_#c8272e]">
+      <div className="border-b border-white/15 p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <WalletCards className="size-5 text-[#8fc4e8]" />
+              <h2 className="text-3xl font-black tracking-normal">Wallet</h2>
+            </div>
+            <p className="mt-2 text-sm leading-6 font-bold text-[#d8ecff]">
+              Private balance display for your signed-in account.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#f5c95f] px-3 py-1 text-xs font-black tracking-normal text-[#111827] uppercase">
+            Live
+          </span>
         </div>
-        <CardDescription>
-          Private balance display for the signed-in player.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
-        <WalletMetric label="Balance" value={`${formatPoints(balance)} pts`} />
-        <WalletMetric label="Status" value={status} />
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+        <WalletMetric
+          icon={Coins}
+          label="Balance"
+          value={`${formatPoints(balance)} pts`}
+        />
+        <WalletMetric icon={BadgeCheck} label="Status" value={status} />
+      </div>
+    </section>
   );
 }
 
-function WalletMetric({ label, value }: { label: string; value: string }) {
+function WalletMetric({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Coins;
+  label: string;
+  value: string;
+}) {
   return (
-    <div className="rounded-lg border px-3 py-2">
-      <p className="text-muted-foreground text-sm">{label}</p>
-      <p className="text-lg font-semibold">{value}</p>
+    <div className="rounded-[1.1rem] border border-white/15 bg-[#071c3f] p-4">
+      <div className="flex items-center gap-2 text-[#8fc4e8]">
+        <Icon className="size-4" />
+        <p className="text-xs font-black tracking-normal uppercase">{label}</p>
+      </div>
+      <p className="mt-3 text-2xl font-black tracking-normal break-words">
+        {value}
+      </p>
     </div>
   );
 }

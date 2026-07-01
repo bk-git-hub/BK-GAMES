@@ -98,7 +98,7 @@ Stage할 때는 파일 경로를 명시한다.
 
 ```text
 허용 예시:
-git add -- AGENTS.md THREAD_SYNC.md
+git add -- AGENTS.md ENGINEERING_LOG.md
 git add -- packages/db/src/wallet-transactions.ts packages/db/package.json
 ```
 
@@ -172,9 +172,11 @@ apps/web/src/lib/auth*
 apps/web/src/app/api/auth/[...all]/route.ts
 .env.example
 AGENTS.md
-THREAD_SYNC.md
+ENGINEERING_LOG.md
 ```
 
-공유 파일을 수정하면 작업 완료 후 `THREAD_SYNC.md`에 변경 이유와 영향을 기록한다.
+`THREAD_SYNC.md`는 여러 Codex thread를 맞추기 위한 local-only handoff 파일이며 공개 Git에 올리지 않는다.
+
+공유 파일을 수정하면 작업 완료 후 로컬 `THREAD_SYNC.md`에는 상세 작업 이력을 남기고, 공개해도 되는 요약은 `ENGINEERING_LOG.md`에 정리한다.
 
 다른 스레드의 담당 영역에서 변경이 필요해지면 즉시 멈추고 사용자에게 범위 변경을 보고한다.

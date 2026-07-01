@@ -41,6 +41,7 @@ type AssetHorse = {
 };
 
 type DisplayHorse = AssetHorse & {
+  isCoasting: boolean;
   lane: number;
   name: string;
   number: number;
@@ -201,6 +202,7 @@ const trackFinishPercent = 91.5;
 const runnerFinishNoseOffsetPx = 185;
 const postFinishTrackOvershootRatio = 0.075;
 const maxVisualRaceProgress = 1 + postFinishTrackOvershootRatio;
+const postFinishCoastDurationMs = 2_400;
 const maxCameraTranslatePercent = ((worldScale - 1) / worldScale) * 100;
 const leaderViewportAnchorPercent = 50 / worldScale;
 const startLaneTops = [
@@ -318,6 +320,7 @@ const assetHorses: AssetHorse[] = [
 
 const fallbackHorses: DisplayHorse[] = assetHorses.map((horse, index) => ({
   ...horse,
+  isCoasting: false,
   lane: index + 1,
   name: `${horse.color} runner`,
   number: index + 1,
@@ -356,7 +359,6 @@ export default function BkDerbyPage() {
   const latestTickRef = useRef<RacingRaceTickSnapshot | null>(null);
   const tableStateRef = useRef<RacingTableViewState | null>(null);
   const isVisuallyRunning = isRaceVisuallyRunning(racing.tableState, clockMs);
-  const isRaceRunning = !usesBackendState || isVisuallyRunning;
   const serverTick = useMemo(
     () =>
       racing.latestTick?.raceId === racing.tableState?.race?.raceId
@@ -377,9 +379,10 @@ export default function BkDerbyPage() {
     persistedResultBoard,
   );
   const displayHorses = useMemo(
-    () => buildDisplayHorses(racing.tableState, displayTick),
-    [displayTick, racing.tableState],
+    () => buildDisplayHorses(racing.tableState, displayTick, clockMs),
+    [clockMs, displayTick, racing.tableState],
   );
+  const isRaceRunning = !usesBackendState || isVisuallyRunning;
   const leaderHorse = getLeaderHorse(displayHorses);
   const cameraTranslatePercent = getCameraTranslatePercent(
     leaderHorse?.progress ?? 0,
@@ -1006,7 +1009,9 @@ const Runner = memo(function Runner({
     <div
       className={`${styles.runner} ${getRunnerLaneClassName(horse.lane)} ${
         !usesBackendState ? styles.previewRunner : styles.liveRunner
-      } ${isLeader ? styles.leaderRunner : ""}`}
+      } ${horse.isCoasting ? styles.coastingRunner : ""} ${
+        isLeader ? styles.leaderRunner : ""
+      }`}
       style={
         {
           "--duration": horse.duration,
@@ -1019,10 +1024,14 @@ const Runner = memo(function Runner({
     >
       <div
         aria-label={`${horse.number}번 말 ${
-          isRaceRunning ? "달리기" : "출발 대기"
+          horse.isCoasting ? "감속" : isRaceRunning ? "달리기" : "출발 대기"
         } 애니메이션`}
         className={`${styles.sprite} ${
-          isRaceRunning ? styles.runningSprite : styles.pausedSprite
+          isRaceRunning
+            ? styles.runningSprite
+            : horse.isCoasting
+              ? styles.coastingSprite
+              : styles.pausedSprite
         }`}
         style={
           {
@@ -2758,12 +2767,13 @@ function factorial(value: number) {
 function buildDisplayHorses(
   tableState: RacingTableViewState | null,
   latestTick: DisplayRaceTickSnapshot | null,
+  nowMs: number,
 ): DisplayHorse[] {
-  const race = tableState?.race;
-
-  if (!race?.entries.length) {
+  if (!tableState?.race?.entries.length) {
     return fallbackHorses;
   }
+
+  const race = tableState.race;
 
   const positionByEntryId = new Map(
     latestTick?.raceId === race.raceId
@@ -2773,9 +2783,14 @@ function buildDisplayHorses(
   const resultRankByEntryId = new Map(
     race.resultOrder.map((raceEntryId, index) => [raceEntryId, index + 1]),
   );
-  const shouldHoldPostFinishPosition = tableState
+  const postFinishStartMs = getPostFinishStartMs(tableState);
+  const isPostFinishPhase = tableState
     ? isRaceResultPhase(tableState.phase)
     : false;
+  const postFinishProgress =
+    isPostFinishPhase && postFinishStartMs !== null
+      ? getPostFinishCoastProgress(postFinishStartMs, nowMs)
+      : null;
 
   return race.entries.map((entry, index) => {
     const asset = assetHorses[index % assetHorses.length];
@@ -2785,20 +2800,20 @@ function buildDisplayHorses(
       entry.finalRank ??
       resultRankByEntryId.get(entry.raceEntryId) ??
       null;
-    const fallbackProgress =
-      entry.finishedAtMs !== null
-        ? shouldHoldPostFinishPosition
-          ? maxVisualRaceProgress
-          : 1
-        : 0;
-    const progress =
-      shouldHoldPostFinishPosition && entry.finishedAtMs !== null
-        ? Math.max(position?.progress ?? fallbackProgress, fallbackProgress)
-        : (position?.progress ?? fallbackProgress);
+    const hasServerFinish = entry.finishedAtMs !== null;
+    const horsePostFinishProgress = hasServerFinish ? postFinishProgress : null;
+    const progress = Math.max(
+      position?.progress ?? (hasServerFinish ? 1 : 0),
+      horsePostFinishProgress ?? 0,
+    );
+    const isCoasting =
+      horsePostFinishProgress !== null &&
+      horsePostFinishProgress < maxVisualRaceProgress;
     const laneIndex = Math.max(0, entry.lane - 1);
 
     return {
       ...asset,
+      isCoasting,
       lane: entry.lane,
       name: entry.name,
       number: entry.number,
@@ -2899,6 +2914,28 @@ function choosePersistedResultBoard(
 
 function getRaceProgressPercent(progress: number) {
   return clamp(progress, 0, 1) * 100;
+}
+
+function getPostFinishStartMs(tableState: RacingTableViewState) {
+  const targetTime =
+    tableState.race?.finishedAt ??
+    tableState.race?.settledAt ??
+    tableState.updatedAt;
+
+  if (!targetTime) {
+    return null;
+  }
+
+  const startMs = Date.parse(targetTime);
+
+  return Number.isFinite(startMs) ? startMs : null;
+}
+
+function getPostFinishCoastProgress(startedAtMs: number, nowMs: number) {
+  const ratio = clamp((nowMs - startedAtMs) / postFinishCoastDurationMs, 0, 1);
+  const easedRatio = 1 - Math.pow(1 - ratio, 3);
+
+  return 1 + postFinishTrackOvershootRatio * easedRatio;
 }
 
 function getProgressHorseStyle(progress: number, index: number) {

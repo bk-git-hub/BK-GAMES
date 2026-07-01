@@ -1876,6 +1876,10 @@
   animation: none;
 }
 
+.coastingRunner {
+  transition: transform 2400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .sprite,
 .rowSprite {
   background-image: var(--sprite);
@@ -1888,6 +1892,10 @@
 
 .runningSprite {
   animation: gallop 0.24s steps(7) infinite;
+}
+
+.coastingSprite {
+  animation: gallop 0.28s steps(7) 9;
 }
 
 .pausedSprite {

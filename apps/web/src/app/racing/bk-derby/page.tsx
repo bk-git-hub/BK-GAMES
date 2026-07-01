@@ -73,12 +73,6 @@ type RaceResultBoard = {
   isComplete: boolean;
   raceId: string;
   raceNo: number;
-  source: "local" | "server";
-};
-
-type VisualRaceStart = {
-  raceId: string;
-  startMs: number;
 };
 
 type StartCountdownOverlay = {
@@ -179,21 +173,7 @@ type ConnectionStatus =
   | "error"
   | "polling";
 
-type RacingSimulationState = {
-  raceEntryId: string;
-  number: number;
-  distanceM: number;
-  finishedAtMs: number | null;
-  finishSpeedMPerMs: number | null;
-};
-
 type RacingTableViewState = RacingTableState | RacingTableSummary;
-
-type RacingTimeline = {
-  maxElapsedMs: number;
-  snapshots: DisplayRacePosition[][];
-  tickIntervalMs: number;
-};
 
 type RacingBetTypeConfig = {
   description: string;
@@ -210,23 +190,17 @@ const previewGuestNickname = "BK Derby Guest";
 const restPollMs = 1_000;
 const raceHistoryPollMs = 10_000;
 const localTickMs = 160;
-const minimumRaceRunDurationMs = 1_000;
-const minimumTickIntervalMs = 10;
-const maxUnforcedRaceDurationMultiplier = 2.2;
-const smoothStartDelayThresholdMs = 2_000;
 const startCountdownWindowMs = 5_000;
 const startCountdownHoldMs = 1_400;
 const raceBgmLeadMs = 14_000;
 const raceBgmVolume = 0.58;
 const raceBgmSrc = "/racing/audio/william-tell-overture-remix.mp3";
-const visualRaceSpeedMultiplier = 1;
 const worldScale = 7.2;
 const trackStartPercent = 1.2;
 const trackFinishPercent = 91.5;
 const runnerFinishNoseOffsetPx = 185;
 const postFinishTrackOvershootRatio = 0.075;
 const maxVisualRaceProgress = 1 + postFinishTrackOvershootRatio;
-const maxRaceTimelineCacheEntries = 8;
 const maxCameraTranslatePercent = ((worldScale - 1) / worldScale) * 100;
 const leaderViewportAnchorPercent = 50 / worldScale;
 const startLaneTops = [
@@ -342,8 +316,6 @@ const assetHorses: AssetHorse[] = [
   },
 ];
 
-const raceTimelineCache = new Map<string, RacingTimeline>();
-
 const fallbackHorses: DisplayHorse[] = assetHorses.map((horse, index) => ({
   ...horse,
   lane: index + 1,
@@ -363,8 +335,6 @@ export default function BkDerbyPage() {
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [persistedResultBoard, setPersistedResultBoard] =
     useState<RaceResultBoard | null>(null);
-  const [visualRaceStart, setVisualRaceStart] =
-    useState<VisualRaceStart | null>(null);
   const [trackWidthPx, setTrackWidthPx] = useState(0);
   const [isBgmBlocked, setIsBgmBlocked] = useState(false);
   const [isBgmPlaying, setIsBgmPlaying] = useState(false);
@@ -385,7 +355,6 @@ export default function BkDerbyPage() {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const latestTickRef = useRef<RacingRaceTickSnapshot | null>(null);
   const tableStateRef = useRef<RacingTableViewState | null>(null);
-  const visualRaceStartRef = useRef<VisualRaceStart | null>(null);
   const isVisuallyRunning = isRaceVisuallyRunning(racing.tableState, clockMs);
   const isRaceRunning = !usesBackendState || isVisuallyRunning;
   const serverTick = useMemo(
@@ -395,27 +364,9 @@ export default function BkDerbyPage() {
         : null,
     [racing.latestTick, racing.tableState?.race?.raceId],
   );
-  const localTick = useMemo(
-    () =>
-      serverTick
-        ? null
-        : buildLocalRaceTick(
-            racing.tableState,
-            clockMs,
-            visualRaceStart,
-            isVisuallyRunning,
-          ),
-    [
-      clockMs,
-      isVisuallyRunning,
-      racing.tableState,
-      serverTick,
-      visualRaceStart,
-    ],
-  );
   const displayTick = useMemo<DisplayRaceTickSnapshot | null>(
-    () => serverTick ?? localTick,
-    [localTick, serverTick],
+    () => serverTick,
+    [serverTick],
   );
   const currentResultBoard = useMemo(
     () => buildRaceResultBoard(racing.tableState, displayTick),
@@ -463,8 +414,6 @@ export default function BkDerbyPage() {
   const statusDetail = getStatusDetail(
     racing.tableState,
     displayTick,
-    clockMs,
-    visualRaceStart,
     isVisuallyRunning,
   );
   const socketErrorMessage =
@@ -657,34 +606,6 @@ export default function BkDerbyPage() {
   }, []);
 
   useEffect(() => {
-    const tableState = racing.tableState;
-    const race = tableState?.race;
-    const currentStart = visualRaceStartRef.current;
-
-    if (!tableState || !race || !isVisuallyRunning) {
-      if (!race || currentStart?.raceId !== race.raceId) {
-        visualRaceStartRef.current = null;
-        setVisualRaceStart(null);
-      }
-
-      return;
-    }
-
-    if (currentStart?.raceId === race.raceId) {
-      return;
-    }
-
-    const startMs = resolveVisualRaceStartMs(tableState, Date.now());
-    const nextStart = {
-      raceId: race.raceId,
-      startMs,
-    };
-
-    visualRaceStartRef.current = nextStart;
-    setVisualRaceStart(nextStart);
-  }, [isVisuallyRunning, racing.tableState]);
-
-  useEffect(() => {
     const timer = window.setInterval(() => {
       const nowMs = Date.now();
 
@@ -692,25 +613,16 @@ export default function BkDerbyPage() {
       setPersistedResultBoard((current) => {
         const tableState = tableStateRef.current;
         const raceId = tableState?.race?.raceId ?? null;
-        const isLocalRaceRunning = isRaceVisuallyRunning(tableState, nowMs);
         const latestTick =
           latestTickRef.current?.raceId === raceId
             ? latestTickRef.current
             : null;
-        const fallbackTick = latestTick
-          ? null
-          : buildLocalRaceTick(
-              tableState,
-              nowMs,
-              visualRaceStartRef.current,
-              isLocalRaceRunning,
-            );
-        const nextResultBoard = buildRaceResultBoard(
-          tableState,
-          latestTick ?? fallbackTick,
-        );
+        const nextResultBoard = buildRaceResultBoard(tableState, latestTick);
 
-        if (isLocalRaceRunning && current?.raceId !== raceId) {
+        if (
+          isRaceVisuallyRunning(tableState, nowMs) &&
+          current?.raceId !== raceId
+        ) {
           return null;
         }
 
@@ -2915,7 +2827,7 @@ function buildRaceResultBoard(
       ? latestTick.positions.map((position) => [position.raceEntryId, position])
       : [],
   );
-  const hasLocalFinishTime = [...positionByEntryId.values()].some(
+  const hasTickFinishTime = [...positionByEntryId.values()].some(
     (position) =>
       position.finishedAtMs !== null && position.finishedAtMs !== undefined,
   );
@@ -2926,23 +2838,23 @@ function buildRaceResultBoard(
     .map((entry, index) => {
       const position = positionByEntryId.get(entry.raceEntryId);
       const asset = assetHorses[index % assetHorses.length];
-      const localFinishedAtMs = position?.finishedAtMs ?? null;
+      const tickFinishedAtMs = position?.finishedAtMs ?? null;
       const serverFinishedAtMs = entry.finishedAtMs ?? null;
-      const localRank = position?.rank ?? null;
+      const tickRank = position?.rank ?? null;
       const serverRank =
         entry.finalRank ?? resultRankByEntryId.get(entry.raceEntryId) ?? null;
 
       return {
         color: asset.color,
-        finishedAtMs: hasLocalFinishTime
-          ? localFinishedAtMs
-          : (serverFinishedAtMs ?? localFinishedAtMs),
+        finishedAtMs: hasTickFinishTime
+          ? tickFinishedAtMs
+          : (serverFinishedAtMs ?? tickFinishedAtMs),
         name: entry.name,
         number: entry.number,
         raceEntryId: entry.raceEntryId,
-        rank: hasLocalFinishTime
-          ? (localRank ?? serverRank)
-          : (serverRank ?? localRank),
+        rank: hasTickFinishTime
+          ? (tickRank ?? serverRank)
+          : (serverRank ?? tickRank),
       } satisfies RaceResultEntry;
     })
     .sort(
@@ -2964,7 +2876,6 @@ function buildRaceResultBoard(
     isComplete: entries.every((entry) => entry.finishedAtMs !== null),
     raceId: race.raceId,
     raceNo: race.raceNo,
-    source: hasLocalFinishTime ? "local" : "server",
   };
 }
 
@@ -2986,303 +2897,6 @@ function choosePersistedResultBoard(
   return next;
 }
 
-function buildLocalRaceTick(
-  tableState: RacingTableViewState | null,
-  nowMs: number,
-  visualRaceStart: VisualRaceStart | null = null,
-  isVisuallyRunning = false,
-): DisplayRaceTickSnapshot | null {
-  const race = tableState?.race;
-
-  if (!race || !isVisuallyRunning) {
-    return null;
-  }
-
-  const raceRunDurationMs = Math.max(
-    minimumRaceRunDurationMs,
-    (tableState.timing.raceAndResultSeconds -
-      tableState.timing.roundEndDelaySeconds) *
-      1000,
-  );
-  const fallbackStartAt =
-    Date.parse(race.startedAt ?? "") ||
-    Date.parse(race.scheduledStartAt ?? "") ||
-    nowMs;
-  const startAt =
-    visualRaceStart?.raceId === race.raceId
-      ? visualRaceStart.startMs
-      : fallbackStartAt;
-  const visualElapsedMs = clamp(
-    (nowMs - startAt) * visualRaceSpeedMultiplier,
-    0,
-    raceRunDurationMs * maxUnforcedRaceDurationMultiplier,
-  );
-  const positions = readRaceTimelineTick({
-    distanceM: tableState.timing.raceDistanceM,
-    elapsedMs: visualElapsedMs,
-    entries: race.entries,
-    runDurationMs: raceRunDurationMs,
-    seed: buildSimulationSeed({
-      raceId: race.raceId,
-      raceNo: race.raceNo,
-    }),
-    tickIntervalMs: tableState.timing.tickIntervalMs,
-  });
-
-  return {
-    elapsedMs: visualElapsedMs,
-    positions,
-    raceId: race.raceId,
-  };
-}
-
-function buildSimulationSeed(input: { raceId: string; raceNo: number }) {
-  return `${input.raceId}:${input.raceNo}`;
-}
-
-function readRaceTimelineTick(input: {
-  distanceM: number;
-  elapsedMs: number;
-  entries: RacingRaceEntrySnapshot[];
-  runDurationMs: number;
-  seed: string;
-  tickIntervalMs: number;
-}) {
-  const timeline = getRaceTimeline(input);
-  const elapsedMs = clamp(input.elapsedMs, 0, timeline.maxElapsedMs);
-  const snapshotIndex = Math.min(
-    timeline.snapshots.length - 1,
-    Math.floor(elapsedMs / timeline.tickIntervalMs),
-  );
-
-  return timeline.snapshots[snapshotIndex] ?? [];
-}
-
-function getRaceTimeline(input: {
-  distanceM: number;
-  entries: RacingRaceEntrySnapshot[];
-  runDurationMs: number;
-  seed: string;
-  tickIntervalMs: number;
-}) {
-  const cacheKey = buildRaceTimelineCacheKey(input);
-  const cachedTimeline = raceTimelineCache.get(cacheKey);
-
-  if (cachedTimeline) {
-    return cachedTimeline;
-  }
-
-  const timeline = buildRaceTimeline(input);
-
-  raceTimelineCache.set(cacheKey, timeline);
-
-  while (raceTimelineCache.size > maxRaceTimelineCacheEntries) {
-    const oldestKey = raceTimelineCache.keys().next().value;
-
-    if (!oldestKey) {
-      break;
-    }
-
-    raceTimelineCache.delete(oldestKey);
-  }
-
-  return timeline;
-}
-
-function buildRaceTimeline(input: {
-  distanceM: number;
-  entries: RacingRaceEntrySnapshot[];
-  runDurationMs: number;
-  seed: string;
-  tickIntervalMs: number;
-}): RacingTimeline {
-  const distanceM = input.distanceM;
-  const runDurationMs = Math.max(minimumRaceRunDurationMs, input.runDurationMs);
-  const maxElapsedMs = runDurationMs * maxUnforcedRaceDurationMultiplier;
-  const tickIntervalMs = Math.max(minimumTickIntervalMs, input.tickIntervalMs);
-  const states = input.entries.map((entry) => ({
-    distanceM: 0,
-    finishedAtMs: null,
-    finishSpeedMPerMs: null,
-    number: entry.number,
-    raceEntryId: entry.raceEntryId,
-  }));
-  const snapshots: DisplayRacePosition[][] = [
-    snapshotSimulationStates(states, distanceM),
-  ];
-  let previousStepMs = 0;
-
-  for (let step = 1; previousStepMs < maxElapsedMs; step += 1) {
-    const stepEndMs = Math.min(step * tickIntervalMs, maxElapsedMs);
-    const deltaMs = stepEndMs - previousStepMs;
-
-    advanceSimulationStep({
-      deltaMs,
-      distanceM,
-      runDurationMs,
-      seed: input.seed,
-      states,
-      step,
-      stepEndMs,
-      stepStartMs: previousStepMs,
-    });
-
-    snapshots.push(snapshotSimulationStates(states, distanceM));
-    previousStepMs = stepEndMs;
-  }
-
-  return {
-    maxElapsedMs,
-    snapshots,
-    tickIntervalMs,
-  };
-}
-
-function buildRaceTimelineCacheKey(input: {
-  distanceM: number;
-  entries: RacingRaceEntrySnapshot[];
-  runDurationMs: number;
-  seed: string;
-  tickIntervalMs: number;
-}) {
-  return JSON.stringify({
-    distanceM: input.distanceM,
-    entries: input.entries.map((entry) => entry.raceEntryId),
-    runDurationMs: input.runDurationMs,
-    seed: input.seed,
-    tickIntervalMs: input.tickIntervalMs,
-  });
-}
-
-function snapshotSimulationStates(
-  states: RacingSimulationState[],
-  distanceM: number,
-) {
-  return rankSimulationStates(states, distanceM).map((state, index) => ({
-    finishedAtMs:
-      state.finishedAtMs === null ? null : Math.round(state.finishedAtMs),
-    progress: Number((state.distanceM / distanceM).toFixed(4)),
-    raceEntryId: state.raceEntryId,
-    rank: index + 1,
-  }));
-}
-
-function advanceSimulationStep(input: {
-  deltaMs: number;
-  distanceM: number;
-  runDurationMs: number;
-  seed: string;
-  states: RacingSimulationState[];
-  step: number;
-  stepEndMs: number;
-  stepStartMs: number;
-}) {
-  const baseSpeedMPerMs = input.distanceM / input.runDurationMs;
-
-  for (const state of input.states) {
-    if (state.finishedAtMs !== null) {
-      state.distanceM = getPostFinishDistance({
-        distanceM: input.distanceM,
-        finishedAtMs: state.finishedAtMs,
-        finishSpeedMPerMs: state.finishSpeedMPerMs ?? baseSpeedMPerMs,
-        stepEndMs: input.stepEndMs,
-      });
-      continue;
-    }
-
-    const previousDistanceM = state.distanceM;
-    const speedMPerMs = calculateStepSpeed({
-      baseSpeedMPerMs,
-      distanceM: input.distanceM,
-      runDurationMs: input.runDurationMs,
-      seed: input.seed,
-      state,
-      step: input.step,
-      stepEndMs: input.stepEndMs,
-    });
-    const nextDistanceM = Math.min(
-      input.distanceM,
-      previousDistanceM + speedMPerMs * input.deltaMs,
-    );
-
-    if (
-      nextDistanceM >= input.distanceM &&
-      previousDistanceM < input.distanceM
-    ) {
-      const travelledM = nextDistanceM - previousDistanceM;
-      const crossingRatio =
-        travelledM <= 0
-          ? 1
-          : (input.distanceM - previousDistanceM) / travelledM;
-
-      state.finishedAtMs =
-        input.stepStartMs + clamp(crossingRatio, 0, 1) * input.deltaMs;
-      state.finishSpeedMPerMs = speedMPerMs;
-    }
-
-    state.distanceM =
-      state.finishedAtMs === null
-        ? nextDistanceM
-        : getPostFinishDistance({
-            distanceM: input.distanceM,
-            finishedAtMs: state.finishedAtMs,
-            finishSpeedMPerMs: state.finishSpeedMPerMs ?? speedMPerMs,
-            stepEndMs: input.stepEndMs,
-          });
-  }
-}
-
-function getPostFinishDistance(input: {
-  distanceM: number;
-  finishedAtMs: number;
-  finishSpeedMPerMs: number;
-  stepEndMs: number;
-}) {
-  const postFinishElapsedMs = Math.max(0, input.stepEndMs - input.finishedAtMs);
-  const maxPostFinishDistanceM =
-    input.distanceM * postFinishTrackOvershootRatio;
-  const postFinishDistanceM = Math.min(
-    maxPostFinishDistanceM,
-    input.finishSpeedMPerMs * postFinishElapsedMs,
-  );
-
-  return input.distanceM + postFinishDistanceM;
-}
-
-function calculateStepSpeed(input: {
-  baseSpeedMPerMs: number;
-  distanceM: number;
-  runDurationMs: number;
-  seed: string;
-  state: RacingSimulationState;
-  step: number;
-  stepEndMs: number;
-}) {
-  const ratio = input.stepEndMs / input.runDurationMs;
-  const entrySeed = `${input.seed}:${input.state.raceEntryId}:${input.state.number}`;
-  const earlyPace = lerp(0.88, 1.14, unitRandom(`${entrySeed}:early`));
-  const latePace = lerp(0.9, 1.18, unitRandom(`${entrySeed}:late`));
-  const stamina = lerp(0.78, 0.94, unitRandom(`${entrySeed}:stamina`));
-  const phasePace = lerp(earlyPace, latePace, smoothStep(ratio));
-  const tickNoise = lerp(
-    -0.18,
-    0.18,
-    unitRandom(`${entrySeed}:tick:${input.step}`),
-  );
-  const burstRoll = unitRandom(`${entrySeed}:burst:${input.step}`);
-  const stumbleRoll = unitRandom(`${entrySeed}:stumble:${input.step}`);
-  const burst = burstRoll > 0.91 ? lerp(0.05, 0.22, burstRoll) : 0;
-  const stumble = stumbleRoll < 0.055 ? -lerp(0.05, 0.18, 1 - stumbleRoll) : 0;
-  const fatigue =
-    ratio <= stamina ? 1 : Math.max(0.88, 1 - (ratio - stamina) * 0.34);
-  const speedMPerMs =
-    input.baseSpeedMPerMs *
-    Math.max(0.28, phasePace + tickNoise + burst + stumble) *
-    fatigue;
-
-  return speedMPerMs;
-}
-
 function getRaceProgressPercent(progress: number) {
   return clamp(progress, 0, 1) * 100;
 }
@@ -3294,69 +2908,6 @@ function getProgressHorseStyle(progress: number, index: number) {
     "--horse-progress": `${getRaceProgressPercent(progress).toFixed(2)}%`,
     "--horse-row-y": `${rowOffsetPx}px`,
   } as CSSProperties;
-}
-
-function rankSimulationStates(
-  states: RacingSimulationState[],
-  distanceM: number,
-) {
-  const maxVisualDistanceM = distanceM * maxVisualRaceProgress;
-
-  return [...states]
-    .sort((left, right) => {
-      if (left.finishedAtMs !== null || right.finishedAtMs !== null) {
-        if (left.finishedAtMs === null) {
-          return 1;
-        }
-
-        if (right.finishedAtMs === null) {
-          return -1;
-        }
-
-        if (left.finishedAtMs !== right.finishedAtMs) {
-          return left.finishedAtMs - right.finishedAtMs;
-        }
-      }
-
-      if (left.distanceM !== right.distanceM) {
-        return right.distanceM - left.distanceM;
-      }
-
-      if (left.number !== right.number) {
-        return left.number - right.number;
-      }
-
-      return left.raceEntryId.localeCompare(right.raceEntryId);
-    })
-    .map((state) => ({
-      ...state,
-      distanceM: Math.min(maxVisualDistanceM, state.distanceM),
-    }));
-}
-
-function deterministicScore(seed: string) {
-  let hash = 2_166_136_261;
-
-  for (const character of seed) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16_777_619);
-  }
-
-  return hash >>> 0;
-}
-
-function unitRandom(seed: string) {
-  return deterministicScore(seed) / 0xffffffff;
-}
-
-function lerp(start: number, end: number, ratio: number) {
-  return start + (end - start) * ratio;
-}
-
-function smoothStep(ratio: number) {
-  const value = clamp(ratio, 0, 1);
-
-  return value * value * (3 - 2 * value);
 }
 
 function getRunnerLaneClassName(lane: number) {
@@ -3467,12 +3018,10 @@ function getStatusLabel(
 function getStatusDetail(
   tableState: RacingTableViewState | null,
   latestTick: RacingRaceTickSnapshot | null,
-  nowMs: number,
-  visualRaceStart: VisualRaceStart | null,
   isVisuallyRunning: boolean,
 ) {
   if (!tableState?.race) {
-    return "Demo fallback";
+    return "Waiting for race";
   }
 
   if (latestTick?.raceId === tableState.race.raceId) {
@@ -3480,35 +3029,10 @@ function getStatusDetail(
   }
 
   if (isVisuallyRunning) {
-    return `${formatLiveElapsedMs(
-      getRaceClockElapsedMs(tableState, nowMs, visualRaceStart),
-    )}s live`;
+    return "Awaiting live tick";
   }
 
   return `Race ${tableState.race.raceNo}`;
-}
-
-function getRaceClockElapsedMs(
-  tableState: RacingTableViewState,
-  nowMs: number,
-  visualRaceStart: VisualRaceStart | null,
-) {
-  const race = tableState.race;
-
-  if (!race) {
-    return 0;
-  }
-
-  const fallbackStartAt =
-    Date.parse(race.startedAt ?? "") ||
-    Date.parse(race.scheduledStartAt ?? "") ||
-    nowMs;
-  const startAt =
-    visualRaceStart?.raceId === race.raceId
-      ? visualRaceStart.startMs
-      : fallbackStartAt;
-
-  return Math.max(0, nowMs - startAt);
 }
 
 function formatLiveElapsedMs(elapsedMs: number) {
@@ -3747,29 +3271,6 @@ function hasSeparateRaceStartDelay(tableState: RacingTableViewState) {
   }
 
   return Date.parse(scheduledStartAt) - Date.parse(bettingClosesAt) > 1_000;
-}
-
-function resolveVisualRaceStartMs(
-  tableState: RacingTableViewState,
-  nowMs: number,
-) {
-  const race = tableState.race;
-
-  if (!race) {
-    return nowMs;
-  }
-
-  const scheduledStartMs = getScheduledRaceStartMs(tableState);
-
-  if (scheduledStartMs !== null && nowMs >= scheduledStartMs) {
-    return scheduledStartMs;
-  }
-
-  const serverStartMs =
-    Date.parse(race.startedAt ?? "") || scheduledStartMs || nowMs;
-  const serverDelayMs = Math.max(0, nowMs - serverStartMs);
-
-  return serverDelayMs <= smoothStartDelayThresholdMs ? nowMs : serverStartMs;
 }
 
 function formatRank(rank: number | null) {

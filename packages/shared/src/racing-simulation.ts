@@ -161,16 +161,14 @@ function advanceSimulationStep(input: {
       runDurationMs: input.runDurationMs,
       baseSpeedMPerMs,
     });
-    const nextDistanceM = Math.min(
-      input.distanceM,
-      previousDistanceM + speedMPerMs * input.deltaMs,
-    );
+    const rawNextDistanceM = previousDistanceM + speedMPerMs * input.deltaMs;
+    const nextDistanceM = Math.min(input.distanceM, rawNextDistanceM);
 
     if (
-      nextDistanceM >= input.distanceM &&
+      rawNextDistanceM >= input.distanceM &&
       previousDistanceM < input.distanceM
     ) {
-      const travelledM = nextDistanceM - previousDistanceM;
+      const travelledM = rawNextDistanceM - previousDistanceM;
       const crossingRatio =
         travelledM <= 0
           ? 1

@@ -18,6 +18,30 @@ import styles from "./page.module.css";
 
 type Corner = "red" | "blue";
 
+const fighterPoseIds = [
+  "idle",
+  "advance",
+  "retreat",
+  "reset_distance",
+  "jab",
+  "cross",
+  "hook",
+  "uppercut",
+  "body_shot",
+  "combo",
+  "block",
+  "slip",
+  "counter",
+  "clinch",
+  "hit_stun",
+  "knockdown",
+  "get_up",
+  "ref_stoppage",
+  "victory",
+] as const;
+
+type FighterPose = (typeof fighterPoseIds)[number];
+
 type Fighter = {
   age: number;
   corner: Corner;
@@ -36,7 +60,9 @@ type Fighter = {
 
 type FeedItem = {
   actor: Corner;
+  bluePose: FighterPose;
   icon: "glove" | "shield" | "spark" | "slip";
+  redPose: FighterPose;
   text: string;
   time: string;
 };
@@ -89,37 +115,49 @@ const fighters: Fighter[] = [
 const feed: FeedItem[] = [
   {
     actor: "red",
+    bluePose: "block",
     icon: "glove",
+    redPose: "jab",
     text: "Reed lands a jab.",
     time: "00:41",
   },
   {
     actor: "blue",
+    bluePose: "block",
     icon: "shield",
+    redPose: "idle",
     text: "Diaz blocks high.",
     time: "00:37",
   },
   {
     actor: "blue",
+    bluePose: "slip",
     icon: "slip",
+    redPose: "advance",
     text: "Diaz slips outside.",
     time: "00:33",
   },
   {
     actor: "red",
+    bluePose: "hit_stun",
     icon: "spark",
+    redPose: "cross",
     text: "Hard right. Reed connects.",
     time: "00:28",
   },
   {
     actor: "blue",
+    bluePose: "body_shot",
     icon: "glove",
+    redPose: "block",
     text: "Diaz counters to the body.",
     time: "00:22",
   },
   {
     actor: "red",
+    bluePose: "retreat",
     icon: "glove",
+    redPose: "advance",
     text: "Reed presses forward.",
     time: "00:18",
   },

@@ -431,27 +431,29 @@ export default function BkDerbyPage() {
     clockMs,
   );
   const currentRaceId = racing.tableState?.race?.raceId ?? null;
+  const isPendingBetForCurrentRace =
+    pendingBetRequest?.raceId === currentRaceId;
   const acceptedBetEvent = getAcceptedBetEvent({
     events: racing.betEvents,
     ignoredEventKeys: pendingBetRequest?.previousAcceptedEventKeys ?? [],
     playerId: racing.player?.id ?? null,
-    raceId: currentRaceId,
+    raceId: isPendingBetForCurrentRace ? currentRaceId : null,
   });
   const betSocketError =
-    pendingBetRequest?.raceId === currentRaceId &&
-    racing.socketError?.event === RACING_CLIENT_EVENTS.BET_PLACE
-      ? racing.socketError
+    pendingBetRequest &&
+    racing.latestBetError?.event === RACING_CLIENT_EVENTS.BET_PLACE
+      ? racing.latestBetError
       : null;
   const isBetSubmissionPending = Boolean(
-    pendingBetRequest?.raceId === currentRaceId &&
+    isPendingBetForCurrentRace &&
     !acceptedBetEvent &&
     !betSocketError,
   );
   const visibleBetFeedback = getVisibleBetFeedback({
-    acceptedEvent: pendingBetRequest ? acceptedBetEvent : null,
-    fallback: betFeedback,
+    acceptedEvent: isPendingBetForCurrentRace ? acceptedBetEvent : null,
+    fallback: isPendingBetForCurrentRace ? betFeedback : null,
     selectedBetType: effectiveBetType,
-    socketError: betSocketError,
+    socketError: isPendingBetForCurrentRace ? betSocketError : null,
   });
   const ticketHistory = useMemo(
     () =>
@@ -1599,6 +1601,8 @@ function useRacingTable() {
   );
   const [latestWalletEvent, setLatestWalletEvent] =
     useState<RacingWalletUpdatedPayload | null>(null);
+  const [latestBetError, setLatestBetError] =
+    useState<RacingSocketErrorPayload | null>(null);
   const [socketError, setSocketError] =
     useState<RacingSocketErrorPayload | null>(null);
   const [tableState, setTableState] = useState<RacingTableViewState | null>(
@@ -1613,6 +1617,7 @@ function useRacingTable() {
       throw new Error("Racing socket is not connected.");
     }
 
+    setLatestBetError(null);
     setSocketError(null);
     socket.emit(RACING_CLIENT_EVENTS.BET_PLACE, payload);
   }, []);
@@ -1782,6 +1787,10 @@ function useRacingTable() {
       socket.on(
         RACING_SERVER_EVENTS.ERROR,
         (payload: RacingSocketErrorPayload) => {
+          if (payload.event === RACING_CLIENT_EVENTS.BET_PLACE) {
+            setLatestBetError(payload);
+          }
+
           setSocketError({
             code: payload.code,
             message:
@@ -1816,6 +1825,7 @@ function useRacingTable() {
     latestTableEvent,
     latestTick,
     latestWalletEvent,
+    latestBetError,
     placeBet,
     player,
     socketError,

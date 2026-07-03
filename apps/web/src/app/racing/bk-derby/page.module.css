@@ -786,17 +786,50 @@
 }
 
 .betAccountStrip {
+  align-items: center;
   background: rgb(255 255 255 / 7%);
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 6px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
   min-height: 30px;
   padding: 0 9px;
+}
+
+.betAccountStrip div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
 .betAccountStrip strong {
   color: #f5f8f5;
   font-size: 12px;
   font-weight: 900;
+}
+
+.betLoginLink {
+  border: 1px solid rgb(255 244 196 / 36%);
+  border-radius: 5px;
+  color: #fff4c4;
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 6px 8px;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.betLoginLink:hover {
+  background: rgb(255 244 196 / 16%);
+  border-color: rgb(255 244 196 / 62%);
+  color: #fff8d8;
 }
 
 .betTypeGrid {

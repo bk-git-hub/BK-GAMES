@@ -59,5 +59,6 @@ export async function POST() {
       nickname,
       role,
     },
+    walletBalance: gameAccount.wallet.balance.toString(),
   });
 }

@@ -164,6 +164,7 @@ type GameTokenResponse = {
     nickname: string;
     role: GameTokenRole;
   };
+  walletBalance: string;
 };
 
 type ConnectionStatus =
@@ -1085,8 +1086,10 @@ function RacingBettingPanel({
   walletBalance: string | null;
 }) {
   const activeConfig = getRacingBetTypeConfig(selectedBetType);
+  const isLoggedIn = Boolean(playerNickname);
   const isBettingOpen =
     tableState?.phase === "BETTING" && Boolean(tableState.race);
+  const canEditBet = isBettingOpen && isLoggedIn && !isPending;
   const amountValue = parsePointAmountText(amount);
   const fieldSize = tableState?.fieldSize ?? entries.length;
   const estimatedOdds = getEstimatedOddsMultiplier(selectedBetType, fieldSize);
@@ -1122,10 +1125,21 @@ function RacingBettingPanel({
       </div>
 
       <div className={styles.betAccountStrip}>
-        <span>{playerNickname ?? "Login required"}</span>
-        <strong>
-          {walletBalance ? `${formatPointText(walletBalance)}P` : "Wallet"}
-        </strong>
+        <div>
+          <span>{playerNickname ?? "Spectator mode"}</span>
+          <strong>
+            {isLoggedIn
+              ? walletBalance
+                ? `${formatPointText(walletBalance)}P`
+                : "Wallet"
+              : "Watching only"}
+          </strong>
+        </div>
+        {!isLoggedIn ? (
+          <a className={styles.betLoginLink} href="/auth">
+            Sign in
+          </a>
+        ) : null}
       </div>
 
       <div className={styles.betTypeGrid} aria-label="Bet type">
@@ -1186,7 +1200,7 @@ function RacingBettingPanel({
               className={`${styles.betHorseButton} ${styles[entry.color]} ${
                 selectedOrder ? styles.betHorseSelected : ""
               }`}
-              disabled={!isBettingOpen || isPending}
+              disabled={!canEditBet}
               key={entry.raceEntryId}
               onClick={() => onToggleEntry(entry.raceEntryId)}
               type="button"
@@ -1211,7 +1225,7 @@ function RacingBettingPanel({
         <label className={styles.betStakeInput}>
           <span>Stake</span>
           <input
-            disabled={!isBettingOpen || isPending}
+            disabled={!canEditBet}
             inputMode="numeric"
             onChange={(event) => onAmountChange(event.target.value)}
             value={amount}
@@ -1220,7 +1234,7 @@ function RacingBettingPanel({
         <div className={styles.betChipRack}>
           {quickStakeAmounts.map((quickAmount) => (
             <button
-              disabled={!isBettingOpen || isPending}
+              disabled={!canEditBet}
               key={quickAmount}
               onClick={() => onAddStake(quickAmount)}
               type="button"
@@ -1229,7 +1243,7 @@ function RacingBettingPanel({
             </button>
           ))}
           <button
-            disabled={!isBettingOpen || isPending}
+            disabled={!canEditBet}
             onClick={() =>
               onSetStake(
                 parsePointAmountText(tableState?.bettingLimits.minBet) ?? 100,
@@ -1704,6 +1718,7 @@ function useRacingTable() {
       }
 
       setPlayer(tokenResponse?.user ?? null);
+      setWalletBalance(tokenResponse?.walletBalance ?? null);
 
       const socket = io(resolveRacingSocketUrl(), {
         auth: tokenResponse

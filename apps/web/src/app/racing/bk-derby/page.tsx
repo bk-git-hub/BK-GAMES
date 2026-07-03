@@ -76,6 +76,14 @@ type RaceResultBoard = {
   raceNo: number;
 };
 
+type RaceFinishMark = {
+  finishedAtMs: number;
+  observedAtMs: number;
+  raceEntryId: string;
+  raceId: string;
+  rank: number;
+};
+
 type StartCountdownOverlay = {
   isStartCue: boolean;
   label: string;
@@ -348,6 +356,9 @@ export default function BkDerbyPage() {
   const [selectedBetEntryIds, setSelectedBetEntryIds] = useState<string[]>([]);
   const [betAmount, setBetAmount] = useState("100");
   const [betFeedback, setBetFeedback] = useState<BetFeedback | null>(null);
+  const [clientFinishMarks, setClientFinishMarks] = useState<
+    RaceFinishMark[]
+  >([]);
   const [localTickets, setLocalTickets] = useState<RacingTicketItem[]>([]);
   const [pendingBetRequest, setPendingBetRequest] = useState<{
     commandId: string;
@@ -357,8 +368,10 @@ export default function BkDerbyPage() {
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const bgmRaceIdRef = useRef<string | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const finishMarksRef = useRef<RaceFinishMark[]>([]);
   const latestTickRef = useRef<RacingRaceTickSnapshot | null>(null);
   const tableStateRef = useRef<RacingTableViewState | null>(null);
+  const currentRaceId = racing.tableState?.race?.raceId ?? null;
   const isVisuallyRunning = isRaceVisuallyRunning(racing.tableState, clockMs);
   const serverTick = useMemo(
     () =>
@@ -371,17 +384,30 @@ export default function BkDerbyPage() {
     () => serverTick,
     [serverTick],
   );
+  const raceFinishMarks = useMemo(
+    () =>
+      currentRaceId
+        ? clientFinishMarks.filter((mark) => mark.raceId === currentRaceId)
+        : [],
+    [clientFinishMarks, currentRaceId],
+  );
   const currentResultBoard = useMemo(
-    () => buildRaceResultBoard(racing.tableState, displayTick),
-    [displayTick, racing.tableState],
+    () => buildRaceResultBoard(racing.tableState, displayTick, raceFinishMarks),
+    [displayTick, raceFinishMarks, racing.tableState],
   );
   const visibleResultBoard = chooseVisibleResultBoard(
     currentResultBoard,
     persistedResultBoard,
   );
   const displayHorses = useMemo(
-    () => buildDisplayHorses(racing.tableState, displayTick, clockMs),
-    [clockMs, displayTick, racing.tableState],
+    () =>
+      buildDisplayHorses(
+        racing.tableState,
+        displayTick,
+        clockMs,
+        raceFinishMarks,
+      ),
+    [clockMs, displayTick, raceFinishMarks, racing.tableState],
   );
   const isRaceRunning = !usesBackendState || isVisuallyRunning;
   const leaderHorse = getLeaderHorse(displayHorses);
@@ -431,7 +457,6 @@ export default function BkDerbyPage() {
     racing.tableState,
     clockMs,
   );
-  const currentRaceId = racing.tableState?.race?.raceId ?? null;
   const isPendingBetForCurrentRace =
     pendingBetRequest?.raceId === currentRaceId;
   const acceptedBetEvent = getAcceptedBetEvent({
@@ -510,6 +535,28 @@ export default function BkDerbyPage() {
   useEffect(() => {
     latestTickRef.current = racing.latestTick;
   }, [racing.latestTick]);
+
+  useEffect(() => {
+    finishMarksRef.current = clientFinishMarks;
+  }, [clientFinishMarks]);
+
+  useEffect(() => {
+    const race = racing.tableState?.race;
+
+    if (!race) {
+      setClientFinishMarks([]);
+      return;
+    }
+
+    setClientFinishMarks((currentMarks) =>
+      collectRaceFinishMarks({
+        currentMarks,
+        latestTick: displayTick,
+        observedAtMs: Date.now(),
+        race,
+      }),
+    );
+  }, [displayTick, racing.tableState?.race]);
 
   useEffect(() => {
     const audio = bgmRef.current;
@@ -623,7 +670,14 @@ export default function BkDerbyPage() {
           latestTickRef.current?.raceId === raceId
             ? latestTickRef.current
             : null;
-        const nextResultBoard = buildRaceResultBoard(tableState, latestTick);
+        const finishMarks = finishMarksRef.current.filter(
+          (mark) => mark.raceId === raceId,
+        );
+        const nextResultBoard = buildRaceResultBoard(
+          tableState,
+          latestTick,
+          finishMarks,
+        );
 
         if (
           isRaceVisuallyRunning(tableState, nowMs) &&
@@ -2789,10 +2843,119 @@ function factorial(value: number) {
   return result;
 }
 
+function collectRaceFinishMarks(input: {
+  currentMarks: RaceFinishMark[];
+  latestTick: DisplayRaceTickSnapshot | null;
+  observedAtMs: number;
+  race: NonNullable<RacingTableViewState["race"]>;
+}) {
+  const nextMarks = input.currentMarks.filter(
+    (mark) => mark.raceId === input.race.raceId,
+  );
+  let changed = nextMarks.length !== input.currentMarks.length;
+  const indexByEntryId = new Map(
+    nextMarks.map((mark, index) => [mark.raceEntryId, index]),
+  );
+  const resultRankByEntryId = new Map(
+    input.race.resultOrder.map((raceEntryId, index) => [
+      raceEntryId,
+      index + 1,
+    ]),
+  );
+
+  const upsertFinishMark = (
+    mark: RaceFinishMark,
+    shouldReplaceTiming: boolean,
+  ) => {
+    const existingIndex = indexByEntryId.get(mark.raceEntryId);
+
+    if (existingIndex === undefined) {
+      indexByEntryId.set(mark.raceEntryId, nextMarks.length);
+      nextMarks.push(mark);
+      changed = true;
+      return;
+    }
+
+    const existingMark = nextMarks[existingIndex];
+    const nextMark = shouldReplaceTiming
+      ? {
+          ...existingMark,
+          finishedAtMs: mark.finishedAtMs,
+          rank: mark.rank,
+        }
+      : existingMark;
+
+    if (
+      nextMark.finishedAtMs !== existingMark.finishedAtMs ||
+      nextMark.rank !== existingMark.rank
+    ) {
+      nextMarks[existingIndex] = nextMark;
+      changed = true;
+    }
+  };
+
+  if (input.latestTick?.raceId === input.race.raceId) {
+    for (const position of input.latestTick.positions) {
+      if (position.progress < 1) {
+        continue;
+      }
+
+      upsertFinishMark(
+        {
+          finishedAtMs: Math.round(
+            position.finishedAtMs ?? input.latestTick.elapsedMs,
+          ),
+          observedAtMs: input.observedAtMs,
+          raceEntryId: position.raceEntryId,
+          raceId: input.race.raceId,
+          rank: position.rank,
+        },
+        false,
+      );
+    }
+  }
+
+  for (const entry of input.race.entries) {
+    if (entry.finishedAtMs === null) {
+      continue;
+    }
+
+    const rank =
+      entry.finalRank ?? resultRankByEntryId.get(entry.raceEntryId) ?? null;
+
+    if (rank === null) {
+      continue;
+    }
+
+    upsertFinishMark(
+      {
+        finishedAtMs: entry.finishedAtMs,
+        observedAtMs: input.observedAtMs,
+        raceEntryId: entry.raceEntryId,
+        raceId: input.race.raceId,
+        rank,
+      },
+      true,
+    );
+  }
+
+  if (!changed) {
+    return input.currentMarks;
+  }
+
+  return nextMarks.sort(
+    (left, right) =>
+      left.finishedAtMs - right.finishedAtMs ||
+      left.rank - right.rank ||
+      left.raceEntryId.localeCompare(right.raceEntryId),
+  );
+}
+
 function buildDisplayHorses(
   tableState: RacingTableViewState | null,
   latestTick: DisplayRaceTickSnapshot | null,
   nowMs: number,
+  finishMarks: RaceFinishMark[],
 ): DisplayHorse[] {
   if (!tableState?.race?.entries.length) {
     return fallbackHorses;
@@ -2804,6 +2967,9 @@ function buildDisplayHorses(
     latestTick?.raceId === race.raceId
       ? latestTick.positions.map((position) => [position.raceEntryId, position])
       : [],
+  );
+  const finishMarkByEntryId = new Map(
+    finishMarks.map((mark) => [mark.raceEntryId, mark]),
   );
   const resultRankByEntryId = new Map(
     race.resultOrder.map((raceEntryId, index) => [raceEntryId, index + 1]),
@@ -2820,15 +2986,21 @@ function buildDisplayHorses(
   return race.entries.map((entry, index) => {
     const asset = assetHorses[index % assetHorses.length];
     const position = positionByEntryId.get(entry.raceEntryId);
+    const finishMark = finishMarkByEntryId.get(entry.raceEntryId);
     const rank =
+      finishMark?.rank ??
       position?.rank ??
       entry.finalRank ??
       resultRankByEntryId.get(entry.raceEntryId) ??
       null;
     const hasServerFinish = entry.finishedAtMs !== null;
-    const horsePostFinishProgress = hasServerFinish ? postFinishProgress : null;
+    const clientPostFinishProgress = finishMark
+      ? getPostFinishCoastProgress(finishMark.observedAtMs, nowMs)
+      : null;
+    const horsePostFinishProgress =
+      clientPostFinishProgress ?? (hasServerFinish ? postFinishProgress : null);
     const progress = Math.max(
-      position?.progress ?? (hasServerFinish ? 1 : 0),
+      position?.progress ?? (hasServerFinish || finishMark ? 1 : 0),
       horsePostFinishProgress ?? 0,
     );
     const isCoasting =
@@ -2855,6 +3027,7 @@ function buildDisplayHorses(
 function buildRaceResultBoard(
   tableState: RacingTableViewState | null,
   latestTick: DisplayRaceTickSnapshot | null,
+  finishMarks: RaceFinishMark[],
 ): RaceResultBoard | null {
   const race = tableState?.race;
 
@@ -2867,9 +3040,8 @@ function buildRaceResultBoard(
       ? latestTick.positions.map((position) => [position.raceEntryId, position])
       : [],
   );
-  const hasTickFinishTime = [...positionByEntryId.values()].some(
-    (position) =>
-      position.finishedAtMs !== null && position.finishedAtMs !== undefined,
+  const finishMarkByEntryId = new Map(
+    finishMarks.map((mark) => [mark.raceEntryId, mark]),
   );
   const resultRankByEntryId = new Map(
     race.resultOrder.map((raceEntryId, index) => [raceEntryId, index + 1]),
@@ -2877,24 +3049,28 @@ function buildRaceResultBoard(
   const entries = race.entries
     .map((entry, index) => {
       const position = positionByEntryId.get(entry.raceEntryId);
+      const finishMark = finishMarkByEntryId.get(entry.raceEntryId);
       const asset = assetHorses[index % assetHorses.length];
-      const tickFinishedAtMs = position?.finishedAtMs ?? null;
+      const tickFinishedAtMs =
+        position?.finishedAtMs ??
+        (position && position.progress >= 1 ? latestTick?.elapsedMs : null) ??
+        null;
+      const clientFinishedAtMs = finishMark?.finishedAtMs ?? null;
       const serverFinishedAtMs = entry.finishedAtMs ?? null;
-      const tickRank = position?.rank ?? null;
+      const tickRank =
+        tickFinishedAtMs !== null ? (position?.rank ?? null) : null;
+      const clientRank = finishMark?.rank ?? null;
       const serverRank =
         entry.finalRank ?? resultRankByEntryId.get(entry.raceEntryId) ?? null;
 
       return {
         color: asset.color,
-        finishedAtMs: hasTickFinishTime
-          ? tickFinishedAtMs
-          : (serverFinishedAtMs ?? tickFinishedAtMs),
+        finishedAtMs:
+          serverFinishedAtMs ?? clientFinishedAtMs ?? tickFinishedAtMs,
         name: entry.name,
         number: entry.number,
         raceEntryId: entry.raceEntryId,
-        rank: hasTickFinishTime
-          ? (tickRank ?? serverRank)
-          : (serverRank ?? tickRank),
+        rank: serverRank ?? clientRank ?? tickRank,
       } satisfies RaceResultEntry;
     })
     .sort(

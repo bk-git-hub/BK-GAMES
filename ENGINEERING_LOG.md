@@ -203,3 +203,14 @@ Still worth improving:
 - Frontend removal of any gameplay-level local replay logic in favor of server ticks
 - More deterministic end-to-end scenario tests
 
+### Codex Ticket Operations
+
+Problem:
+
+- Multi-thread Codex work needed a shared way to issue tickets, claim work, and inspect current status without relying on chat history.
+
+Correction:
+
+- Added a `tickets/` workflow with ticket frontmatter as source of truth.
+- Added a local Node script that can create tickets, change status, assign owner threads, and regenerate `tickets/BOARD.md`.
+- Added an initial bootstrap ticket so future backend/frontend/review threads can follow the same ticket lifecycle.

@@ -3051,22 +3051,19 @@ function buildRaceResultBoard(
       const position = positionByEntryId.get(entry.raceEntryId);
       const finishMark = finishMarkByEntryId.get(entry.raceEntryId);
       const asset = assetHorses[index % assetHorses.length];
-      const tickFinishedAtMs =
-        position?.finishedAtMs ??
-        (position && position.progress >= 1 ? latestTick?.elapsedMs : null) ??
-        null;
-      const clientFinishedAtMs = finishMark?.finishedAtMs ?? null;
+      const hasTickFinish =
+        position?.finishedAtMs !== null && position?.finishedAtMs !== undefined
+          ? true
+          : (position?.progress ?? 0) >= 1;
       const serverFinishedAtMs = entry.finishedAtMs ?? null;
-      const tickRank =
-        tickFinishedAtMs !== null ? (position?.rank ?? null) : null;
+      const tickRank = hasTickFinish ? (position?.rank ?? null) : null;
       const clientRank = finishMark?.rank ?? null;
       const serverRank =
         entry.finalRank ?? resultRankByEntryId.get(entry.raceEntryId) ?? null;
 
       return {
         color: asset.color,
-        finishedAtMs:
-          serverFinishedAtMs ?? clientFinishedAtMs ?? tickFinishedAtMs,
+        finishedAtMs: serverFinishedAtMs,
         name: entry.name,
         number: entry.number,
         raceEntryId: entry.raceEntryId,
@@ -3081,7 +3078,9 @@ function buildRaceResultBoard(
           (right.finishedAtMs ?? Number.MAX_SAFE_INTEGER) ||
         left.number - right.number,
     );
-  const hasAnyResult = entries.some((entry) => entry.finishedAtMs !== null);
+  const hasAnyResult = entries.some(
+    (entry) => entry.rank !== null || entry.finishedAtMs !== null,
+  );
 
   if (!hasAnyResult) {
     return null;

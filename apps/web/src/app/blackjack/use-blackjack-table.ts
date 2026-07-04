@@ -329,12 +329,20 @@ async function readErrorMessage(response: Response) {
 
 function resolveBlackjackSocketUrl() {
   const configuredUrl =
-    process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? "http://localhost:4000";
+    process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? resolveRuntimeGameServerUrl();
   const normalizedUrl = configuredUrl.replace(/\/$/, "");
 
   return normalizedUrl.endsWith(BLACKJACK_NAMESPACE)
     ? normalizedUrl
     : `${normalizedUrl}${BLACKJACK_NAMESPACE}`;
+}
+
+function resolveRuntimeGameServerUrl() {
+  if (typeof window !== "undefined" && window.location.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:4000`;
+  }
+
+  return "http://localhost:4000";
 }
 
 function createCommandId(prefix: string) {

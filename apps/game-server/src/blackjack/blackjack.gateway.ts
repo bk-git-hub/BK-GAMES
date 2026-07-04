@@ -23,6 +23,7 @@ import {
 } from '@bk-games/shared';
 import { Server, Socket } from 'socket.io';
 import { GameTokenService } from '../auth/game-token.service';
+import { gameServerCorsOptions } from '../cors';
 import { WalletService } from '../wallet/wallet.service';
 import {
   BlackjackTableError,
@@ -33,10 +34,7 @@ import { BlackjackTableConfigService } from './blackjack-table-config.service';
 
 @WebSocketGateway({
   namespace: BLACKJACK_NAMESPACE,
-  cors: {
-    origin: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
-    credentials: true,
-  },
+  cors: gameServerCorsOptions,
 })
 export class BlackjackGateway {
   @WebSocketServer()

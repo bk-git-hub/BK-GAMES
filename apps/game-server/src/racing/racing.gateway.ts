@@ -23,6 +23,7 @@ import {
 } from '@bk-games/shared';
 import { Server, Socket } from 'socket.io';
 import { GameTokenService } from '../auth/game-token.service';
+import { gameServerCorsOptions } from '../cors';
 import { WalletService } from '../wallet/wallet.service';
 import { RacingTableConfigService } from './racing-table-config.service';
 import type {
@@ -42,10 +43,7 @@ const minimumRaceTickIntervalMs = 10;
 
 @WebSocketGateway({
   namespace: RACING_NAMESPACE,
-  cors: {
-    origin: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
-    credentials: true,
-  },
+  cors: gameServerCorsOptions,
 })
 export class RacingGateway implements OnModuleDestroy {
   @WebSocketServer()

@@ -135,9 +135,14 @@ export function AuthForm() {
           onValueChange={handleModeChange}
           className="gap-6"
         >
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid h-12 min-h-12 w-full grid-cols-2 p-1">
             {authModes.map((authMode) => (
-              <TabsTrigger key={authMode} value={authMode}>
+              <TabsTrigger
+                key={authMode}
+                type="button"
+                value={authMode}
+                className="min-h-10 text-base sm:text-sm"
+              >
                 {authModeConfig[authMode].tabLabel}
               </TabsTrigger>
             ))}

@@ -381,11 +381,6 @@
   z-index: 0;
 }
 
-.previewWorldLayer {
-  animation: leadCameraPan var(--camera-duration) linear infinite;
-  animation-delay: var(--camera-offset);
-}
-
 .liveWorldLayer {
   transform: translate3d(var(--camera-x), 0, 0);
 }
@@ -1900,11 +1895,6 @@
   z-index: 0;
 }
 
-.previewRunner {
-  animation: raceMove var(--duration) cubic-bezier(0.18, 0.02, 0.18, 1) infinite;
-  animation-delay: var(--offset);
-}
-
 .liveRunner {
   animation: none;
 }
@@ -2096,38 +2086,6 @@
 @keyframes gallop {
   to {
     background-position: -1442px 0;
-  }
-}
-
-@keyframes raceMove {
-  from {
-    left: 1.2%;
-  }
-
-  to {
-    left: 88%;
-  }
-}
-
-@keyframes leadCameraPan {
-  0% {
-    transform: translate3d(0, 0, 0);
-  }
-
-  12% {
-    transform: translate3d(-4%, 0, 0);
-  }
-
-  40% {
-    transform: translate3d(-25%, 0, 0);
-  }
-
-  70% {
-    transform: translate3d(-52%, 0, 0);
-  }
-
-  100% {
-    transform: translate3d(-86.1111%, 0, 0);
   }
 }
 
@@ -2543,8 +2501,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .previewWorldLayer,
-  .previewRunner,
   .runningSprite,
   .rowSprite {
     animation-duration: 1ms;

@@ -16,6 +16,7 @@ import {
   type RacingClientEvent,
   type RacingJoinTablePayload,
   type RacingPlaceBetPayload,
+  type RacingTableEventPayload,
   type RacingSocketErrorPayload,
   type RacingSocketUser,
   type RacingTableState,
@@ -39,6 +40,8 @@ import { buildRaceTick } from './racing-race-tick';
 
 const racingLobbyTableIds = ['main'] as const;
 const racingScheduleSyncIntervalMs = 5_000;
+const racingPrestartLeadMs = 5_000;
+const racingPrestartTickIntervalMs = 100;
 const minimumRaceTickIntervalMs = 10;
 
 @WebSocketGateway({
@@ -50,6 +53,7 @@ export class RacingGateway implements OnModuleDestroy {
   server!: Server;
 
   private scheduleSyncTimer?: NodeJS.Timeout;
+  private readonly prestartTimers = new Map<string, RacingPrestartTimer>();
   private readonly raceTickTimers = new Map<string, RacingTickTimer>();
 
   constructor(
@@ -70,6 +74,10 @@ export class RacingGateway implements OnModuleDestroy {
     if (this.scheduleSyncTimer) {
       clearInterval(this.scheduleSyncTimer);
       this.scheduleSyncTimer = undefined;
+    }
+
+    for (const tableId of Array.from(this.prestartTimers.keys())) {
+      this.stopPrestartTimer(tableId);
     }
 
     for (const timer of this.raceTickTimers.values()) {
@@ -202,11 +210,9 @@ export class RacingGateway implements OnModuleDestroy {
 
       if (update) {
         this.emitTableUpdate(update);
+      } else {
+        this.ensureRuntimeTimers(this.tableService.getTableState(tableId));
       }
-
-      this.ensureRaceTickLoop(
-        update?.state ?? this.tableService.getTableState(tableId),
-      );
     } catch (error) {
       this.emitTableError(tableId, error, 'Unexpected racing scheduler error.');
     }
@@ -228,6 +234,7 @@ export class RacingGateway implements OnModuleDestroy {
 
     this.server.to(room).emit(RACING_SERVER_EVENTS.TABLE_STATE, update.state);
     this.server.to(room).emit(RACING_SERVER_EVENTS.TABLE_EVENT, update.event);
+    this.ensureRuntimeTimers(update.state);
   }
 
   private emitWalletUpdated(
@@ -274,6 +281,185 @@ export class RacingGateway implements OnModuleDestroy {
         reason: 'CANCEL_REFUND',
         ledgerId: bet.walletMutation.ledger.id,
       });
+    }
+  }
+
+  private ensureRuntimeTimers(state: RacingTableState) {
+    this.ensurePrestartTimer(state);
+    this.ensureRaceTickLoop(state);
+  }
+
+  private ensurePrestartTimer(state: RacingTableState) {
+    const race = getPrestartRace(state);
+
+    if (!race) {
+      this.stopPrestartTimer(state.tableId);
+      return;
+    }
+
+    const scheduledStartAtMs = Date.parse(race.scheduledStartAt);
+
+    if (!Number.isFinite(scheduledStartAtMs)) {
+      this.stopPrestartTimer(state.tableId);
+      return;
+    }
+
+    const existing = this.prestartTimers.get(state.tableId);
+
+    if (
+      existing?.raceId === race.raceId &&
+      existing.scheduledStartAtMs === scheduledStartAtMs
+    ) {
+      return;
+    }
+
+    this.stopPrestartTimer(state.tableId);
+
+    const delayMs = Math.max(
+      0,
+      scheduledStartAtMs - Date.now() - racingPrestartLeadMs,
+    );
+
+    if (delayMs === 0 && scheduledStartAtMs <= Date.now()) {
+      void this.startRaceFromPrestartTimer(state.tableId);
+      return;
+    }
+
+    if (delayMs > 0) {
+      const handle = setTimeout(() => {
+        this.startPrestartTickLoop(
+          state.tableId,
+          race.raceId,
+          scheduledStartAtMs,
+        );
+      }, delayMs);
+
+      handle.unref?.();
+      this.prestartTimers.set(state.tableId, {
+        handle,
+        mode: 'waiting',
+        raceId: race.raceId,
+        scheduledStartAtMs,
+      });
+      return;
+    }
+
+    this.startPrestartTickLoop(state.tableId, race.raceId, scheduledStartAtMs);
+  }
+
+  private startPrestartTickLoop(
+    tableId: string,
+    raceId: string,
+    scheduledStartAtMs: number,
+  ) {
+    this.stopPrestartTimer(tableId);
+
+    const handle = setInterval(() => {
+      void this.emitPrestartTickOrStart(tableId, raceId, scheduledStartAtMs);
+    }, racingPrestartTickIntervalMs);
+
+    handle.unref?.();
+    this.prestartTimers.set(tableId, {
+      handle,
+      mode: 'ticking',
+      raceId,
+      scheduledStartAtMs,
+    });
+
+    void this.emitPrestartTickOrStart(tableId, raceId, scheduledStartAtMs);
+  }
+
+  private stopPrestartTimer(tableId: string) {
+    const existing = this.prestartTimers.get(tableId);
+
+    if (!existing) {
+      return;
+    }
+
+    if (existing.mode === 'ticking') {
+      clearInterval(existing.handle);
+    } else {
+      clearTimeout(existing.handle);
+    }
+
+    this.prestartTimers.delete(tableId);
+  }
+
+  private async emitPrestartTickOrStart(
+    tableId: string,
+    raceId: string,
+    scheduledStartAtMs: number,
+  ) {
+    const serverNowMs = Date.now();
+    const remainingMs = scheduledStartAtMs - serverNowMs;
+
+    if (remainingMs <= 0) {
+      this.stopPrestartTimer(tableId);
+      await this.startRaceFromPrestartTimer(tableId);
+      return;
+    }
+
+    let state: RacingTableState;
+
+    try {
+      state = this.tableService.getTableState(tableId);
+    } catch (error) {
+      this.stopPrestartTimer(tableId);
+      this.emitTableError(tableId, error, 'Unexpected racing prestart error.');
+      return;
+    }
+
+    const race = getPrestartRace(state);
+
+    if (
+      !race ||
+      race.raceId !== raceId ||
+      Date.parse(race.scheduledStartAt) !== scheduledStartAtMs
+    ) {
+      this.ensurePrestartTimer(state);
+      return;
+    }
+
+    const room = racingTableRoom(tableId);
+    const event: RacingTableEventPayload = {
+      tableId,
+      type: 'PRESTART_TICK',
+      actorUserId: 'SYSTEM',
+      raceId,
+      raceNo: race.raceNo,
+      prestartTick: {
+        scheduledStartAt: race.scheduledStartAt,
+        serverNowMs,
+        remainingMs,
+      },
+      stateVersion: state.version,
+      createdAt: new Date(serverNowMs).toISOString(),
+    };
+
+    this.server.to(room).emit(RACING_SERVER_EVENTS.TABLE_EVENT, event);
+  }
+
+  private async startRaceFromPrestartTimer(tableId: string) {
+    try {
+      const lifecycle =
+        await this.tableConfigService.advanceRaceLifecycle(tableId);
+      this.emitSettlementWalletUpdates(lifecycle.settled);
+      this.emitCancellationWalletUpdates(lifecycle.cancelled);
+
+      const update = await this.configureRuntimeTable(tableId);
+
+      if (update) {
+        this.emitTableUpdate(update);
+        return;
+      }
+
+      this.ensureRuntimeTimers(this.tableService.getTableState(tableId));
+    } catch (error) {
+      this.emitTableError(
+        tableId,
+        error,
+        'Unexpected racing prestart timer error.',
+      );
     }
   }
 
@@ -441,6 +627,17 @@ type RacingTickTimer = {
   raceId: string;
 };
 
+type RacingPrestartTimer = {
+  handle: NodeJS.Timeout;
+  mode: 'waiting' | 'ticking';
+  raceId: string;
+  scheduledStartAtMs: number;
+};
+
+type RacingPrestartRace = NonNullable<RacingTableState['race']> & {
+  scheduledStartAt: string;
+};
+
 class RacingGatewayError extends Error {
   constructor(
     readonly code: RacingSocketErrorPayload['code'],
@@ -519,6 +716,17 @@ function getActiveRunningRace(state: RacingTableState) {
   }
 
   return state.race;
+}
+
+function getPrestartRace(state: RacingTableState): RacingPrestartRace | null {
+  if (
+    (state.phase !== 'BETTING' && state.phase !== 'LOCKING_BETS') ||
+    !state.race?.scheduledStartAt
+  ) {
+    return null;
+  }
+
+  return state.race as RacingPrestartRace;
 }
 
 function normalizeRaceTickIntervalMs(tickIntervalMs: number) {

@@ -444,6 +444,12 @@ export type RacingRaceTickSnapshot = {
   }>;
 };
 
+export type RacingPrestartTickSnapshot = {
+  scheduledStartAt: string;
+  serverNowMs: number;
+  remainingMs: number;
+};
+
 export type RacingTableState = {
   tableId: string;
   status: RacingTableStatus;
@@ -531,6 +537,7 @@ export type RacingTableEventType =
   | "TABLE_JOINED"
   | "RACE_SCHEDULED"
   | "BET_PLACED"
+  | "PRESTART_TICK"
   | "RACE_STARTED"
   | "RACE_TICK"
   | "RACE_SETTLED"
@@ -541,11 +548,13 @@ export type RacingTableEventPayload = {
   type: RacingTableEventType;
   actorUserId: string;
   raceId?: string;
+  raceNo?: number;
   betId?: string;
   betType?: RacingBetType;
   raceEntryIds?: string[];
   resultOrder?: string[];
   tick?: RacingRaceTickSnapshot;
+  prestartTick?: RacingPrestartTickSnapshot;
   stateVersion: number;
   createdAt: string;
 };

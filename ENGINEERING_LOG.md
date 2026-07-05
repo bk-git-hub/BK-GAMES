@@ -114,6 +114,7 @@ Clients may animate, interpolate, and display effects. The server owns:
 - Multiple bet types: win, place, quinella, exacta, quinella place, trio, trifecta.
 - Deterministic per-tick race simulation with overtakes.
 - Server `RACE_TICK` broadcast at table tick interval.
+- Server `PRESTART_TICK` broadcast during the final five seconds before race start.
 - 25-second server race movement window with 35-second result display.
 - Today-based race history and horse statistics APIs.
 
@@ -183,6 +184,18 @@ Lesson:
 
 - A socket event name is not the same thing as a server-authoritative realtime loop.
 - Completion criteria must include producer cadence, two-client synchronization, and settlement consistency.
+
+### Racing Countdown Gap
+
+Problem:
+
+- The frontend countdown used `scheduledStartAt`, but the backend only started `RACE_TICK` after the 5-second lifecycle scheduler observed `RUNNING`.
+- This could leave a visible gap after countdown reached zero.
+
+Correction:
+
+- Added a server-side `PRESTART_TICK` event for the final five seconds before `scheduledStartAt`.
+- The prestart timer now advances the race to `RUNNING` immediately when remaining time reaches zero, emits `TABLE_STATE`, and starts the first `RACE_TICK` without waiting for the scheduler fallback.
 
 ## Current Public Status
 

@@ -533,6 +533,32 @@ export type RacingHorseStatsResponse = {
   horses: RacingHorseStatsSnapshot[];
 };
 
+export type RacingBetHistoryStatus = "PLACED" | "WON" | "LOST" | "CANCELLED";
+
+export type RacingBetHistorySelectionSnapshot = {
+  raceEntryId: string;
+  entryNo: number;
+  displayName: string;
+};
+
+export type RacingBetHistorySnapshot = {
+  betId: string;
+  raceId: string;
+  raceNo: number;
+  tableId: string;
+  betType: RacingBetType;
+  amount: string;
+  status: RacingBetHistoryStatus;
+  payoutAmount: string;
+  createdAt: string;
+  settledAt: string | null;
+  selections: RacingBetHistorySelectionSnapshot[];
+};
+
+export type RacingBetsResponse = {
+  bets: RacingBetHistorySnapshot[];
+};
+
 export type RacingTableEventType =
   | "TABLE_JOINED"
   | "RACE_SCHEDULED"

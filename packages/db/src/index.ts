@@ -6,6 +6,7 @@ export * from "./daily-rewards.js";
 export * from "./blackjack-betting.js";
 export * from "./blackjack-settlement.js";
 export * from "./racing-betting.js";
+export * from "./racing-bet-history.js";
 export * from "./racing-history.js";
 export * from "./racing-scheduler.js";
 export * from "./racing-runner.js";

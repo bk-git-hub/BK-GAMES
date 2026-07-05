@@ -197,6 +197,19 @@ Correction:
 - Added a server-side `PRESTART_TICK` event for the final five seconds before `scheduledStartAt`.
 - The prestart timer now advances the race to `RUNNING` immediately when remaining time reaches zero, emits `TABLE_STATE`, and starts the first `RACE_TICK` without waiting for the scheduler fallback.
 
+### Racing Ticket History API
+
+Problem:
+
+- The frontend could only display tickets from local React state and the current socket session's `BET_PLACED` events.
+- After leaving and re-entering the BK Derby page, the persisted user ticket history had no backend read path.
+
+Correction:
+
+- Added authenticated `GET /racing/bets?tableId=main&limit=20`.
+- The endpoint requires a verified game token and returns only the current user's persisted racing bets, race number, table code, point amounts, status, settlement timestamp, and ordered selections.
+- The API returns the existing persisted `PLACED` status for open tickets instead of inventing a new `PENDING` status.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

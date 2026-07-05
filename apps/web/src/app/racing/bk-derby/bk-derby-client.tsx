@@ -14,7 +14,10 @@ import {
   RACING_CLIENT_EVENTS,
   RACING_NAMESPACE,
   RACING_SERVER_EVENTS,
+  type RacingBetHistorySnapshot,
+  type RacingBetHistoryStatus,
   type RacingBetType,
+  type RacingBetsResponse,
   type RacingJoinTablePayload,
   type RacingPlaceBetPayload,
   type RacingPrestartTickSnapshot,
@@ -132,9 +135,12 @@ type RacingTicketItem = {
   createdAt: string;
   localId: string;
   message: string | null;
+  payoutAmount?: number | null;
   raceId: string;
   raceNo: number | null;
   selections: RacingTicketSelection[];
+  serverStatus?: RacingBetHistoryStatus | null;
+  settledAt?: string | null;
   status: RacingTicketStatus;
 };
 
@@ -159,6 +165,14 @@ type RaceHistoryViewState = {
   errorMessage: string | null;
   races: RacingSettledRaceSnapshot[];
   status: RaceHistoryStatus;
+};
+
+type BetHistoryStatus = "idle" | "loading" | "ready" | "error";
+
+type BetHistoryViewState = {
+  bets: RacingBetHistorySnapshot[];
+  errorMessage: string | null;
+  status: BetHistoryStatus;
 };
 
 type HorseRecord = {
@@ -351,6 +365,7 @@ export function BkDerbyClient() {
   const router = useRouter();
   const racing = useRacingTable();
   const raceHistory = useRacingRaceHistory();
+  const betHistory = useRacingBetHistory(racing.gameToken);
   const usesBackendState = Boolean(racing.tableState?.race);
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [persistedResultBoard, setPersistedResultBoard] =
@@ -510,9 +525,11 @@ export function BkDerbyClient() {
         localTickets,
         pendingBetRequest,
         playerId: racing.player?.id ?? null,
+        serverBets: betHistory.bets,
         settledRaces: raceHistory.races,
       }),
     [
+      betHistory.bets,
       betSocketError,
       bettingHorses,
       effectiveBetType,
@@ -1068,7 +1085,11 @@ export function BkDerbyClient() {
                 validationReason={bettingValidation.reason}
                 walletBalance={racing.walletBalance}
               />
-              <TicketHistoryPanel ticketHistory={ticketHistory} />
+              <TicketHistoryPanel
+                historyErrorMessage={betHistory.errorMessage}
+                historyStatus={betHistory.status}
+                ticketHistory={ticketHistory}
+              />
             </div>
           </div>
         </div>
@@ -1385,8 +1406,12 @@ function RacingBettingPanel({
 }
 
 function TicketHistoryPanel({
+  historyErrorMessage,
+  historyStatus,
   ticketHistory,
 }: {
+  historyErrorMessage: string | null;
+  historyStatus: BetHistoryStatus;
   ticketHistory: RacingTicketHistoryItem[];
 }) {
   return (
@@ -1454,7 +1479,8 @@ function TicketHistoryPanel({
                   <span>{ticket.outcomeDetail}</span>
                   {ticket.projectedReturn !== null ? (
                     <strong>
-                      예상 {formatPoints(ticket.projectedReturn)}P
+                      {ticket.outcomeStatus === "won" ? "지급" : "반환"}{" "}
+                      {formatPoints(ticket.projectedReturn)}P
                     </strong>
                   ) : null}
                 </div>
@@ -1483,7 +1509,9 @@ function TicketHistoryPanel({
           })}
         </ol>
       ) : (
-        <p className={styles.ticketEmpty}>아직 티켓 히스토리가 없습니다</p>
+        <p className={styles.ticketEmpty}>
+          {getTicketHistoryEmptyText(historyStatus, historyErrorMessage)}
+        </p>
       )}
     </section>
   );
@@ -1683,9 +1711,87 @@ function useRacingRaceHistory(): RaceHistoryViewState {
   return history;
 }
 
+function useRacingBetHistory(gameToken: string | null): BetHistoryViewState {
+  const [history, setHistory] = useState<BetHistoryViewState>({
+    bets: [],
+    errorMessage: null,
+    status: "idle",
+  });
+
+  useEffect(() => {
+    if (!gameToken) {
+      setHistory({
+        bets: [],
+        errorMessage: null,
+        status: "idle",
+      });
+      return;
+    }
+
+    const authorizedGameToken = gameToken;
+    let cancelled = false;
+    const controller = new AbortController();
+    let pollTimer: number | null = null;
+
+    async function loadBetHistory() {
+      setHistory((currentHistory) => ({
+        ...currentHistory,
+        errorMessage: null,
+        status: currentHistory.status === "ready" ? "ready" : "loading",
+      }));
+
+      try {
+        const nextHistory = await requestRacingBetHistory(
+          authorizedGameToken,
+          controller.signal,
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setHistory({
+          bets: nextHistory.bets,
+          errorMessage: null,
+          status: "ready",
+        });
+      } catch (error) {
+        if (cancelled || controller.signal.aborted) {
+          return;
+        }
+
+        setHistory((currentHistory) => ({
+          ...currentHistory,
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : "Ticket history request failed.",
+          status: "error",
+        }));
+      }
+    }
+
+    void loadBetHistory();
+    pollTimer = window.setInterval(() => {
+      void loadBetHistory();
+    }, raceHistoryPollMs);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+      }
+    };
+  }, [gameToken]);
+
+  return history;
+}
+
 function useRacingTable() {
   const socketRef = useRef<Socket | null>(null);
   const latestTableStateRef = useRef<RacingTableViewState | null>(null);
+  const [gameToken, setGameToken] = useState<string | null>(null);
   const [player, setPlayer] = useState<GameTokenResponse["user"] | null>(null);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("requesting-token");
@@ -1779,6 +1885,7 @@ function useRacingTable() {
     async function connectSocket() {
       setConnectionStatus("requesting-token");
       setConnectionStatus("connecting");
+      setGameToken(null);
       setSocketError(null);
 
       let tokenResponse: GameTokenResponse;
@@ -1796,6 +1903,7 @@ function useRacingTable() {
         if (message === "Authentication required.") {
           setIsAuthRequired(true);
           setConnectionStatus("error");
+          setGameToken(null);
           return false;
         }
 
@@ -1815,6 +1923,7 @@ function useRacingTable() {
       }
 
       setPlayer(tokenResponse.user);
+      setGameToken(tokenResponse.token);
       setWalletBalance(tokenResponse.walletBalance);
 
       const socket = io(resolveRacingSocketUrl(), {
@@ -1953,6 +2062,7 @@ function useRacingTable() {
   return {
     betEvents,
     connectionStatus,
+    gameToken,
     latestPrestartTick,
     latestTableEvent,
     latestTick,
@@ -1999,6 +2109,35 @@ async function requestRacingRaceHistory(signal: AbortSignal) {
   }
 
   return (await response.json()) as RacingRaceResultsResponse;
+}
+
+async function requestRacingBetHistory(
+  gameToken: string,
+  signal: AbortSignal,
+) {
+  const url = new URL(`${resolveRacingServerUrl()}/racing/bets`);
+
+  url.searchParams.set("tableId", tableId);
+  url.searchParams.set("limit", "20");
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${gameToken}`,
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ticket history request failed (${response.status}).`);
+  }
+
+  const body = (await response.json()) as Partial<RacingBetsResponse>;
+
+  if (!Array.isArray(body.bets)) {
+    throw new Error("Ticket history response was invalid.");
+  }
+
+  return body as RacingBetsResponse;
 }
 
 async function requestGameToken(signal: AbortSignal) {
@@ -2212,11 +2351,12 @@ function buildTicketHistory(input: {
   localTickets: RacingTicketItem[];
   pendingBetRequest: { commandId: string; raceId: string } | null;
   playerId: string | null;
+  serverBets: RacingBetHistorySnapshot[];
   settledRaces: RacingSettledRaceSnapshot[];
 }): RacingTicketHistoryItem[] {
-  let mergedTickets = input.localTickets.map((ticket) =>
-    input.betSocketError &&
-    input.pendingBetRequest?.commandId === ticket.localId
+  const serverTickets = input.serverBets.map(buildTicketFromServerBet);
+  const localTickets = input.localTickets.map((ticket) =>
+    input.betSocketError && input.pendingBetRequest?.commandId === ticket.localId
       ? {
           ...ticket,
           message: input.betSocketError.message,
@@ -2224,6 +2364,7 @@ function buildTicketHistory(input: {
         }
       : ticket,
   );
+  let mergedTickets = mergeServerAndLocalTickets(serverTickets, localTickets);
 
   for (let index = input.acceptedEvents.length - 1; index >= 0; index -= 1) {
     const event = input.acceptedEvents[index];
@@ -2285,6 +2426,51 @@ function buildTicketHistory(input: {
         settledRaceById.get(ticket.raceId) ?? null,
       ),
     );
+}
+
+function buildTicketFromServerBet(
+  serverBet: RacingBetHistorySnapshot,
+): RacingTicketItem {
+  return {
+    amount: parsePointAmountText(serverBet.amount),
+    betId: serverBet.betId,
+    betType: serverBet.betType,
+    createdAt: serverBet.createdAt,
+    localId: `server:${serverBet.betId}`,
+    message: null,
+    payoutAmount: parseNonNegativePointAmountText(serverBet.payoutAmount),
+    raceId: serverBet.raceId,
+    raceNo: serverBet.raceNo,
+    selections: serverBet.selections.map((selection) => ({
+      color: getHistoryHorseColor(selection.entryNo),
+      name: selection.displayName,
+      number: selection.entryNo,
+      raceEntryId: selection.raceEntryId,
+    })),
+    serverStatus: serverBet.status,
+    settledAt: serverBet.settledAt,
+    status: "accepted",
+  };
+}
+
+function mergeServerAndLocalTickets(
+  serverTickets: RacingTicketItem[],
+  localTickets: RacingTicketItem[],
+) {
+  const serverBetIds = new Set(
+    serverTickets.flatMap((ticket) => (ticket.betId ? [ticket.betId] : [])),
+  );
+  const mergedTickets = [...serverTickets];
+
+  for (const ticket of localTickets) {
+    if (ticket.betId && serverBetIds.has(ticket.betId)) {
+      continue;
+    }
+
+    mergedTickets.push(ticket);
+  }
+
+  return mergedTickets;
 }
 
 function getTicketSelectionEntriesForRace(input: {
@@ -2502,6 +2688,14 @@ function buildTicketHistoryItem(
     };
   }
 
+  if (ticket.serverStatus) {
+    return {
+      ...ticket,
+      ...getServerTicketOutcome(ticket),
+      resultOrder,
+    };
+  }
+
   if (!settledRace) {
     return {
       ...ticket,
@@ -2512,21 +2706,48 @@ function buildTicketHistoryItem(
     };
   }
 
-  const isWon = isWinningTicket(ticket, settledRace);
-  const fieldSize = settledRace.entries.length;
-  const projectedReturn =
-    isWon && ticket.amount !== null
-      ? Math.floor(
-          ticket.amount * getEstimatedOddsMultiplier(ticket.betType, fieldSize),
-        )
-      : null;
-
   return {
     ...ticket,
-    outcomeDetail: getSettledTicketDetail(ticket, settledRace, isWon),
-    outcomeStatus: isWon ? "won" : "lost",
-    projectedReturn,
+    outcomeDetail: "서버 정산 대기중",
+    outcomeStatus: "pending",
+    projectedReturn: null,
     resultOrder,
+  };
+}
+
+function getServerTicketOutcome(ticket: RacingTicketItem) {
+  const selectionText =
+    ticket.selections.map((selection) => `${selection.number}번`).join(" / ") ||
+    "선택 없음";
+
+  if (ticket.serverStatus === "WON") {
+    return {
+      outcomeDetail: `적중: ${selectionText}`,
+      outcomeStatus: "won" as const,
+      projectedReturn: ticket.payoutAmount ?? null,
+    };
+  }
+
+  if (ticket.serverStatus === "LOST") {
+    return {
+      outcomeDetail: `미적중: ${selectionText}`,
+      outcomeStatus: "lost" as const,
+      projectedReturn: null,
+    };
+  }
+
+  if (ticket.serverStatus === "CANCELLED") {
+    return {
+      outcomeDetail: "취소/환불 처리됨",
+      outcomeStatus: "rejected" as const,
+      projectedReturn: ticket.payoutAmount ?? null,
+    };
+  }
+
+  return {
+    outcomeDetail: "결과 대기중",
+    outcomeStatus: "pending" as const,
+    projectedReturn: null,
   };
 }
 
@@ -2541,88 +2762,6 @@ function buildTicketResultOrder(
       number: entry.number,
       raceEntryId: entry.raceEntryId,
     }));
-}
-
-function getSettledTicketDetail(
-  ticket: RacingTicketItem,
-  settledRace: RacingSettledRaceSnapshot,
-  isWon: boolean,
-) {
-  const rankByRaceEntryId = new Map(
-    settledRace.entries.map((entry) => [entry.raceEntryId, entry.finalRank]),
-  );
-  const selectedRankText = ticket.selections
-    .map((selection) => {
-      const rank = rankByRaceEntryId.get(selection.raceEntryId);
-
-      return rank
-        ? `${selection.number}번 ${formatKoreanRank(rank)}`
-        : `${selection.number}번 -`;
-    })
-    .join(" / ");
-
-  return `${isWon ? "적중" : "미적중"}: ${selectedRankText || "선택 없음"}`;
-}
-
-function isWinningTicket(
-  ticket: RacingTicketItem,
-  settledRace: RacingSettledRaceSnapshot,
-) {
-  const rankByRaceEntryId = new Map(
-    settledRace.entries.map((entry) => [entry.raceEntryId, entry.finalRank]),
-  );
-  const selectedIds = ticket.selections.map(
-    (selection) => selection.raceEntryId,
-  );
-  const fieldSize = settledRace.entries.length;
-
-  if (ticket.betType === "WIN") {
-    return rankByRaceEntryId.get(selectedIds[0] ?? "") === 1;
-  }
-
-  if (ticket.betType === "PLACE") {
-    return (
-      selectedIds.length === 1 &&
-      (rankByRaceEntryId.get(selectedIds[0] ?? "") ??
-        Number.POSITIVE_INFINITY) <= getPlaceRank(fieldSize)
-    );
-  }
-
-  if (ticket.betType === "QUINELLA") {
-    return areTicketSelectionsWithinRank(selectedIds, rankByRaceEntryId, 2, 2);
-  }
-
-  if (ticket.betType === "QUINELLA_PLACE") {
-    return areTicketSelectionsWithinRank(selectedIds, rankByRaceEntryId, 3, 2);
-  }
-
-  if (ticket.betType === "TRIO") {
-    return areTicketSelectionsWithinRank(selectedIds, rankByRaceEntryId, 3, 3);
-  }
-
-  return (
-    selectedIds.length ===
-      getRacingBetTypeConfig(ticket.betType).requiredSelections &&
-    selectedIds.every(
-      (raceEntryId, index) => rankByRaceEntryId.get(raceEntryId) === index + 1,
-    )
-  );
-}
-
-function areTicketSelectionsWithinRank(
-  selectedRaceEntryIds: string[],
-  rankByRaceEntryId: Map<string, number>,
-  maxRank: number,
-  expectedSelectionCount: number,
-) {
-  return (
-    selectedRaceEntryIds.length === expectedSelectionCount &&
-    selectedRaceEntryIds.every(
-      (raceEntryId) =>
-        (rankByRaceEntryId.get(raceEntryId) ?? Number.POSITIVE_INFINITY) <=
-        maxRank,
-    )
-  );
 }
 
 function getTicketRaceNo(
@@ -2697,6 +2836,21 @@ function getTicketHistoryStatusLabel(status: RacingTicketOutcomeStatus) {
   }
 
   return "발권중";
+}
+
+function getTicketHistoryEmptyText(
+  status: BetHistoryStatus,
+  errorMessage: string | null,
+) {
+  if (status === "loading") {
+    return "티켓 히스토리를 불러오는 중";
+  }
+
+  if (status === "error") {
+    return errorMessage ?? "티켓 히스토리를 불러오지 못했습니다";
+  }
+
+  return "아직 티켓 히스토리가 없습니다";
 }
 
 function formatTicketTime(value: string) {
@@ -2784,6 +2938,16 @@ function buildHorseRecords(races: RacingSettledRaceSnapshot[]): HorseRecord[] {
 
 function parsePointAmountText(value: string | null | undefined) {
   if (!value || !/^[1-9]\d*$/.test(value.trim())) {
+    return null;
+  }
+
+  const amount = Number(value);
+
+  return Number.isSafeInteger(amount) ? amount : null;
+}
+
+function parseNonNegativePointAmountText(value: string | null | undefined) {
+  if (!value || !/^\d+$/.test(value.trim())) {
     return null;
   }
 

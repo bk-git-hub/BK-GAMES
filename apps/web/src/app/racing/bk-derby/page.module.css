@@ -449,30 +449,6 @@
   position: absolute;
 }
 
-.cameraStartGate {
-  background: linear-gradient(
-    180deg,
-    rgb(244 250 239 / 0%) 0%,
-    rgb(244 250 239 / 86%) 8%,
-    rgb(244 250 239 / 94%) 92%,
-    rgb(244 250 239 / 0%) 100%
-  );
-  border: 0;
-  border-radius: 0;
-  bottom: 16%;
-  box-shadow:
-    0 0 0 1px rgb(20 32 27 / 48%),
-    0 0 18px rgb(255 255 255 / 20%);
-  left: 8.2%;
-  position: absolute;
-  top: 24%;
-  width: 4px;
-}
-
-.cameraStartGate::before {
-  content: none;
-}
-
 .cameraFinishPost {
   background:
     linear-gradient(

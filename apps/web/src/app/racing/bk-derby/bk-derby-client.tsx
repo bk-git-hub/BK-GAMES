@@ -893,7 +893,6 @@ export function BkDerbyClient() {
                   }
                 >
                   <div className={styles.cameraTrack} aria-hidden="true">
-                    <div className={styles.cameraStartGate} />
                     <div className={styles.cameraFinishPost} />
                   </div>
                   <div

@@ -17,6 +17,7 @@ import {
   type RacingBetType,
   type RacingJoinTablePayload,
   type RacingPlaceBetPayload,
+  type RacingPrestartTickSnapshot,
   type RacingRaceEntrySnapshot,
   type RacingRaceResultsResponse,
   type RacingRaceTickSnapshot,
@@ -83,6 +84,12 @@ type RaceFinishMark = {
   raceEntryId: string;
   raceId: string;
   rank: number;
+};
+
+type PrestartTickView = RacingPrestartTickSnapshot & {
+  raceId: string;
+  raceNo: number | null;
+  receivedAtMs: number;
 };
 
 type StartCountdownOverlay = {
@@ -201,6 +208,7 @@ const raceHistoryPollMs = 10_000;
 const localTickMs = 160;
 const startCountdownWindowMs = 5_000;
 const startCountdownHoldMs = 1_400;
+const prestartTickFreshMs = 1_500;
 const raceBgmLeadMs = 14_000;
 const raceBgmVolume = 0.58;
 const raceBgmSrc = "/racing/audio/william-tell-overture-remix.mp3";
@@ -372,7 +380,16 @@ export function BkDerbyClient() {
   const latestTickRef = useRef<RacingRaceTickSnapshot | null>(null);
   const tableStateRef = useRef<RacingTableViewState | null>(null);
   const currentRaceId = racing.tableState?.race?.raceId ?? null;
-  const isVisuallyRunning = isRaceVisuallyRunning(racing.tableState, clockMs);
+  const activePrestartTick = getActivePrestartTick(
+    racing.latestPrestartTick,
+    racing.tableState,
+    clockMs,
+  );
+  const isVisuallyRunning = isRaceVisuallyRunning(
+    racing.tableState,
+    clockMs,
+    activePrestartTick,
+  );
   const serverTick = useMemo(
     () =>
       racing.latestTick?.raceId === racing.tableState?.race?.raceId
@@ -445,6 +462,8 @@ export function BkDerbyClient() {
     racing.tableState,
     displayTick,
     isVisuallyRunning,
+    activePrestartTick,
+    clockMs,
   );
   const socketErrorMessage =
     racing.socketError?.message === "Server polling active."
@@ -454,6 +473,7 @@ export function BkDerbyClient() {
   const startCountdownOverlay = getStartCountdownOverlay(
     racing.tableState,
     clockMs,
+    activePrestartTick,
   );
   const isPendingBetForCurrentRace =
     pendingBetRequest?.raceId === currentRaceId;
@@ -927,7 +947,11 @@ export function BkDerbyClient() {
                     <em>
                       {isVisuallyRunning
                         ? "LIVE"
-                        : getTimerText(racing.tableState)}
+                        : getTimerText(
+                            racing.tableState,
+                            clockMs,
+                            activePrestartTick,
+                          )}
                     </em>
                     <button
                       aria-label={bgmButtonLabel}
@@ -1671,6 +1695,8 @@ function useRacingTable() {
   const [latestTick, setLatestTick] = useState<RacingRaceTickSnapshot | null>(
     null,
   );
+  const [latestPrestartTick, setLatestPrestartTick] =
+    useState<PrestartTickView | null>(null);
   const [latestWalletEvent, setLatestWalletEvent] =
     useState<RacingWalletUpdatedPayload | null>(null);
   const [latestBetError, setLatestBetError] =
@@ -1711,6 +1737,12 @@ function useRacingTable() {
       setTableState(resolvedState);
       setLatestTick((currentTick) =>
         currentTick?.raceId === resolvedState.race?.raceId ? currentTick : null,
+      );
+      setLatestPrestartTick((currentTick) =>
+        currentTick?.raceId === resolvedState.race?.raceId &&
+        isRaceStartCountdownPhase(resolvedState)
+          ? currentTick
+          : null,
       );
     }
 
@@ -1846,6 +1878,22 @@ function useRacingTable() {
 
           if (payload.type === "RACE_TICK" && payload.tick) {
             setLatestTick(payload.tick);
+            setLatestPrestartTick((currentTick) =>
+              currentTick?.raceId === payload.tick?.raceId ? null : currentTick,
+            );
+          }
+
+          if (
+            payload.type === "PRESTART_TICK" &&
+            payload.prestartTick &&
+            payload.raceId
+          ) {
+            setLatestPrestartTick({
+              ...payload.prestartTick,
+              raceId: payload.raceId,
+              raceNo: payload.raceNo ?? null,
+              receivedAtMs: Date.now(),
+            });
           }
         },
       );
@@ -1905,6 +1953,7 @@ function useRacingTable() {
   return {
     betEvents,
     connectionStatus,
+    latestPrestartTick,
     latestTableEvent,
     latestTick,
     latestWalletEvent,
@@ -3271,6 +3320,8 @@ function getStatusDetail(
   tableState: RacingTableViewState | null,
   latestTick: RacingRaceTickSnapshot | null,
   isVisuallyRunning: boolean,
+  prestartTick: PrestartTickView | null,
+  nowMs: number,
 ) {
   if (!tableState?.race) {
     return "Waiting for race";
@@ -3281,7 +3332,11 @@ function getStatusDetail(
   }
 
   if (isVisuallyRunning) {
-    return "Awaiting live tick";
+    const remainingMs = getPrestartRemainingMs(prestartTick, nowMs);
+
+    return remainingMs !== null && remainingMs > 0
+      ? "Server countdown"
+      : "Starting";
   }
 
   return `Race ${tableState.race.raceNo}`;
@@ -3291,7 +3346,11 @@ function formatLiveElapsedMs(elapsedMs: number) {
   return (Math.floor(elapsedMs / 100) / 10).toFixed(1);
 }
 
-function getTimerText(tableState: RacingTableViewState | null) {
+function getTimerText(
+  tableState: RacingTableViewState | null,
+  nowMs = Date.now(),
+  prestartTick: PrestartTickView | null = null,
+) {
   if (!tableState?.race) {
     return "00:03";
   }
@@ -3310,7 +3369,9 @@ function getTimerText(tableState: RacingTableViewState | null) {
     return `R${tableState.race.raceNo}`;
   }
 
-  const remainingMs = Date.parse(targetTime) - Date.now();
+  const remainingMs =
+    getCountdownRemainingMs(tableState, nowMs, prestartTick) ??
+    Date.parse(targetTime) - nowMs;
 
   if (isRaceStartCountdownPhase(tableState) && remainingMs <= 0) {
     return "START";
@@ -3373,6 +3434,7 @@ function getTimerTargetTime(tableState: RacingTableViewState) {
 function getStartCountdownOverlay(
   tableState: RacingTableViewState | null,
   nowMs: number,
+  prestartTick: PrestartTickView | null = null,
 ): StartCountdownOverlay | null {
   if (!tableState?.race || !isRaceStartCountdownPhase(tableState)) {
     return null;
@@ -3384,7 +3446,9 @@ function getStartCountdownOverlay(
     return null;
   }
 
-  const remainingMs = Date.parse(targetTime) - nowMs;
+  const remainingMs =
+    getCountdownRemainingMs(tableState, nowMs, prestartTick) ??
+    Date.parse(targetTime) - nowMs;
 
   if (
     remainingMs > startCountdownWindowMs ||
@@ -3458,6 +3522,69 @@ function getRaceStartTargetMs(tableState: RacingTableViewState) {
   return Number.isFinite(startMs) ? startMs : null;
 }
 
+function getActivePrestartTick(
+  prestartTick: PrestartTickView | null,
+  tableState: RacingTableViewState | null,
+  nowMs: number,
+) {
+  if (
+    !prestartTick ||
+    !tableState?.race ||
+    !isRaceStartCountdownPhase(tableState)
+  ) {
+    return null;
+  }
+
+  if (prestartTick.raceId !== tableState.race.raceId) {
+    return null;
+  }
+
+  const remainingMs = getPrestartRemainingMs(prestartTick, nowMs);
+
+  if (remainingMs === null || remainingMs < -startCountdownHoldMs) {
+    return null;
+  }
+
+  if (
+    nowMs - prestartTick.receivedAtMs > prestartTickFreshMs &&
+    remainingMs > 0
+  ) {
+    return null;
+  }
+
+  return prestartTick;
+}
+
+function getCountdownRemainingMs(
+  tableState: RacingTableViewState,
+  nowMs: number,
+  prestartTick: PrestartTickView | null,
+) {
+  if (
+    !prestartTick ||
+    !tableState.race ||
+    prestartTick.raceId !== tableState.race.raceId ||
+    !isRaceStartCountdownPhase(tableState)
+  ) {
+    return null;
+  }
+
+  return getPrestartRemainingMs(prestartTick, nowMs);
+}
+
+function getPrestartRemainingMs(
+  prestartTick: PrestartTickView | null,
+  nowMs: number,
+) {
+  if (!prestartTick) {
+    return null;
+  }
+
+  const elapsedSinceReceiptMs = Math.max(0, nowMs - prestartTick.receivedAtMs);
+
+  return prestartTick.remainingMs - elapsedSinceReceiptMs;
+}
+
 function getScheduledRaceStartMs(tableState: RacingTableViewState) {
   const targetTime =
     tableState.timers.scheduledStartAt ?? tableState.race?.scheduledStartAt;
@@ -3474,6 +3601,7 @@ function getScheduledRaceStartMs(tableState: RacingTableViewState) {
 function isRaceVisuallyRunning(
   tableState: RacingTableViewState | null,
   nowMs: number,
+  prestartTick: PrestartTickView | null = null,
 ) {
   if (!tableState?.race) {
     return false;
@@ -3485,6 +3613,16 @@ function isRaceVisuallyRunning(
 
   if (tableState.phase !== "BETTING" && tableState.phase !== "LOCKING_BETS") {
     return false;
+  }
+
+  const prestartRemainingMs = getCountdownRemainingMs(
+    tableState,
+    nowMs,
+    prestartTick,
+  );
+
+  if (prestartRemainingMs !== null && prestartRemainingMs <= 0) {
+    return true;
   }
 
   const scheduledStartMs = getScheduledRaceStartMs(tableState);

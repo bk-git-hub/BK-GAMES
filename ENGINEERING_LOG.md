@@ -248,6 +248,15 @@ Correction:
 - Agents and worker threads may request that the user start, restart, or inspect a server, but must not start, stop, restart, kill, or message the Runtime Helper thread without explicit user instruction.
 - `runtime-state` is treated as an observation record, not process ownership.
 
+### Baccarat DB Foundation
+
+Correction:
+
+- Added Baccarat MVP schema and migration for tables, shoes, rounds, reveal slots, bets, and actions.
+- Added the `main` Baccarat table seed helper and seed script.
+- This is schema/seed only: no betting transaction, settlement transaction, socket contract, game-server runtime, or web UI behavior was introduced.
+- Reveal `card_snapshot` remains nullable before reveal, and shoe encrypted state/card order/server seed fields stay DB/server-only.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

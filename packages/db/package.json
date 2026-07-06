@@ -17,6 +17,7 @@
     "smoke:racing-scheduler": "tsx scripts/racing-scheduler-smoke.ts",
     "smoke:racing-runner": "tsx scripts/racing-runner-smoke.ts",
     "seed:blackjack-main": "tsx scripts/seed-blackjack-main.ts",
+    "seed:baccarat-main": "tsx scripts/seed-baccarat-main.ts",
     "seed:racing-main": "tsx scripts/seed-racing-main.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

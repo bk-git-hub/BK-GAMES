@@ -1,0 +1,6542 @@
+{
+  "id": "51719970-df30-4db4-a442-577fa02b7fff",
+  "prevId": "bddf8078-8939-4f66-981d-7ec29c0184fc",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.account": {
+      "name": "account",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_token": {
+          "name": "id_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "access_token_expires_at": {
+          "name": "access_token_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token_expires_at": {
+          "name": "refresh_token_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "account_provider_account_unique": {
+          "name": "account_provider_account_unique",
+          "columns": [
+            {
+              "expression": "provider_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "account_user_id_idx": {
+          "name": "account_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "account_user_id_user_id_fk": {
+          "name": "account_user_id_user_id_fk",
+          "tableFrom": "account",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.admin_audit_logs": {
+      "name": "admin_audit_logs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "before": {
+          "name": "before",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "after": {
+          "name": "after",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "admin_audit_logs_actor_created_idx": {
+          "name": "admin_audit_logs_actor_created_idx",
+          "columns": [
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "admin_audit_logs_target_idx": {
+          "name": "admin_audit_logs_target_idx",
+          "columns": [
+            {
+              "expression": "target_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "target_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "admin_audit_logs_actor_user_id_user_id_fk": {
+          "name": "admin_audit_logs_actor_user_id_user_id_fk",
+          "tableFrom": "admin_audit_logs",
+          "tableTo": "user",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.session": {
+      "name": "session",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "session_token_unique": {
+          "name": "session_token_unique",
+          "columns": [
+            {
+              "expression": "token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "session_user_id_idx": {
+          "name": "session_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "session_expires_at_idx": {
+          "name": "session_expires_at_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "session_user_id_user_id_fk": {
+          "name": "session_user_id_user_id_fk",
+          "tableFrom": "session",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user": {
+      "name": "user",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_verified": {
+          "name": "email_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_email_unique": {
+          "name": "user_email_unique",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_created_at_idx": {
+          "name": "user_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.verification": {
+      "name": "verification",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "verification_identifier_idx": {
+          "name": "verification_identifier_idx",
+          "columns": [
+            {
+              "expression": "identifier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "verification_expires_at_idx": {
+          "name": "verification_expires_at_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.baccarat_actions": {
+      "name": "baccarat_actions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bet_id": {
+          "name": "bet_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action_type": {
+          "name": "action_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action_sequence": {
+          "name": "action_sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command_id": {
+          "name": "command_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "baccarat_actions_round_sequence_unique": {
+          "name": "baccarat_actions_round_sequence_unique",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "action_sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_actions_round_user_command_unique": {
+          "name": "baccarat_actions_round_user_command_unique",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "command_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"baccarat_actions\".\"user_id\" is not null and \"baccarat_actions\".\"command_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_actions_round_id_idx": {
+          "name": "baccarat_actions_round_id_idx",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_actions_bet_id_idx": {
+          "name": "baccarat_actions_bet_id_idx",
+          "columns": [
+            {
+              "expression": "bet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_actions_user_id_idx": {
+          "name": "baccarat_actions_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "baccarat_actions_round_id_baccarat_rounds_id_fk": {
+          "name": "baccarat_actions_round_id_baccarat_rounds_id_fk",
+          "tableFrom": "baccarat_actions",
+          "tableTo": "baccarat_rounds",
+          "columnsFrom": [
+            "round_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_actions_bet_id_baccarat_bets_id_fk": {
+          "name": "baccarat_actions_bet_id_baccarat_bets_id_fk",
+          "tableFrom": "baccarat_actions",
+          "tableTo": "baccarat_bets",
+          "columnsFrom": [
+            "bet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_actions_user_id_user_id_fk": {
+          "name": "baccarat_actions_user_id_user_id_fk",
+          "tableFrom": "baccarat_actions",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "baccarat_actions_sequence_positive": {
+          "name": "baccarat_actions_sequence_positive",
+          "value": "\"baccarat_actions\".\"action_sequence\" > 0"
+        },
+        "baccarat_actions_actor_type_check": {
+          "name": "baccarat_actions_actor_type_check",
+          "value": "\"baccarat_actions\".\"actor_type\" in ('PLAYER', 'SYSTEM')"
+        },
+        "baccarat_actions_action_type_check": {
+          "name": "baccarat_actions_action_type_check",
+          "value": "\"baccarat_actions\".\"action_type\" in (\n        'PLACE_BET',\n        'SHOE_START',\n        'DEAL',\n        'SQUEEZE_PROGRESS',\n        'REVEAL_CARD',\n        'AUTO_REVEAL',\n        'SETTLE',\n        'CANCEL'\n      )"
+        },
+        "baccarat_actions_amount_non_negative": {
+          "name": "baccarat_actions_amount_non_negative",
+          "value": "\"baccarat_actions\".\"amount\" is null or \"baccarat_actions\".\"amount\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.baccarat_bets": {
+      "name": "baccarat_bets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "table_id": {
+          "name": "table_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bet_type": {
+          "name": "bet_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PLAYER'"
+        },
+        "bet_group": {
+          "name": "bet_group",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'MAIN'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PLACED'"
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "odds_numerator": {
+          "name": "odds_numerator",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "odds_denominator": {
+          "name": "odds_denominator",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "commission_bps_snapshot": {
+          "name": "commission_bps_snapshot",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "payout_amount": {
+          "name": "payout_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "net_amount": {
+          "name": "net_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "placed_ledger_id": {
+          "name": "placed_ledger_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "settlement_ledger_id": {
+          "name": "settlement_ledger_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refund_ledger_id": {
+          "name": "refund_ledger_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "command_id": {
+          "name": "command_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "baccarat_bets_round_user_main_unique": {
+          "name": "baccarat_bets_round_user_main_unique",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"baccarat_bets\".\"bet_group\" = 'MAIN'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_bets_round_user_command_unique": {
+          "name": "baccarat_bets_round_user_command_unique",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "command_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_bets_placed_ledger_unique": {
+          "name": "baccarat_bets_placed_ledger_unique",
+          "columns": [
+            {
+              "expression": "placed_ledger_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_bets_settlement_ledger_unique": {
+          "name": "baccarat_bets_settlement_ledger_unique",
+          "columns": [
+            {
+              "expression": "settlement_ledger_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"baccarat_bets\".\"settlement_ledger_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_bets_refund_ledger_unique": {
+          "name": "baccarat_bets_refund_ledger_unique",
+          "columns": [
+            {
+              "expression": "refund_ledger_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"baccarat_bets\".\"refund_ledger_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_bets_round_id_idx": {
+          "name": "baccarat_bets_round_id_idx",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_bets_table_id_idx": {
+          "name": "baccarat_bets_table_id_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_bets_user_id_idx": {
+          "name": "baccarat_bets_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_bets_status_idx": {
+          "name": "baccarat_bets_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "baccarat_bets_round_id_baccarat_rounds_id_fk": {
+          "name": "baccarat_bets_round_id_baccarat_rounds_id_fk",
+          "tableFrom": "baccarat_bets",
+          "tableTo": "baccarat_rounds",
+          "columnsFrom": [
+            "round_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_bets_table_id_baccarat_tables_id_fk": {
+          "name": "baccarat_bets_table_id_baccarat_tables_id_fk",
+          "tableFrom": "baccarat_bets",
+          "tableTo": "baccarat_tables",
+          "columnsFrom": [
+            "table_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_bets_user_id_user_id_fk": {
+          "name": "baccarat_bets_user_id_user_id_fk",
+          "tableFrom": "baccarat_bets",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_bets_placed_ledger_id_point_ledgers_id_fk": {
+          "name": "baccarat_bets_placed_ledger_id_point_ledgers_id_fk",
+          "tableFrom": "baccarat_bets",
+          "tableTo": "point_ledgers",
+          "columnsFrom": [
+            "placed_ledger_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_bets_settlement_ledger_id_point_ledgers_id_fk": {
+          "name": "baccarat_bets_settlement_ledger_id_point_ledgers_id_fk",
+          "tableFrom": "baccarat_bets",
+          "tableTo": "point_ledgers",
+          "columnsFrom": [
+            "settlement_ledger_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_bets_refund_ledger_id_point_ledgers_id_fk": {
+          "name": "baccarat_bets_refund_ledger_id_point_ledgers_id_fk",
+          "tableFrom": "baccarat_bets",
+          "tableTo": "point_ledgers",
+          "columnsFrom": [
+            "refund_ledger_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_bets_round_table_fk": {
+          "name": "baccarat_bets_round_table_fk",
+          "tableFrom": "baccarat_bets",
+          "tableTo": "baccarat_rounds",
+          "columnsFrom": [
+            "table_id",
+            "round_id"
+          ],
+          "columnsTo": [
+            "table_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "baccarat_bets_round_id_id_unique": {
+          "name": "baccarat_bets_round_id_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "round_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "baccarat_bets_type_check": {
+          "name": "baccarat_bets_type_check",
+          "value": "\"baccarat_bets\".\"bet_type\" in ('PLAYER', 'BANKER', 'TIE')"
+        },
+        "baccarat_bets_group_check": {
+          "name": "baccarat_bets_group_check",
+          "value": "\"baccarat_bets\".\"bet_group\" in ('MAIN', 'SIDE')"
+        },
+        "baccarat_bets_status_check": {
+          "name": "baccarat_bets_status_check",
+          "value": "\"baccarat_bets\".\"status\" in ('PLACED', 'SETTLED', 'CANCELLED')"
+        },
+        "baccarat_bets_amount_positive": {
+          "name": "baccarat_bets_amount_positive",
+          "value": "\"baccarat_bets\".\"amount\" > 0"
+        },
+        "baccarat_bets_odds_positive": {
+          "name": "baccarat_bets_odds_positive",
+          "value": "\"baccarat_bets\".\"odds_numerator\" > 0 and \"baccarat_bets\".\"odds_denominator\" > 0"
+        },
+        "baccarat_bets_commission_check": {
+          "name": "baccarat_bets_commission_check",
+          "value": "\"baccarat_bets\".\"commission_bps_snapshot\" between 0 and 10000"
+        },
+        "baccarat_bets_payout_non_negative": {
+          "name": "baccarat_bets_payout_non_negative",
+          "value": "\"baccarat_bets\".\"payout_amount\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.baccarat_reveals": {
+      "name": "baccarat_reveals",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "table_id": {
+          "name": "table_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slot": {
+          "name": "slot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDING'"
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "squeezer_user_id": {
+          "name": "squeezer_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "progress": {
+          "name": "progress",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ends_at": {
+          "name": "ends_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revealed_at": {
+          "name": "revealed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revealed_by": {
+          "name": "revealed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "card_snapshot": {
+          "name": "card_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "baccarat_reveals_round_sequence_unique": {
+          "name": "baccarat_reveals_round_sequence_unique",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_reveals_round_slot_unique": {
+          "name": "baccarat_reveals_round_slot_unique",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "slot",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_reveals_table_status_idx": {
+          "name": "baccarat_reveals_table_status_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_reveals_squeezer_user_idx": {
+          "name": "baccarat_reveals_squeezer_user_idx",
+          "columns": [
+            {
+              "expression": "squeezer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "baccarat_reveals_round_id_baccarat_rounds_id_fk": {
+          "name": "baccarat_reveals_round_id_baccarat_rounds_id_fk",
+          "tableFrom": "baccarat_reveals",
+          "tableTo": "baccarat_rounds",
+          "columnsFrom": [
+            "round_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_reveals_table_id_baccarat_tables_id_fk": {
+          "name": "baccarat_reveals_table_id_baccarat_tables_id_fk",
+          "tableFrom": "baccarat_reveals",
+          "tableTo": "baccarat_tables",
+          "columnsFrom": [
+            "table_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_reveals_squeezer_user_id_user_id_fk": {
+          "name": "baccarat_reveals_squeezer_user_id_user_id_fk",
+          "tableFrom": "baccarat_reveals",
+          "tableTo": "user",
+          "columnsFrom": [
+            "squeezer_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_reveals_round_table_fk": {
+          "name": "baccarat_reveals_round_table_fk",
+          "tableFrom": "baccarat_reveals",
+          "tableTo": "baccarat_rounds",
+          "columnsFrom": [
+            "table_id",
+            "round_id"
+          ],
+          "columnsTo": [
+            "table_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "baccarat_reveals_sequence_positive": {
+          "name": "baccarat_reveals_sequence_positive",
+          "value": "\"baccarat_reveals\".\"sequence\" > 0"
+        },
+        "baccarat_reveals_slot_check": {
+          "name": "baccarat_reveals_slot_check",
+          "value": "\"baccarat_reveals\".\"slot\" in (\n        'PLAYER_CARD_1',\n        'BANKER_CARD_1',\n        'PLAYER_CARD_2',\n        'BANKER_CARD_2',\n        'PLAYER_CARD_3',\n        'BANKER_CARD_3'\n      )"
+        },
+        "baccarat_reveals_status_check": {
+          "name": "baccarat_reveals_status_check",
+          "value": "\"baccarat_reveals\".\"status\" in ('PENDING', 'ACTIVE', 'REVEALED', 'SKIPPED')"
+        },
+        "baccarat_reveals_progress_check": {
+          "name": "baccarat_reveals_progress_check",
+          "value": "\"baccarat_reveals\".\"progress\" between 0 and 100"
+        },
+        "baccarat_reveals_card_snapshot_gate": {
+          "name": "baccarat_reveals_card_snapshot_gate",
+          "value": "(\n        (\"baccarat_reveals\".\"status\" <> 'REVEALED' and \"baccarat_reveals\".\"card_snapshot\" is null) or\n        (\"baccarat_reveals\".\"status\" = 'REVEALED' and \"baccarat_reveals\".\"card_snapshot\" is not null)\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.baccarat_rounds": {
+      "name": "baccarat_rounds",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "table_id": {
+          "name": "table_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shoe_id": {
+          "name": "shoe_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_index_in_shoe": {
+          "name": "round_index_in_shoe",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_no": {
+          "name": "round_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'WAITING_BETS'"
+        },
+        "player_cards": {
+          "name": "player_cards",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "banker_cards": {
+          "name": "banker_cards",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "player_total": {
+          "name": "player_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "banker_total": {
+          "name": "banker_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_natural": {
+          "name": "is_natural",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "total_cards": {
+          "name": "total_cards",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result_flags": {
+          "name": "result_flags",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "rule_snapshot": {
+          "name": "rule_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reveal_state": {
+          "name": "reveal_state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "roadmap_snapshot": {
+          "name": "roadmap_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "betting_opens_at": {
+          "name": "betting_opens_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "betting_closes_at": {
+          "name": "betting_closes_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dealt_at": {
+          "name": "dealt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancelled_at": {
+          "name": "cancelled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancel_reason": {
+          "name": "cancel_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "baccarat_rounds_table_round_no_unique": {
+          "name": "baccarat_rounds_table_round_no_unique",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "round_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_rounds_shoe_index_unique": {
+          "name": "baccarat_rounds_shoe_index_unique",
+          "columns": [
+            {
+              "expression": "shoe_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "round_index_in_shoe",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_rounds_table_status_idx": {
+          "name": "baccarat_rounds_table_status_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_rounds_shoe_id_idx": {
+          "name": "baccarat_rounds_shoe_id_idx",
+          "columns": [
+            {
+              "expression": "shoe_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "baccarat_rounds_table_id_baccarat_tables_id_fk": {
+          "name": "baccarat_rounds_table_id_baccarat_tables_id_fk",
+          "tableFrom": "baccarat_rounds",
+          "tableTo": "baccarat_tables",
+          "columnsFrom": [
+            "table_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_rounds_shoe_id_baccarat_shoes_id_fk": {
+          "name": "baccarat_rounds_shoe_id_baccarat_shoes_id_fk",
+          "tableFrom": "baccarat_rounds",
+          "tableTo": "baccarat_shoes",
+          "columnsFrom": [
+            "shoe_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "baccarat_rounds_table_shoe_fk": {
+          "name": "baccarat_rounds_table_shoe_fk",
+          "tableFrom": "baccarat_rounds",
+          "tableTo": "baccarat_shoes",
+          "columnsFrom": [
+            "table_id",
+            "shoe_id"
+          ],
+          "columnsTo": [
+            "table_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "baccarat_rounds_table_id_id_unique": {
+          "name": "baccarat_rounds_table_id_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "table_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "baccarat_rounds_round_index_positive": {
+          "name": "baccarat_rounds_round_index_positive",
+          "value": "\"baccarat_rounds\".\"round_index_in_shoe\" > 0"
+        },
+        "baccarat_rounds_round_no_positive": {
+          "name": "baccarat_rounds_round_no_positive",
+          "value": "\"baccarat_rounds\".\"round_no\" > 0"
+        },
+        "baccarat_rounds_status_check": {
+          "name": "baccarat_rounds_status_check",
+          "value": "\"baccarat_rounds\".\"status\" in (\n        'WAITING_BETS',\n        'DEALING',\n        'SQUEEZE',\n        'SETTLING',\n        'SETTLED',\n        'CANCELLED'\n      )"
+        },
+        "baccarat_rounds_outcome_check": {
+          "name": "baccarat_rounds_outcome_check",
+          "value": "\"baccarat_rounds\".\"outcome\" is null or \"baccarat_rounds\".\"outcome\" in ('PLAYER', 'BANKER', 'TIE')"
+        },
+        "baccarat_rounds_player_total_check": {
+          "name": "baccarat_rounds_player_total_check",
+          "value": "\"baccarat_rounds\".\"player_total\" is null or \"baccarat_rounds\".\"player_total\" between 0 and 9"
+        },
+        "baccarat_rounds_banker_total_check": {
+          "name": "baccarat_rounds_banker_total_check",
+          "value": "\"baccarat_rounds\".\"banker_total\" is null or \"baccarat_rounds\".\"banker_total\" between 0 and 9"
+        },
+        "baccarat_rounds_total_cards_check": {
+          "name": "baccarat_rounds_total_cards_check",
+          "value": "\"baccarat_rounds\".\"total_cards\" is null or \"baccarat_rounds\".\"total_cards\" between 4 and 6"
+        },
+        "baccarat_rounds_betting_window_check": {
+          "name": "baccarat_rounds_betting_window_check",
+          "value": "(\n        \"baccarat_rounds\".\"betting_opens_at\" is null or\n        \"baccarat_rounds\".\"betting_closes_at\" is null or\n        \"baccarat_rounds\".\"betting_opens_at\" <= \"baccarat_rounds\".\"betting_closes_at\"\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.baccarat_shoes": {
+      "name": "baccarat_shoes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "table_id": {
+          "name": "table_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shoe_no": {
+          "name": "shoe_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'READY'"
+        },
+        "deck_count": {
+          "name": "deck_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cards_total": {
+          "name": "cards_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cards_dealt": {
+          "name": "cards_dealt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cards_remaining": {
+          "name": "cards_remaining",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cut_card_position": {
+          "name": "cut_card_position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shuffle_algorithm": {
+          "name": "shuffle_algorithm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'FISHER_YATES_V1'"
+        },
+        "server_seed_hash": {
+          "name": "server_seed_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encrypted_state": {
+          "name": "encrypted_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state_version": {
+          "name": "state_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "baccarat_shoes_table_shoe_no_unique": {
+          "name": "baccarat_shoes_table_shoe_no_unique",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "shoe_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_shoes_table_status_idx": {
+          "name": "baccarat_shoes_table_status_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "baccarat_shoes_table_id_baccarat_tables_id_fk": {
+          "name": "baccarat_shoes_table_id_baccarat_tables_id_fk",
+          "tableFrom": "baccarat_shoes",
+          "tableTo": "baccarat_tables",
+          "columnsFrom": [
+            "table_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "baccarat_shoes_table_id_id_unique": {
+          "name": "baccarat_shoes_table_id_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "table_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "baccarat_shoes_shoe_no_positive": {
+          "name": "baccarat_shoes_shoe_no_positive",
+          "value": "\"baccarat_shoes\".\"shoe_no\" > 0"
+        },
+        "baccarat_shoes_status_check": {
+          "name": "baccarat_shoes_status_check",
+          "value": "\"baccarat_shoes\".\"status\" in ('READY', 'ACTIVE', 'COMPLETED', 'VOID')"
+        },
+        "baccarat_shoes_deck_count_check": {
+          "name": "baccarat_shoes_deck_count_check",
+          "value": "\"baccarat_shoes\".\"deck_count\" between 1 and 8"
+        },
+        "baccarat_shoes_cards_total_check": {
+          "name": "baccarat_shoes_cards_total_check",
+          "value": "\"baccarat_shoes\".\"cards_total\" = \"baccarat_shoes\".\"deck_count\" * 52"
+        },
+        "baccarat_shoes_cards_dealt_check": {
+          "name": "baccarat_shoes_cards_dealt_check",
+          "value": "\"baccarat_shoes\".\"cards_dealt\" between 0 and \"baccarat_shoes\".\"cards_total\""
+        },
+        "baccarat_shoes_cards_remaining_check": {
+          "name": "baccarat_shoes_cards_remaining_check",
+          "value": "\"baccarat_shoes\".\"cards_remaining\" between 0 and \"baccarat_shoes\".\"cards_total\""
+        },
+        "baccarat_shoes_cards_count_math": {
+          "name": "baccarat_shoes_cards_count_math",
+          "value": "\"baccarat_shoes\".\"cards_dealt\" + \"baccarat_shoes\".\"cards_remaining\" = \"baccarat_shoes\".\"cards_total\""
+        },
+        "baccarat_shoes_cut_card_position_check": {
+          "name": "baccarat_shoes_cut_card_position_check",
+          "value": "\"baccarat_shoes\".\"cut_card_position\" between 1 and \"baccarat_shoes\".\"cards_total\""
+        },
+        "baccarat_shoes_seed_hash_not_empty": {
+          "name": "baccarat_shoes_seed_hash_not_empty",
+          "value": "length(trim(\"baccarat_shoes\".\"server_seed_hash\")) > 0"
+        },
+        "baccarat_shoes_state_version_check": {
+          "name": "baccarat_shoes_state_version_check",
+          "value": "\"baccarat_shoes\".\"state_version\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.baccarat_tables": {
+      "name": "baccarat_tables",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
+        "min_bet": {
+          "name": "min_bet",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_main_bet": {
+          "name": "max_main_bet",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_total_bet_per_user": {
+          "name": "max_total_bet_per_user",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "betting_timeout_seconds": {
+          "name": "betting_timeout_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 15
+        },
+        "squeeze_timeout_seconds": {
+          "name": "squeeze_timeout_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 8
+        },
+        "round_end_delay_seconds": {
+          "name": "round_end_delay_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 5
+        },
+        "deck_count": {
+          "name": "deck_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 8
+        },
+        "shoe_penetration_percent": {
+          "name": "shoe_penetration_percent",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 75
+        },
+        "minimum_cards_before_round": {
+          "name": "minimum_cards_before_round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 6
+        },
+        "result_history_limit": {
+          "name": "result_history_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 72
+        },
+        "tie_payout_numerator": {
+          "name": "tie_payout_numerator",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 8
+        },
+        "tie_payout_denominator": {
+          "name": "tie_payout_denominator",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "banker_commission_bps": {
+          "name": "banker_commission_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 500
+        },
+        "roadmap_config": {
+          "name": "roadmap_config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "rules": {
+          "name": "rules",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "baccarat_tables_code_unique": {
+          "name": "baccarat_tables_code_unique",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "baccarat_tables_status_idx": {
+          "name": "baccarat_tables_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "baccarat_tables_code_not_empty": {
+          "name": "baccarat_tables_code_not_empty",
+          "value": "length(trim(\"baccarat_tables\".\"code\")) > 0"
+        },
+        "baccarat_tables_status_check": {
+          "name": "baccarat_tables_status_check",
+          "value": "\"baccarat_tables\".\"status\" in ('OPEN', 'MAINTENANCE', 'CLOSED')"
+        },
+        "baccarat_tables_min_bet_positive": {
+          "name": "baccarat_tables_min_bet_positive",
+          "value": "\"baccarat_tables\".\"min_bet\" > 0"
+        },
+        "baccarat_tables_max_main_bet_check": {
+          "name": "baccarat_tables_max_main_bet_check",
+          "value": "\"baccarat_tables\".\"max_main_bet\" >= \"baccarat_tables\".\"min_bet\""
+        },
+        "baccarat_tables_max_total_user_check": {
+          "name": "baccarat_tables_max_total_user_check",
+          "value": "\"baccarat_tables\".\"max_total_bet_per_user\" >= \"baccarat_tables\".\"max_main_bet\""
+        },
+        "baccarat_tables_betting_timeout_check": {
+          "name": "baccarat_tables_betting_timeout_check",
+          "value": "\"baccarat_tables\".\"betting_timeout_seconds\" > 0"
+        },
+        "baccarat_tables_squeeze_timeout_check": {
+          "name": "baccarat_tables_squeeze_timeout_check",
+          "value": "\"baccarat_tables\".\"squeeze_timeout_seconds\" > 0"
+        },
+        "baccarat_tables_round_end_delay_check": {
+          "name": "baccarat_tables_round_end_delay_check",
+          "value": "\"baccarat_tables\".\"round_end_delay_seconds\" >= 0"
+        },
+        "baccarat_tables_deck_count_check": {
+          "name": "baccarat_tables_deck_count_check",
+          "value": "\"baccarat_tables\".\"deck_count\" between 1 and 8"
+        },
+        "baccarat_tables_shoe_penetration_check": {
+          "name": "baccarat_tables_shoe_penetration_check",
+          "value": "\"baccarat_tables\".\"shoe_penetration_percent\" between 50 and 90"
+        },
+        "baccarat_tables_minimum_cards_check": {
+          "name": "baccarat_tables_minimum_cards_check",
+          "value": "\"baccarat_tables\".\"minimum_cards_before_round\" >= 4"
+        },
+        "baccarat_tables_result_history_check": {
+          "name": "baccarat_tables_result_history_check",
+          "value": "\"baccarat_tables\".\"result_history_limit\" > 0"
+        },
+        "baccarat_tables_tie_payout_check": {
+          "name": "baccarat_tables_tie_payout_check",
+          "value": "\"baccarat_tables\".\"tie_payout_numerator\" > 0 and \"baccarat_tables\".\"tie_payout_denominator\" > 0"
+        },
+        "baccarat_tables_commission_check": {
+          "name": "baccarat_tables_commission_check",
+          "value": "\"baccarat_tables\".\"banker_commission_bps\" between 0 and 10000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.blackjack_actions": {
+      "name": "blackjack_actions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_seat_id": {
+          "name": "round_seat_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hand_id": {
+          "name": "hand_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action_type": {
+          "name": "action_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action_sequence": {
+          "name": "action_sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command_id": {
+          "name": "command_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "blackjack_actions_round_sequence_unique": {
+          "name": "blackjack_actions_round_sequence_unique",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "action_sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_actions_round_command_unique": {
+          "name": "blackjack_actions_round_command_unique",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "command_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"blackjack_actions\".\"command_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_actions_round_id_idx": {
+          "name": "blackjack_actions_round_id_idx",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_actions_round_seat_id_idx": {
+          "name": "blackjack_actions_round_seat_id_idx",
+          "columns": [
+            {
+              "expression": "round_seat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_actions_hand_id_idx": {
+          "name": "blackjack_actions_hand_id_idx",
+          "columns": [
+            {
+              "expression": "hand_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_actions_user_id_idx": {
+          "name": "blackjack_actions_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "blackjack_actions_round_id_blackjack_rounds_id_fk": {
+          "name": "blackjack_actions_round_id_blackjack_rounds_id_fk",
+          "tableFrom": "blackjack_actions",
+          "tableTo": "blackjack_rounds",
+          "columnsFrom": [
+            "round_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blackjack_actions_round_seat_id_blackjack_round_seats_id_fk": {
+          "name": "blackjack_actions_round_seat_id_blackjack_round_seats_id_fk",
+          "tableFrom": "blackjack_actions",
+          "tableTo": "blackjack_round_seats",
+          "columnsFrom": [
+            "round_seat_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blackjack_actions_hand_id_blackjack_hands_id_fk": {
+          "name": "blackjack_actions_hand_id_blackjack_hands_id_fk",
+          "tableFrom": "blackjack_actions",
+          "tableTo": "blackjack_hands",
+          "columnsFrom": [
+            "hand_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blackjack_actions_user_id_user_id_fk": {
+          "name": "blackjack_actions_user_id_user_id_fk",
+          "tableFrom": "blackjack_actions",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "blackjack_actions_sequence_positive": {
+          "name": "blackjack_actions_sequence_positive",
+          "value": "\"blackjack_actions\".\"action_sequence\" > 0"
+        },
+        "blackjack_actions_amount_non_negative": {
+          "name": "blackjack_actions_amount_non_negative",
+          "value": "\"blackjack_actions\".\"amount\" is null or \"blackjack_actions\".\"amount\" >= 0"
+        },
+        "blackjack_actions_actor_type_check": {
+          "name": "blackjack_actions_actor_type_check",
+          "value": "\"blackjack_actions\".\"actor_type\" in ('PLAYER', 'DEALER', 'SYSTEM')"
+        },
+        "blackjack_actions_action_type_check": {
+          "name": "blackjack_actions_action_type_check",
+          "value": "\"blackjack_actions\".\"action_type\" in (\n        'PLACE_BET',\n        'DEAL',\n        'HIT',\n        'STAND',\n        'DOUBLE',\n        'SPLIT',\n        'SURRENDER',\n        'INSURANCE_ACCEPT',\n        'INSURANCE_DECLINE',\n        'EVEN_MONEY',\n        'TIMEOUT',\n        'AUTO_STAND',\n        'SETTLE',\n        'CANCEL'\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.blackjack_hands": {
+      "name": "blackjack_hands",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_seat_id": {
+          "name": "round_seat_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hand_no": {
+          "name": "hand_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_hand_id": {
+          "name": "source_hand_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ACTIVE'"
+        },
+        "cards": {
+          "name": "cards",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "initial_bet_amount": {
+          "name": "initial_bet_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "final_bet_amount": {
+          "name": "final_bet_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payout_amount": {
+          "name": "payout_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "net_amount": {
+          "name": "net_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome_reason": {
+          "name": "outcome_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hand_value": {
+          "name": "hand_value",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_soft": {
+          "name": "is_soft",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_natural_blackjack": {
+          "name": "is_natural_blackjack",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_split_hand": {
+          "name": "is_split_hand",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_doubled": {
+          "name": "is_doubled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "blackjack_hands_round_seat_hand_unique": {
+          "name": "blackjack_hands_round_seat_hand_unique",
+          "columns": [
+            {
+              "expression": "round_seat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "hand_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_hands_round_id_idx": {
+          "name": "blackjack_hands_round_id_idx",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_hands_round_seat_id_idx": {
+          "name": "blackjack_hands_round_seat_id_idx",
+          "columns": [
+            {
+              "expression": "round_seat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_hands_source_hand_id_idx": {
+          "name": "blackjack_hands_source_hand_id_idx",
+          "columns": [
+            {
+              "expression": "source_hand_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "blackjack_hands_round_id_blackjack_rounds_id_fk": {
+          "name": "blackjack_hands_round_id_blackjack_rounds_id_fk",
+          "tableFrom": "blackjack_hands",
+          "tableTo": "blackjack_rounds",
+          "columnsFrom": [
+            "round_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blackjack_hands_round_seat_id_blackjack_round_seats_id_fk": {
+          "name": "blackjack_hands_round_seat_id_blackjack_round_seats_id_fk",
+          "tableFrom": "blackjack_hands",
+          "tableTo": "blackjack_round_seats",
+          "columnsFrom": [
+            "round_seat_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "blackjack_hands_hand_no_check": {
+          "name": "blackjack_hands_hand_no_check",
+          "value": "\"blackjack_hands\".\"hand_no\" between 1 and 4"
+        },
+        "blackjack_hands_initial_bet_positive": {
+          "name": "blackjack_hands_initial_bet_positive",
+          "value": "\"blackjack_hands\".\"initial_bet_amount\" > 0"
+        },
+        "blackjack_hands_final_bet_check": {
+          "name": "blackjack_hands_final_bet_check",
+          "value": "\"blackjack_hands\".\"final_bet_amount\" >= \"blackjack_hands\".\"initial_bet_amount\""
+        },
+        "blackjack_hands_payout_non_negative": {
+          "name": "blackjack_hands_payout_non_negative",
+          "value": "\"blackjack_hands\".\"payout_amount\" >= 0"
+        },
+        "blackjack_hands_status_check": {
+          "name": "blackjack_hands_status_check",
+          "value": "\"blackjack_hands\".\"status\" in ('ACTIVE', 'STOOD', 'DOUBLED', 'SURRENDERED', 'BUSTED', 'SETTLED', 'CANCELLED')"
+        },
+        "blackjack_hands_outcome_check": {
+          "name": "blackjack_hands_outcome_check",
+          "value": "\"blackjack_hands\".\"outcome\" is null or \"blackjack_hands\".\"outcome\" in ('WIN', 'LOSE', 'PUSH', 'CANCELLED')"
+        },
+        "blackjack_hands_outcome_reason_check": {
+          "name": "blackjack_hands_outcome_reason_check",
+          "value": "\"blackjack_hands\".\"outcome_reason\" is null or \"blackjack_hands\".\"outcome_reason\" in (\n        'NATURAL_BLACKJACK',\n        'STANDARD',\n        'PLAYER_BUST',\n        'DEALER_BUST',\n        'SURRENDER',\n        'DEALER_BLACKJACK',\n        'ROUND_CANCELLED'\n      )"
+        },
+        "blackjack_hands_value_check": {
+          "name": "blackjack_hands_value_check",
+          "value": "\"blackjack_hands\".\"hand_value\" is null or \"blackjack_hands\".\"hand_value\" between 0 and 31"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.blackjack_round_seats": {
+      "name": "blackjack_round_seats",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "table_id": {
+          "name": "table_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seat_no": {
+          "name": "seat_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ACTIVE'"
+        },
+        "initial_bet_amount": {
+          "name": "initial_bet_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_wager_amount": {
+          "name": "total_wager_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_payout_amount": {
+          "name": "total_payout_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "net_amount": {
+          "name": "net_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "blackjack_round_seats_round_seat_unique": {
+          "name": "blackjack_round_seats_round_seat_unique",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seat_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_round_seats_round_user_idx": {
+          "name": "blackjack_round_seats_round_user_idx",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_round_seats_table_user_idx": {
+          "name": "blackjack_round_seats_table_user_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "blackjack_round_seats_round_id_blackjack_rounds_id_fk": {
+          "name": "blackjack_round_seats_round_id_blackjack_rounds_id_fk",
+          "tableFrom": "blackjack_round_seats",
+          "tableTo": "blackjack_rounds",
+          "columnsFrom": [
+            "round_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blackjack_round_seats_table_id_blackjack_tables_id_fk": {
+          "name": "blackjack_round_seats_table_id_blackjack_tables_id_fk",
+          "tableFrom": "blackjack_round_seats",
+          "tableTo": "blackjack_tables",
+          "columnsFrom": [
+            "table_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blackjack_round_seats_user_id_user_id_fk": {
+          "name": "blackjack_round_seats_user_id_user_id_fk",
+          "tableFrom": "blackjack_round_seats",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "blackjack_round_seats_seat_no_check": {
+          "name": "blackjack_round_seats_seat_no_check",
+          "value": "\"blackjack_round_seats\".\"seat_no\" between 1 and 7"
+        },
+        "blackjack_round_seats_initial_bet_positive": {
+          "name": "blackjack_round_seats_initial_bet_positive",
+          "value": "\"blackjack_round_seats\".\"initial_bet_amount\" > 0"
+        },
+        "blackjack_round_seats_total_wager_check": {
+          "name": "blackjack_round_seats_total_wager_check",
+          "value": "\"blackjack_round_seats\".\"total_wager_amount\" >= \"blackjack_round_seats\".\"initial_bet_amount\""
+        },
+        "blackjack_round_seats_total_payout_non_negative": {
+          "name": "blackjack_round_seats_total_payout_non_negative",
+          "value": "\"blackjack_round_seats\".\"total_payout_amount\" >= 0"
+        },
+        "blackjack_round_seats_status_check": {
+          "name": "blackjack_round_seats_status_check",
+          "value": "\"blackjack_round_seats\".\"status\" in ('ACTIVE', 'SETTLED', 'CANCELLED')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.blackjack_rounds": {
+      "name": "blackjack_rounds",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "table_id": {
+          "name": "table_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shoe_id": {
+          "name": "shoe_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_no": {
+          "name": "round_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'WAITING_BETS'"
+        },
+        "dealer_cards": {
+          "name": "dealer_cards",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "dealer_final_value": {
+          "name": "dealer_final_value",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dealer_has_blackjack": {
+          "name": "dealer_has_blackjack",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "dealer_busted": {
+          "name": "dealer_busted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "running_count_before": {
+          "name": "running_count_before",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "running_count_after": {
+          "name": "running_count_after",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "true_count_x100_before": {
+          "name": "true_count_x100_before",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "true_count_x100_after": {
+          "name": "true_count_x100_after",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rule_snapshot": {
+          "name": "rule_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "betting_opens_at": {
+          "name": "betting_opens_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "betting_closes_at": {
+          "name": "betting_closes_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "blackjack_rounds_table_round_no_unique": {
+          "name": "blackjack_rounds_table_round_no_unique",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "round_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_rounds_table_status_idx": {
+          "name": "blackjack_rounds_table_status_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_rounds_shoe_id_idx": {
+          "name": "blackjack_rounds_shoe_id_idx",
+          "columns": [
+            {
+              "expression": "shoe_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "blackjack_rounds_table_id_blackjack_tables_id_fk": {
+          "name": "blackjack_rounds_table_id_blackjack_tables_id_fk",
+          "tableFrom": "blackjack_rounds",
+          "tableTo": "blackjack_tables",
+          "columnsFrom": [
+            "table_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blackjack_rounds_shoe_id_blackjack_shoes_id_fk": {
+          "name": "blackjack_rounds_shoe_id_blackjack_shoes_id_fk",
+          "tableFrom": "blackjack_rounds",
+          "tableTo": "blackjack_shoes",
+          "columnsFrom": [
+            "shoe_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "blackjack_rounds_status_check": {
+          "name": "blackjack_rounds_status_check",
+          "value": "\"blackjack_rounds\".\"status\" in (\n        'WAITING_BETS',\n        'DEALING',\n        'PLAYER_TURNS',\n        'DEALER_TURN',\n        'SETTLING',\n        'SETTLED',\n        'CANCELLED'\n      )"
+        },
+        "blackjack_rounds_dealer_final_value_check": {
+          "name": "blackjack_rounds_dealer_final_value_check",
+          "value": "\"blackjack_rounds\".\"dealer_final_value\" is null or \"blackjack_rounds\".\"dealer_final_value\" between 0 and 31"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.blackjack_shoes": {
+      "name": "blackjack_shoes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "table_id": {
+          "name": "table_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'READY'"
+        },
+        "deck_count": {
+          "name": "deck_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cards_total": {
+          "name": "cards_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cards_dealt": {
+          "name": "cards_dealt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cut_card_position": {
+          "name": "cut_card_position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "running_count": {
+          "name": "running_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "true_count_x100": {
+          "name": "true_count_x100",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "shuffle_algorithm": {
+          "name": "shuffle_algorithm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'FISHER_YATES_V1'"
+        },
+        "server_seed_hash": {
+          "name": "server_seed_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encrypted_state": {
+          "name": "encrypted_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state_version": {
+          "name": "state_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "blackjack_shoes_table_status_idx": {
+          "name": "blackjack_shoes_table_status_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "blackjack_shoes_table_id_blackjack_tables_id_fk": {
+          "name": "blackjack_shoes_table_id_blackjack_tables_id_fk",
+          "tableFrom": "blackjack_shoes",
+          "tableTo": "blackjack_tables",
+          "columnsFrom": [
+            "table_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "blackjack_shoes_status_check": {
+          "name": "blackjack_shoes_status_check",
+          "value": "\"blackjack_shoes\".\"status\" in ('READY', 'ACTIVE', 'COMPLETED', 'VOID')"
+        },
+        "blackjack_shoes_deck_count_check": {
+          "name": "blackjack_shoes_deck_count_check",
+          "value": "\"blackjack_shoes\".\"deck_count\" between 1 and 8"
+        },
+        "blackjack_shoes_cards_total_check": {
+          "name": "blackjack_shoes_cards_total_check",
+          "value": "\"blackjack_shoes\".\"cards_total\" = \"blackjack_shoes\".\"deck_count\" * 52"
+        },
+        "blackjack_shoes_cards_dealt_check": {
+          "name": "blackjack_shoes_cards_dealt_check",
+          "value": "\"blackjack_shoes\".\"cards_dealt\" between 0 and \"blackjack_shoes\".\"cards_total\""
+        },
+        "blackjack_shoes_cut_card_position_check": {
+          "name": "blackjack_shoes_cut_card_position_check",
+          "value": "\"blackjack_shoes\".\"cut_card_position\" between 1 and \"blackjack_shoes\".\"cards_total\""
+        },
+        "blackjack_shoes_state_version_check": {
+          "name": "blackjack_shoes_state_version_check",
+          "value": "\"blackjack_shoes\".\"state_version\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.blackjack_side_bets": {
+      "name": "blackjack_side_bets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_seat_id": {
+          "name": "round_seat_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PLACED'"
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payout_amount": {
+          "name": "payout_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "net_amount": {
+          "name": "net_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome_reason": {
+          "name": "outcome_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "blackjack_side_bets_round_seat_type_unique": {
+          "name": "blackjack_side_bets_round_seat_type_unique",
+          "columns": [
+            {
+              "expression": "round_seat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_side_bets_round_id_idx": {
+          "name": "blackjack_side_bets_round_id_idx",
+          "columns": [
+            {
+              "expression": "round_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_side_bets_round_seat_id_idx": {
+          "name": "blackjack_side_bets_round_seat_id_idx",
+          "columns": [
+            {
+              "expression": "round_seat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "blackjack_side_bets_round_id_blackjack_rounds_id_fk": {
+          "name": "blackjack_side_bets_round_id_blackjack_rounds_id_fk",
+          "tableFrom": "blackjack_side_bets",
+          "tableTo": "blackjack_rounds",
+          "columnsFrom": [
+            "round_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blackjack_side_bets_round_seat_id_blackjack_round_seats_id_fk": {
+          "name": "blackjack_side_bets_round_seat_id_blackjack_round_seats_id_fk",
+          "tableFrom": "blackjack_side_bets",
+          "tableTo": "blackjack_round_seats",
+          "columnsFrom": [
+            "round_seat_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "blackjack_side_bets_type_check": {
+          "name": "blackjack_side_bets_type_check",
+          "value": "\"blackjack_side_bets\".\"type\" in ('INSURANCE')"
+        },
+        "blackjack_side_bets_status_check": {
+          "name": "blackjack_side_bets_status_check",
+          "value": "\"blackjack_side_bets\".\"status\" in ('PLACED', 'SETTLED', 'CANCELLED')"
+        },
+        "blackjack_side_bets_amount_positive": {
+          "name": "blackjack_side_bets_amount_positive",
+          "value": "\"blackjack_side_bets\".\"amount\" > 0"
+        },
+        "blackjack_side_bets_payout_non_negative": {
+          "name": "blackjack_side_bets_payout_non_negative",
+          "value": "\"blackjack_side_bets\".\"payout_amount\" >= 0"
+        },
+        "blackjack_side_bets_outcome_check": {
+          "name": "blackjack_side_bets_outcome_check",
+          "value": "\"blackjack_side_bets\".\"outcome\" is null or \"blackjack_side_bets\".\"outcome\" in ('WIN', 'LOSE', 'CANCELLED')"
+        },
+        "blackjack_side_bets_reason_check": {
+          "name": "blackjack_side_bets_reason_check",
+          "value": "\"blackjack_side_bets\".\"outcome_reason\" is null or \"blackjack_side_bets\".\"outcome_reason\" in ('DEALER_BLACKJACK', 'DEALER_NO_BLACKJACK', 'ROUND_CANCELLED')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.blackjack_table_seats": {
+      "name": "blackjack_table_seats",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "table_id": {
+          "name": "table_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seat_no": {
+          "name": "seat_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OCCUPIED'"
+        },
+        "occupied_at": {
+          "name": "occupied_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "blackjack_table_seats_table_seat_unique": {
+          "name": "blackjack_table_seats_table_seat_unique",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seat_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_table_seats_table_user_idx": {
+          "name": "blackjack_table_seats_table_user_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_table_seats_user_id_idx": {
+          "name": "blackjack_table_seats_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "blackjack_table_seats_table_id_blackjack_tables_id_fk": {
+          "name": "blackjack_table_seats_table_id_blackjack_tables_id_fk",
+          "tableFrom": "blackjack_table_seats",
+          "tableTo": "blackjack_tables",
+          "columnsFrom": [
+            "table_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blackjack_table_seats_user_id_user_id_fk": {
+          "name": "blackjack_table_seats_user_id_user_id_fk",
+          "tableFrom": "blackjack_table_seats",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "blackjack_table_seats_seat_no_check": {
+          "name": "blackjack_table_seats_seat_no_check",
+          "value": "\"blackjack_table_seats\".\"seat_no\" between 1 and 7"
+        },
+        "blackjack_table_seats_status_check": {
+          "name": "blackjack_table_seats_status_check",
+          "value": "\"blackjack_table_seats\".\"status\" in ('OCCUPIED', 'SITTING_OUT')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.blackjack_tables": {
+      "name": "blackjack_tables",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
+        "min_initial_bet": {
+          "name": "min_initial_bet",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_initial_bet": {
+          "name": "max_initial_bet",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_total_bet_per_seat": {
+          "name": "max_total_bet_per_seat",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_total_bet_per_user": {
+          "name": "max_total_bet_per_user",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_seats": {
+          "name": "max_seats",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 7
+        },
+        "max_seats_per_user": {
+          "name": "max_seats_per_user",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "betting_timeout_seconds": {
+          "name": "betting_timeout_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 15
+        },
+        "action_timeout_seconds": {
+          "name": "action_timeout_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 20
+        },
+        "deck_count": {
+          "name": "deck_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 6
+        },
+        "shoe_penetration_percent": {
+          "name": "shoe_penetration_percent",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 75
+        },
+        "dealer_hits_soft_17": {
+          "name": "dealer_hits_soft_17",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "blackjack_payout_numerator": {
+          "name": "blackjack_payout_numerator",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 3
+        },
+        "blackjack_payout_denominator": {
+          "name": "blackjack_payout_denominator",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 2
+        },
+        "insurance_allowed": {
+          "name": "insurance_allowed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "even_money_allowed": {
+          "name": "even_money_allowed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "surrender_mode": {
+          "name": "surrender_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'LATE'"
+        },
+        "double_allowed": {
+          "name": "double_allowed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "double_after_split_allowed": {
+          "name": "double_after_split_allowed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "split_allowed": {
+          "name": "split_allowed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "allow_ten_value_split": {
+          "name": "allow_ten_value_split",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "max_split_hands": {
+          "name": "max_split_hands",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 4
+        },
+        "resplit_aces_allowed": {
+          "name": "resplit_aces_allowed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "hit_split_aces_allowed": {
+          "name": "hit_split_aces_allowed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "dealer_peek_enabled": {
+          "name": "dealer_peek_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "card_counting_mode": {
+          "name": "card_counting_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'INTERNAL_ANALYTICS'"
+        },
+        "rules": {
+          "name": "rules",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "blackjack_tables_code_unique": {
+          "name": "blackjack_tables_code_unique",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "blackjack_tables_status_idx": {
+          "name": "blackjack_tables_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "blackjack_tables_code_not_empty": {
+          "name": "blackjack_tables_code_not_empty",
+          "value": "length(trim(\"blackjack_tables\".\"code\")) > 0"
+        },
+        "blackjack_tables_status_check": {
+          "name": "blackjack_tables_status_check",
+          "value": "\"blackjack_tables\".\"status\" in ('OPEN', 'MAINTENANCE', 'CLOSED')"
+        },
+        "blackjack_tables_min_bet_positive": {
+          "name": "blackjack_tables_min_bet_positive",
+          "value": "\"blackjack_tables\".\"min_initial_bet\" > 0"
+        },
+        "blackjack_tables_max_initial_bet_check": {
+          "name": "blackjack_tables_max_initial_bet_check",
+          "value": "\"blackjack_tables\".\"max_initial_bet\" >= \"blackjack_tables\".\"min_initial_bet\""
+        },
+        "blackjack_tables_max_total_seat_check": {
+          "name": "blackjack_tables_max_total_seat_check",
+          "value": "\"blackjack_tables\".\"max_total_bet_per_seat\" >= \"blackjack_tables\".\"max_initial_bet\""
+        },
+        "blackjack_tables_max_total_user_check": {
+          "name": "blackjack_tables_max_total_user_check",
+          "value": "\"blackjack_tables\".\"max_total_bet_per_user\" >= \"blackjack_tables\".\"max_total_bet_per_seat\""
+        },
+        "blackjack_tables_max_seats_check": {
+          "name": "blackjack_tables_max_seats_check",
+          "value": "\"blackjack_tables\".\"max_seats\" between 1 and 7"
+        },
+        "blackjack_tables_max_seats_per_user_check": {
+          "name": "blackjack_tables_max_seats_per_user_check",
+          "value": "\"blackjack_tables\".\"max_seats_per_user\" between 1 and \"blackjack_tables\".\"max_seats\""
+        },
+        "blackjack_tables_betting_timeout_check": {
+          "name": "blackjack_tables_betting_timeout_check",
+          "value": "\"blackjack_tables\".\"betting_timeout_seconds\" > 0"
+        },
+        "blackjack_tables_action_timeout_check": {
+          "name": "blackjack_tables_action_timeout_check",
+          "value": "\"blackjack_tables\".\"action_timeout_seconds\" > 0"
+        },
+        "blackjack_tables_deck_count_check": {
+          "name": "blackjack_tables_deck_count_check",
+          "value": "\"blackjack_tables\".\"deck_count\" between 1 and 8"
+        },
+        "blackjack_tables_shoe_penetration_check": {
+          "name": "blackjack_tables_shoe_penetration_check",
+          "value": "\"blackjack_tables\".\"shoe_penetration_percent\" between 50 and 90"
+        },
+        "blackjack_tables_blackjack_payout_check": {
+          "name": "blackjack_tables_blackjack_payout_check",
+          "value": "\"blackjack_tables\".\"blackjack_payout_numerator\" > \"blackjack_tables\".\"blackjack_payout_denominator\""
+        },
+        "blackjack_tables_surrender_mode_check": {
+          "name": "blackjack_tables_surrender_mode_check",
+          "value": "\"blackjack_tables\".\"surrender_mode\" in ('NONE', 'LATE', 'EARLY')"
+        },
+        "blackjack_tables_max_split_hands_check": {
+          "name": "blackjack_tables_max_split_hands_check",
+          "value": "\"blackjack_tables\".\"max_split_hands\" between 1 and 4"
+        },
+        "blackjack_tables_counting_mode_check": {
+          "name": "blackjack_tables_counting_mode_check",
+          "value": "\"blackjack_tables\".\"card_counting_mode\" in ('DISABLED', 'INTERNAL_ANALYTICS', 'TRAINER_VISIBLE')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.daily_reward_claims": {
+      "name": "daily_reward_claims",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claim_date": {
+          "name": "claim_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ledger_id": {
+          "name": "ledger_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "daily_reward_claims_user_date_unique": {
+          "name": "daily_reward_claims_user_date_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "claim_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "daily_reward_claims_ledger_id_unique": {
+          "name": "daily_reward_claims_ledger_id_unique",
+          "columns": [
+            {
+              "expression": "ledger_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "daily_reward_claims_user_id_idx": {
+          "name": "daily_reward_claims_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "daily_reward_claims_user_id_user_id_fk": {
+          "name": "daily_reward_claims_user_id_user_id_fk",
+          "tableFrom": "daily_reward_claims",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "daily_reward_claims_ledger_id_point_ledgers_id_fk": {
+          "name": "daily_reward_claims_ledger_id_point_ledgers_id_fk",
+          "tableFrom": "daily_reward_claims",
+          "tableTo": "point_ledgers",
+          "columnsFrom": [
+            "ledger_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "daily_reward_claims_amount_positive": {
+          "name": "daily_reward_claims_amount_positive",
+          "value": "\"daily_reward_claims\".\"amount\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.point_ledgers": {
+      "name": "point_ledgers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "game_type": {
+          "name": "game_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delta": {
+          "name": "delta",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "balance_before": {
+          "name": "balance_before",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "balance_after": {
+          "name": "balance_after",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference_type": {
+          "name": "reference_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference_id": {
+          "name": "reference_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "memo": {
+          "name": "memo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "point_ledgers_user_idempotency_unique": {
+          "name": "point_ledgers_user_idempotency_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "point_ledgers_wallet_created_idx": {
+          "name": "point_ledgers_wallet_created_idx",
+          "columns": [
+            {
+              "expression": "wallet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "point_ledgers_user_created_idx": {
+          "name": "point_ledgers_user_created_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "point_ledgers_reference_idx": {
+          "name": "point_ledgers_reference_idx",
+          "columns": [
+            {
+              "expression": "reference_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reference_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "point_ledgers_game_created_idx": {
+          "name": "point_ledgers_game_created_idx",
+          "columns": [
+            {
+              "expression": "game_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "point_ledgers_wallet_id_wallets_id_fk": {
+          "name": "point_ledgers_wallet_id_wallets_id_fk",
+          "tableFrom": "point_ledgers",
+          "tableTo": "wallets",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "point_ledgers_user_id_user_id_fk": {
+          "name": "point_ledgers_user_id_user_id_fk",
+          "tableFrom": "point_ledgers",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "point_ledgers_category_check": {
+          "name": "point_ledgers_category_check",
+          "value": "\"point_ledgers\".\"category\" in ('GAME', 'REWARD', 'ADMIN', 'SYSTEM')"
+        },
+        "point_ledgers_game_type_check": {
+          "name": "point_ledgers_game_type_check",
+          "value": "\"point_ledgers\".\"game_type\" is null or \"point_ledgers\".\"game_type\" in ('BLACKJACK', 'BACCARAT', 'RACING')"
+        },
+        "point_ledgers_type_check": {
+          "name": "point_ledgers_type_check",
+          "value": "\"point_ledgers\".\"type\" in (\n        'ADMIN_ADJUST',\n        'DAILY_REWARD',\n        'BET',\n        'DOUBLE_BET',\n        'SPLIT_BET',\n        'INSURANCE_BET',\n        'SURRENDER_REFUND',\n        'PAYOUT',\n        'PUSH_REFUND',\n        'CANCEL_REFUND'\n      )"
+        },
+        "point_ledgers_balance_before_non_negative": {
+          "name": "point_ledgers_balance_before_non_negative",
+          "value": "\"point_ledgers\".\"balance_before\" >= 0"
+        },
+        "point_ledgers_balance_after_non_negative": {
+          "name": "point_ledgers_balance_after_non_negative",
+          "value": "\"point_ledgers\".\"balance_after\" >= 0"
+        },
+        "point_ledgers_balance_math_check": {
+          "name": "point_ledgers_balance_math_check",
+          "value": "\"point_ledgers\".\"balance_after\" = \"point_ledgers\".\"balance_before\" + \"point_ledgers\".\"delta\""
+        },
+        "point_ledgers_game_category_check": {
+          "name": "point_ledgers_game_category_check",
+          "value": "(\n        (\"point_ledgers\".\"category\" = 'GAME' and \"point_ledgers\".\"game_type\" is not null) or\n        (\"point_ledgers\".\"category\" <> 'GAME' and \"point_ledgers\".\"game_type\" is null)\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.racing_actions": {
+      "name": "racing_actions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "race_id": {
+          "name": "race_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bet_id": {
+          "name": "bet_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action_type": {
+          "name": "action_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action_sequence": {
+          "name": "action_sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command_id": {
+          "name": "command_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "racing_actions_race_sequence_unique": {
+          "name": "racing_actions_race_sequence_unique",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "action_sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_actions_race_user_command_unique": {
+          "name": "racing_actions_race_user_command_unique",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "command_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"racing_actions\".\"user_id\" is not null and \"racing_actions\".\"command_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_actions_race_id_idx": {
+          "name": "racing_actions_race_id_idx",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_actions_bet_id_idx": {
+          "name": "racing_actions_bet_id_idx",
+          "columns": [
+            {
+              "expression": "bet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_actions_user_id_idx": {
+          "name": "racing_actions_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "racing_actions_race_id_racing_races_id_fk": {
+          "name": "racing_actions_race_id_racing_races_id_fk",
+          "tableFrom": "racing_actions",
+          "tableTo": "racing_races",
+          "columnsFrom": [
+            "race_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_actions_bet_id_racing_bets_id_fk": {
+          "name": "racing_actions_bet_id_racing_bets_id_fk",
+          "tableFrom": "racing_actions",
+          "tableTo": "racing_bets",
+          "columnsFrom": [
+            "bet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_actions_user_id_user_id_fk": {
+          "name": "racing_actions_user_id_user_id_fk",
+          "tableFrom": "racing_actions",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "racing_actions_sequence_positive": {
+          "name": "racing_actions_sequence_positive",
+          "value": "\"racing_actions\".\"action_sequence\" > 0"
+        },
+        "racing_actions_actor_type_check": {
+          "name": "racing_actions_actor_type_check",
+          "value": "\"racing_actions\".\"actor_type\" in ('PLAYER', 'SYSTEM')"
+        },
+        "racing_actions_action_type_check": {
+          "name": "racing_actions_action_type_check",
+          "value": "\"racing_actions\".\"action_type\" in (\n        'PLACE_BET',\n        'RACE_START',\n        'FINISH',\n        'SETTLE',\n        'CANCEL'\n      )"
+        },
+        "racing_actions_amount_non_negative": {
+          "name": "racing_actions_amount_non_negative",
+          "value": "\"racing_actions\".\"amount\" is null or \"racing_actions\".\"amount\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.racing_bet_selections": {
+      "name": "racing_bet_selections",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "bet_id": {
+          "name": "bet_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "race_id": {
+          "name": "race_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "race_entry_id": {
+          "name": "race_entry_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "horse_id": {
+          "name": "horse_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "selection_order": {
+          "name": "selection_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_rank": {
+          "name": "expected_rank",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "racing_bet_selections_bet_order_unique": {
+          "name": "racing_bet_selections_bet_order_unique",
+          "columns": [
+            {
+              "expression": "bet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "selection_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_bet_selections_bet_entry_unique": {
+          "name": "racing_bet_selections_bet_entry_unique",
+          "columns": [
+            {
+              "expression": "bet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "race_entry_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_bet_selections_bet_id_idx": {
+          "name": "racing_bet_selections_bet_id_idx",
+          "columns": [
+            {
+              "expression": "bet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_bet_selections_race_id_idx": {
+          "name": "racing_bet_selections_race_id_idx",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_bet_selections_race_entry_id_idx": {
+          "name": "racing_bet_selections_race_entry_id_idx",
+          "columns": [
+            {
+              "expression": "race_entry_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "racing_bet_selections_bet_id_racing_bets_id_fk": {
+          "name": "racing_bet_selections_bet_id_racing_bets_id_fk",
+          "tableFrom": "racing_bet_selections",
+          "tableTo": "racing_bets",
+          "columnsFrom": [
+            "bet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_bet_selections_horse_id_racing_horses_id_fk": {
+          "name": "racing_bet_selections_horse_id_racing_horses_id_fk",
+          "tableFrom": "racing_bet_selections",
+          "tableTo": "racing_horses",
+          "columnsFrom": [
+            "horse_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_bet_selections_race_entry_fk": {
+          "name": "racing_bet_selections_race_entry_fk",
+          "tableFrom": "racing_bet_selections",
+          "tableTo": "racing_race_entries",
+          "columnsFrom": [
+            "race_id",
+            "race_entry_id",
+            "horse_id"
+          ],
+          "columnsTo": [
+            "race_id",
+            "id",
+            "horse_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "racing_bet_selections_order_positive": {
+          "name": "racing_bet_selections_order_positive",
+          "value": "\"racing_bet_selections\".\"selection_order\" > 0"
+        },
+        "racing_bet_selections_expected_rank_positive": {
+          "name": "racing_bet_selections_expected_rank_positive",
+          "value": "\"racing_bet_selections\".\"expected_rank\" is null or \"racing_bet_selections\".\"expected_rank\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.racing_bets": {
+      "name": "racing_bets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "race_id": {
+          "name": "race_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "table_id": {
+          "name": "table_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "race_entry_id": {
+          "name": "race_entry_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "horse_id": {
+          "name": "horse_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bet_type": {
+          "name": "bet_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'WIN'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PLACED'"
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "odds_numerator": {
+          "name": "odds_numerator",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "odds_denominator": {
+          "name": "odds_denominator",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payout_amount": {
+          "name": "payout_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "net_amount": {
+          "name": "net_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "placed_ledger_id": {
+          "name": "placed_ledger_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "settlement_ledger_id": {
+          "name": "settlement_ledger_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "command_id": {
+          "name": "command_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "racing_bets_race_user_command_unique": {
+          "name": "racing_bets_race_user_command_unique",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "command_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_bets_placed_ledger_unique": {
+          "name": "racing_bets_placed_ledger_unique",
+          "columns": [
+            {
+              "expression": "placed_ledger_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_bets_settlement_ledger_unique": {
+          "name": "racing_bets_settlement_ledger_unique",
+          "columns": [
+            {
+              "expression": "settlement_ledger_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"racing_bets\".\"settlement_ledger_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_bets_race_id_idx": {
+          "name": "racing_bets_race_id_idx",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_bets_table_id_idx": {
+          "name": "racing_bets_table_id_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_bets_race_entry_id_idx": {
+          "name": "racing_bets_race_entry_id_idx",
+          "columns": [
+            {
+              "expression": "race_entry_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_bets_user_id_idx": {
+          "name": "racing_bets_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "racing_bets_table_id_racing_tables_id_fk": {
+          "name": "racing_bets_table_id_racing_tables_id_fk",
+          "tableFrom": "racing_bets",
+          "tableTo": "racing_tables",
+          "columnsFrom": [
+            "table_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_bets_horse_id_racing_horses_id_fk": {
+          "name": "racing_bets_horse_id_racing_horses_id_fk",
+          "tableFrom": "racing_bets",
+          "tableTo": "racing_horses",
+          "columnsFrom": [
+            "horse_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_bets_user_id_user_id_fk": {
+          "name": "racing_bets_user_id_user_id_fk",
+          "tableFrom": "racing_bets",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_bets_placed_ledger_id_point_ledgers_id_fk": {
+          "name": "racing_bets_placed_ledger_id_point_ledgers_id_fk",
+          "tableFrom": "racing_bets",
+          "tableTo": "point_ledgers",
+          "columnsFrom": [
+            "placed_ledger_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_bets_settlement_ledger_id_point_ledgers_id_fk": {
+          "name": "racing_bets_settlement_ledger_id_point_ledgers_id_fk",
+          "tableFrom": "racing_bets",
+          "tableTo": "point_ledgers",
+          "columnsFrom": [
+            "settlement_ledger_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_bets_race_table_fk": {
+          "name": "racing_bets_race_table_fk",
+          "tableFrom": "racing_bets",
+          "tableTo": "racing_races",
+          "columnsFrom": [
+            "table_id",
+            "race_id"
+          ],
+          "columnsTo": [
+            "table_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_bets_race_entry_fk": {
+          "name": "racing_bets_race_entry_fk",
+          "tableFrom": "racing_bets",
+          "tableTo": "racing_race_entries",
+          "columnsFrom": [
+            "race_id",
+            "race_entry_id",
+            "horse_id"
+          ],
+          "columnsTo": [
+            "race_id",
+            "id",
+            "horse_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "racing_bets_amount_positive": {
+          "name": "racing_bets_amount_positive",
+          "value": "\"racing_bets\".\"amount\" > 0"
+        },
+        "racing_bets_type_check": {
+          "name": "racing_bets_type_check",
+          "value": "\"racing_bets\".\"bet_type\" in ('WIN', 'PLACE', 'QUINELLA', 'EXACTA', 'QUINELLA_PLACE', 'TRIO', 'TRIFECTA')"
+        },
+        "racing_bets_status_check": {
+          "name": "racing_bets_status_check",
+          "value": "\"racing_bets\".\"status\" in ('PLACED', 'WON', 'LOST', 'CANCELLED')"
+        },
+        "racing_bets_odds_positive": {
+          "name": "racing_bets_odds_positive",
+          "value": "\"racing_bets\".\"odds_numerator\" > 0 and \"racing_bets\".\"odds_denominator\" > 0"
+        },
+        "racing_bets_payout_non_negative": {
+          "name": "racing_bets_payout_non_negative",
+          "value": "\"racing_bets\".\"payout_amount\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.racing_horses": {
+      "name": "racing_horses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "silk_color": {
+          "name": "silk_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "racing_horses_active_idx": {
+          "name": "racing_horses_active_idx",
+          "columns": [
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "racing_horses_name_not_empty": {
+          "name": "racing_horses_name_not_empty",
+          "value": "length(trim(\"racing_horses\".\"name\")) > 0"
+        },
+        "racing_horses_silk_color_not_empty": {
+          "name": "racing_horses_silk_color_not_empty",
+          "value": "length(trim(\"racing_horses\".\"silk_color\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.racing_race_entries": {
+      "name": "racing_race_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "race_id": {
+          "name": "race_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "horse_id": {
+          "name": "horse_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gate_no": {
+          "name": "gate_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lane": {
+          "name": "lane",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "temporary_profile": {
+          "name": "temporary_profile",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "final_rank": {
+          "name": "final_rank",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at_ms": {
+          "name": "finished_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "racing_entries_race_horse_unique": {
+          "name": "racing_entries_race_horse_unique",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "horse_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_entries_race_number_unique": {
+          "name": "racing_entries_race_number_unique",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_entries_race_gate_unique": {
+          "name": "racing_entries_race_gate_unique",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "gate_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_entries_race_id_idx": {
+          "name": "racing_entries_race_id_idx",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_entries_horse_id_idx": {
+          "name": "racing_entries_horse_id_idx",
+          "columns": [
+            {
+              "expression": "horse_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "racing_race_entries_race_id_racing_races_id_fk": {
+          "name": "racing_race_entries_race_id_racing_races_id_fk",
+          "tableFrom": "racing_race_entries",
+          "tableTo": "racing_races",
+          "columnsFrom": [
+            "race_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "racing_race_entries_horse_id_racing_horses_id_fk": {
+          "name": "racing_race_entries_horse_id_racing_horses_id_fk",
+          "tableFrom": "racing_race_entries",
+          "tableTo": "racing_horses",
+          "columnsFrom": [
+            "horse_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "racing_entries_race_id_id_horse_id_unique": {
+          "name": "racing_entries_race_id_id_horse_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "race_id",
+            "id",
+            "horse_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "racing_entries_number_positive": {
+          "name": "racing_entries_number_positive",
+          "value": "\"racing_race_entries\".\"number\" > 0"
+        },
+        "racing_entries_gate_no_positive": {
+          "name": "racing_entries_gate_no_positive",
+          "value": "\"racing_race_entries\".\"gate_no\" > 0"
+        },
+        "racing_entries_lane_positive": {
+          "name": "racing_entries_lane_positive",
+          "value": "\"racing_race_entries\".\"lane\" > 0"
+        },
+        "racing_entries_final_rank_positive": {
+          "name": "racing_entries_final_rank_positive",
+          "value": "\"racing_race_entries\".\"final_rank\" is null or \"racing_race_entries\".\"final_rank\" > 0"
+        },
+        "racing_entries_finished_at_non_negative": {
+          "name": "racing_entries_finished_at_non_negative",
+          "value": "\"racing_race_entries\".\"finished_at_ms\" is null or \"racing_race_entries\".\"finished_at_ms\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.racing_races": {
+      "name": "racing_races",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "table_id": {
+          "name": "table_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "race_no": {
+          "name": "race_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'BETTING'"
+        },
+        "seed": {
+          "name": "seed",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seed_locked_at": {
+          "name": "seed_locked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "distance_m": {
+          "name": "distance_m",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "field_size": {
+          "name": "field_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phase": {
+          "name": "phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'BETTING'"
+        },
+        "scheduled_start_at": {
+          "name": "scheduled_start_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "betting_opens_at": {
+          "name": "betting_opens_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "betting_closes_at": {
+          "name": "betting_closes_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancelled_at": {
+          "name": "cancelled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancel_reason": {
+          "name": "cancel_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result_order": {
+          "name": "result_order",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "runtime_snapshot": {
+          "name": "runtime_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "racing_races_table_race_no_unique": {
+          "name": "racing_races_table_race_no_unique",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "race_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_races_table_scheduled_start_idx": {
+          "name": "racing_races_table_scheduled_start_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "scheduled_start_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_races_table_status_idx": {
+          "name": "racing_races_table_status_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_races_table_phase_idx": {
+          "name": "racing_races_table_phase_idx",
+          "columns": [
+            {
+              "expression": "table_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "phase",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "racing_races_table_id_racing_tables_id_fk": {
+          "name": "racing_races_table_id_racing_tables_id_fk",
+          "tableFrom": "racing_races",
+          "tableTo": "racing_tables",
+          "columnsFrom": [
+            "table_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "racing_races_table_id_id_unique": {
+          "name": "racing_races_table_id_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "table_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "racing_races_race_no_positive": {
+          "name": "racing_races_race_no_positive",
+          "value": "\"racing_races\".\"race_no\" > 0"
+        },
+        "racing_races_status_check": {
+          "name": "racing_races_status_check",
+          "value": "\"racing_races\".\"status\" in (\n        'WAITING',\n        'BETTING',\n        'LOCKING_BETS',\n        'RUNNING',\n        'FINISHING',\n        'SETTLING',\n        'SETTLED',\n        'ROUND_END',\n        'CANCELLED'\n      )"
+        },
+        "racing_races_phase_check": {
+          "name": "racing_races_phase_check",
+          "value": "\"racing_races\".\"phase\" in (\n        'WAITING',\n        'BETTING',\n        'LOCKING_BETS',\n        'RUNNING',\n        'FINISHING',\n        'SETTLING',\n        'SETTLED',\n        'ROUND_END',\n        'CANCELLED'\n      )"
+        },
+        "racing_races_seed_lock_check": {
+          "name": "racing_races_seed_lock_check",
+          "value": "(\n        (\"racing_races\".\"seed\" is null and \"racing_races\".\"seed_locked_at\" is null) or\n        (\"racing_races\".\"seed\" is not null and \"racing_races\".\"seed_locked_at\" is not null)\n      )"
+        },
+        "racing_races_seed_after_betting_check": {
+          "name": "racing_races_seed_after_betting_check",
+          "value": "(\n        \"racing_races\".\"phase\" <> 'BETTING' or\n        (\"racing_races\".\"seed\" is null and \"racing_races\".\"seed_locked_at\" is null)\n      )"
+        },
+        "racing_races_schedule_order_check": {
+          "name": "racing_races_schedule_order_check",
+          "value": "(\n        \"racing_races\".\"scheduled_start_at\" is null or\n        \"racing_races\".\"betting_closes_at\" is null or\n        \"racing_races\".\"betting_closes_at\" <= \"racing_races\".\"scheduled_start_at\"\n      )"
+        },
+        "racing_races_distance_positive": {
+          "name": "racing_races_distance_positive",
+          "value": "\"racing_races\".\"distance_m\" > 0"
+        },
+        "racing_races_field_size_check": {
+          "name": "racing_races_field_size_check",
+          "value": "\"racing_races\".\"field_size\" between 6 and 8"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.racing_tables": {
+      "name": "racing_tables",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
+        "field_size": {
+          "name": "field_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 6
+        },
+        "min_bet": {
+          "name": "min_bet",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_bet": {
+          "name": "max_bet",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payout_rate_bps": {
+          "name": "payout_rate_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 9000
+        },
+        "betting_timeout_seconds": {
+          "name": "betting_timeout_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 150
+        },
+        "race_interval_seconds": {
+          "name": "race_interval_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 240
+        },
+        "betting_close_before_start_seconds": {
+          "name": "betting_close_before_start_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 30
+        },
+        "tick_interval_ms": {
+          "name": "tick_interval_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 100
+        },
+        "race_distance_m": {
+          "name": "race_distance_m",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1200
+        },
+        "round_end_delay_seconds": {
+          "name": "round_end_delay_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 8
+        },
+        "rules": {
+          "name": "rules",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "racing_tables_code_unique": {
+          "name": "racing_tables_code_unique",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_tables_status_idx": {
+          "name": "racing_tables_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "racing_tables_code_not_empty": {
+          "name": "racing_tables_code_not_empty",
+          "value": "length(trim(\"racing_tables\".\"code\")) > 0"
+        },
+        "racing_tables_status_check": {
+          "name": "racing_tables_status_check",
+          "value": "\"racing_tables\".\"status\" in ('OPEN', 'MAINTENANCE', 'CLOSED')"
+        },
+        "racing_tables_field_size_check": {
+          "name": "racing_tables_field_size_check",
+          "value": "\"racing_tables\".\"field_size\" between 6 and 8"
+        },
+        "racing_tables_min_bet_positive": {
+          "name": "racing_tables_min_bet_positive",
+          "value": "\"racing_tables\".\"min_bet\" > 0"
+        },
+        "racing_tables_max_bet_check": {
+          "name": "racing_tables_max_bet_check",
+          "value": "\"racing_tables\".\"max_bet\" >= \"racing_tables\".\"min_bet\""
+        },
+        "racing_tables_payout_rate_check": {
+          "name": "racing_tables_payout_rate_check",
+          "value": "\"racing_tables\".\"payout_rate_bps\" between 1 and 10000"
+        },
+        "racing_tables_betting_timeout_check": {
+          "name": "racing_tables_betting_timeout_check",
+          "value": "\"racing_tables\".\"betting_timeout_seconds\" > 0"
+        },
+        "racing_tables_race_interval_check": {
+          "name": "racing_tables_race_interval_check",
+          "value": "\"racing_tables\".\"race_interval_seconds\" > 0"
+        },
+        "racing_tables_betting_close_before_start_check": {
+          "name": "racing_tables_betting_close_before_start_check",
+          "value": "\"racing_tables\".\"betting_close_before_start_seconds\" >= 0 and \"racing_tables\".\"betting_timeout_seconds\" + \"racing_tables\".\"betting_close_before_start_seconds\" < \"racing_tables\".\"race_interval_seconds\""
+        },
+        "racing_tables_tick_interval_check": {
+          "name": "racing_tables_tick_interval_check",
+          "value": "\"racing_tables\".\"tick_interval_ms\" > 0"
+        },
+        "racing_tables_distance_check": {
+          "name": "racing_tables_distance_check",
+          "value": "\"racing_tables\".\"race_distance_m\" > 0"
+        },
+        "racing_tables_round_end_delay_check": {
+          "name": "racing_tables_round_end_delay_check",
+          "value": "\"racing_tables\".\"round_end_delay_seconds\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.racing_ticks": {
+      "name": "racing_ticks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "race_id": {
+          "name": "race_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tick": {
+          "name": "tick",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "elapsed_ms": {
+          "name": "elapsed_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "racing_ticks_race_tick_unique": {
+          "name": "racing_ticks_race_tick_unique",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "tick",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "racing_ticks_race_id_idx": {
+          "name": "racing_ticks_race_id_idx",
+          "columns": [
+            {
+              "expression": "race_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "racing_ticks_race_id_racing_races_id_fk": {
+          "name": "racing_ticks_race_id_racing_races_id_fk",
+          "tableFrom": "racing_ticks",
+          "tableTo": "racing_races",
+          "columnsFrom": [
+            "race_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "racing_ticks_tick_non_negative": {
+          "name": "racing_ticks_tick_non_negative",
+          "value": "\"racing_ticks\".\"tick\" >= 0"
+        },
+        "racing_ticks_elapsed_non_negative": {
+          "name": "racing_ticks_elapsed_non_negative",
+          "value": "\"racing_ticks\".\"elapsed_ms\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.user_profiles": {
+      "name": "user_profiles",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PLAYER'"
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ACTIVE'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_profiles_status_idx": {
+          "name": "user_profiles_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_profiles_user_id_user_id_fk": {
+          "name": "user_profiles_user_id_user_id_fk",
+          "tableFrom": "user_profiles",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "user_profiles_role_check": {
+          "name": "user_profiles_role_check",
+          "value": "\"user_profiles\".\"role\" in ('PLAYER', 'ADMIN')"
+        },
+        "user_profiles_status_check": {
+          "name": "user_profiles_status_check",
+          "value": "\"user_profiles\".\"status\" in ('ACTIVE', 'SUSPENDED', 'CLOSED')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.wallets": {
+      "name": "wallets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "balance": {
+          "name": "balance",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "locked_balance": {
+          "name": "locked_balance",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ACTIVE'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "wallets_user_id_unique": {
+          "name": "wallets_user_id_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "wallets_status_idx": {
+          "name": "wallets_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wallets_user_id_user_id_fk": {
+          "name": "wallets_user_id_user_id_fk",
+          "tableFrom": "wallets",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "wallets_balance_non_negative": {
+          "name": "wallets_balance_non_negative",
+          "value": "\"wallets\".\"balance\" >= 0"
+        },
+        "wallets_locked_balance_non_negative": {
+          "name": "wallets_locked_balance_non_negative",
+          "value": "\"wallets\".\"locked_balance\" >= 0"
+        },
+        "wallets_locked_balance_lte_balance": {
+          "name": "wallets_locked_balance_lte_balance",
+          "value": "\"wallets\".\"locked_balance\" <= \"wallets\".\"balance\""
+        },
+        "wallets_version_non_negative": {
+          "name": "wallets_version_non_negative",
+          "value": "\"wallets\".\"version\" >= 0"
+        },
+        "wallets_status_check": {
+          "name": "wallets_status_check",
+          "value": "\"wallets\".\"status\" in ('ACTIVE', 'LOCKED', 'CLOSED')"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

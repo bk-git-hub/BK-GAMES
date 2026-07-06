@@ -58,6 +58,30 @@ export type BlackjackRuleSnapshot = {
   cardCountingMode: "DISABLED" | "INTERNAL_ANALYTICS" | "TRAINER_VISIBLE";
 };
 
+export type BaccaratRevealSlot =
+  | "PLAYER_CARD_1"
+  | "BANKER_CARD_1"
+  | "PLAYER_CARD_2"
+  | "BANKER_CARD_2"
+  | "PLAYER_CARD_3"
+  | "BANKER_CARD_3";
+
+export type BaccaratRuleSnapshot = {
+  deckCount: number;
+  shoePenetrationPercent: number;
+  minimumCardsBeforeRound: number;
+  tiePayout: {
+    numerator: number;
+    denominator: number;
+  };
+  bankerCommissionBps: number;
+  betTypes: Array<"PLAYER" | "BANKER" | "TIE">;
+  roadmaps: {
+    beadPlate: boolean;
+    basicBigRoad: boolean;
+  };
+};
+
 const now = () =>
   timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
 const updatedAt = () =>
@@ -880,6 +904,514 @@ export const blackjackActions = pgTable(
         'SETTLE',
         'CANCEL'
       )`,
+    ),
+  ],
+);
+
+export const baccaratTables = pgTable(
+  "baccarat_tables",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    status: text("status").default("OPEN").notNull(),
+    minBet: pointAmount("min_bet").notNull(),
+    maxMainBet: pointAmount("max_main_bet").notNull(),
+    maxTotalBetPerUser: pointAmount("max_total_bet_per_user").notNull(),
+    bettingTimeoutSeconds: integer("betting_timeout_seconds")
+      .default(15)
+      .notNull(),
+    squeezeTimeoutSeconds: integer("squeeze_timeout_seconds")
+      .default(8)
+      .notNull(),
+    roundEndDelaySeconds: integer("round_end_delay_seconds")
+      .default(5)
+      .notNull(),
+    deckCount: integer("deck_count").default(8).notNull(),
+    shoePenetrationPercent: integer("shoe_penetration_percent")
+      .default(75)
+      .notNull(),
+    minimumCardsBeforeRound: integer("minimum_cards_before_round")
+      .default(6)
+      .notNull(),
+    resultHistoryLimit: integer("result_history_limit").default(72).notNull(),
+    tiePayoutNumerator: integer("tie_payout_numerator").default(8).notNull(),
+    tiePayoutDenominator: integer("tie_payout_denominator")
+      .default(1)
+      .notNull(),
+    bankerCommissionBps: integer("banker_commission_bps")
+      .default(500)
+      .notNull(),
+    roadmapConfig: jsonb("roadmap_config")
+      .$type<JsonObject>()
+      .default(emptyJsonObject)
+      .notNull(),
+    rules: jsonb("rules")
+      .$type<JsonObject>()
+      .default(emptyJsonObject)
+      .notNull(),
+    createdAt: now(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("baccarat_tables_code_unique").on(table.code),
+    index("baccarat_tables_status_idx").on(table.status),
+    check(
+      "baccarat_tables_code_not_empty",
+      sql`length(trim(${table.code})) > 0`,
+    ),
+    check(
+      "baccarat_tables_status_check",
+      sql`${table.status} in ('OPEN', 'MAINTENANCE', 'CLOSED')`,
+    ),
+    check("baccarat_tables_min_bet_positive", sql`${table.minBet} > 0`),
+    check(
+      "baccarat_tables_max_main_bet_check",
+      sql`${table.maxMainBet} >= ${table.minBet}`,
+    ),
+    check(
+      "baccarat_tables_max_total_user_check",
+      sql`${table.maxTotalBetPerUser} >= ${table.maxMainBet}`,
+    ),
+    check(
+      "baccarat_tables_betting_timeout_check",
+      sql`${table.bettingTimeoutSeconds} > 0`,
+    ),
+    check(
+      "baccarat_tables_squeeze_timeout_check",
+      sql`${table.squeezeTimeoutSeconds} > 0`,
+    ),
+    check(
+      "baccarat_tables_round_end_delay_check",
+      sql`${table.roundEndDelaySeconds} >= 0`,
+    ),
+    check(
+      "baccarat_tables_deck_count_check",
+      sql`${table.deckCount} between 1 and 8`,
+    ),
+    check(
+      "baccarat_tables_shoe_penetration_check",
+      sql`${table.shoePenetrationPercent} between 50 and 90`,
+    ),
+    check(
+      "baccarat_tables_minimum_cards_check",
+      sql`${table.minimumCardsBeforeRound} >= 4`,
+    ),
+    check(
+      "baccarat_tables_result_history_check",
+      sql`${table.resultHistoryLimit} > 0`,
+    ),
+    check(
+      "baccarat_tables_tie_payout_check",
+      sql`${table.tiePayoutNumerator} > 0 and ${table.tiePayoutDenominator} > 0`,
+    ),
+    check(
+      "baccarat_tables_commission_check",
+      sql`${table.bankerCommissionBps} between 0 and 10000`,
+    ),
+  ],
+);
+
+export const baccaratShoes = pgTable(
+  "baccarat_shoes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tableId: uuid("table_id")
+      .notNull()
+      .references(() => baccaratTables.id),
+    shoeNo: integer("shoe_no").notNull(),
+    status: text("status").default("READY").notNull(),
+    deckCount: integer("deck_count").notNull(),
+    cardsTotal: integer("cards_total").notNull(),
+    cardsDealt: integer("cards_dealt").default(0).notNull(),
+    cardsRemaining: integer("cards_remaining").notNull(),
+    cutCardPosition: integer("cut_card_position").notNull(),
+    shuffleAlgorithm: text("shuffle_algorithm")
+      .default("FISHER_YATES_V1")
+      .notNull(),
+    serverSeedHash: text("server_seed_hash").notNull(),
+    encryptedState: text("encrypted_state"),
+    stateVersion: integer("state_version").default(0).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    createdAt: now(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique("baccarat_shoes_table_id_id_unique").on(table.tableId, table.id),
+    uniqueIndex("baccarat_shoes_table_shoe_no_unique").on(
+      table.tableId,
+      table.shoeNo,
+    ),
+    index("baccarat_shoes_table_status_idx").on(table.tableId, table.status),
+    check("baccarat_shoes_shoe_no_positive", sql`${table.shoeNo} > 0`),
+    check(
+      "baccarat_shoes_status_check",
+      sql`${table.status} in ('READY', 'ACTIVE', 'COMPLETED', 'VOID')`,
+    ),
+    check(
+      "baccarat_shoes_deck_count_check",
+      sql`${table.deckCount} between 1 and 8`,
+    ),
+    check(
+      "baccarat_shoes_cards_total_check",
+      sql`${table.cardsTotal} = ${table.deckCount} * 52`,
+    ),
+    check(
+      "baccarat_shoes_cards_dealt_check",
+      sql`${table.cardsDealt} between 0 and ${table.cardsTotal}`,
+    ),
+    check(
+      "baccarat_shoes_cards_remaining_check",
+      sql`${table.cardsRemaining} between 0 and ${table.cardsTotal}`,
+    ),
+    check(
+      "baccarat_shoes_cards_count_math",
+      sql`${table.cardsDealt} + ${table.cardsRemaining} = ${table.cardsTotal}`,
+    ),
+    check(
+      "baccarat_shoes_cut_card_position_check",
+      sql`${table.cutCardPosition} between 1 and ${table.cardsTotal}`,
+    ),
+    check(
+      "baccarat_shoes_seed_hash_not_empty",
+      sql`length(trim(${table.serverSeedHash})) > 0`,
+    ),
+    check(
+      "baccarat_shoes_state_version_check",
+      sql`${table.stateVersion} >= 0`,
+    ),
+  ],
+);
+
+export const baccaratRounds = pgTable(
+  "baccarat_rounds",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tableId: uuid("table_id")
+      .notNull()
+      .references(() => baccaratTables.id),
+    shoeId: uuid("shoe_id")
+      .notNull()
+      .references(() => baccaratShoes.id),
+    roundIndexInShoe: integer("round_index_in_shoe").notNull(),
+    roundNo: integer("round_no").notNull(),
+    status: text("status").default("WAITING_BETS").notNull(),
+    playerCards: jsonb("player_cards")
+      .$type<CardSnapshot[]>()
+      .default(emptyJsonArray)
+      .notNull(),
+    bankerCards: jsonb("banker_cards")
+      .$type<CardSnapshot[]>()
+      .default(emptyJsonArray)
+      .notNull(),
+    playerTotal: integer("player_total"),
+    bankerTotal: integer("banker_total"),
+    outcome: text("outcome"),
+    isNatural: boolean("is_natural").default(false).notNull(),
+    totalCards: integer("total_cards"),
+    resultFlags: jsonb("result_flags")
+      .$type<JsonObject>()
+      .default(emptyJsonObject)
+      .notNull(),
+    ruleSnapshot: jsonb("rule_snapshot")
+      .$type<BaccaratRuleSnapshot>()
+      .notNull(),
+    revealState: jsonb("reveal_state")
+      .$type<JsonObject>()
+      .default(emptyJsonObject)
+      .notNull(),
+    roadmapSnapshot: jsonb("roadmap_snapshot").$type<JsonObject>(),
+    bettingOpensAt: timestamp("betting_opens_at", { withTimezone: true }),
+    bettingClosesAt: timestamp("betting_closes_at", { withTimezone: true }),
+    dealtAt: timestamp("dealt_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelReason: text("cancel_reason"),
+    createdAt: now(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique("baccarat_rounds_table_id_id_unique").on(table.tableId, table.id),
+    uniqueIndex("baccarat_rounds_table_round_no_unique").on(
+      table.tableId,
+      table.roundNo,
+    ),
+    uniqueIndex("baccarat_rounds_shoe_index_unique").on(
+      table.shoeId,
+      table.roundIndexInShoe,
+    ),
+    index("baccarat_rounds_table_status_idx").on(table.tableId, table.status),
+    index("baccarat_rounds_shoe_id_idx").on(table.shoeId),
+    foreignKey({
+      name: "baccarat_rounds_table_shoe_fk",
+      columns: [table.tableId, table.shoeId],
+      foreignColumns: [baccaratShoes.tableId, baccaratShoes.id],
+    }),
+    check(
+      "baccarat_rounds_round_index_positive",
+      sql`${table.roundIndexInShoe} > 0`,
+    ),
+    check("baccarat_rounds_round_no_positive", sql`${table.roundNo} > 0`),
+    check(
+      "baccarat_rounds_status_check",
+      sql`${table.status} in (
+        'WAITING_BETS',
+        'DEALING',
+        'SQUEEZE',
+        'SETTLING',
+        'SETTLED',
+        'CANCELLED'
+      )`,
+    ),
+    check(
+      "baccarat_rounds_outcome_check",
+      sql`${table.outcome} is null or ${table.outcome} in ('PLAYER', 'BANKER', 'TIE')`,
+    ),
+    check(
+      "baccarat_rounds_player_total_check",
+      sql`${table.playerTotal} is null or ${table.playerTotal} between 0 and 9`,
+    ),
+    check(
+      "baccarat_rounds_banker_total_check",
+      sql`${table.bankerTotal} is null or ${table.bankerTotal} between 0 and 9`,
+    ),
+    check(
+      "baccarat_rounds_total_cards_check",
+      sql`${table.totalCards} is null or ${table.totalCards} between 4 and 6`,
+    ),
+    check(
+      "baccarat_rounds_betting_window_check",
+      sql`(
+        ${table.bettingOpensAt} is null or
+        ${table.bettingClosesAt} is null or
+        ${table.bettingOpensAt} <= ${table.bettingClosesAt}
+      )`,
+    ),
+  ],
+);
+
+export const baccaratReveals = pgTable(
+  "baccarat_reveals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => baccaratRounds.id),
+    tableId: uuid("table_id")
+      .notNull()
+      .references(() => baccaratTables.id),
+    slot: text("slot").notNull(),
+    status: text("status").default("PENDING").notNull(),
+    sequence: integer("sequence").notNull(),
+    squeezerUserId: text("squeezer_user_id").references(() => authUsers.id),
+    progress: integer("progress").default(0).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    revealedAt: timestamp("revealed_at", { withTimezone: true }),
+    revealedBy: text("revealed_by"),
+    cardSnapshot: jsonb("card_snapshot").$type<CardSnapshot>(),
+    createdAt: now(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("baccarat_reveals_round_sequence_unique").on(
+      table.roundId,
+      table.sequence,
+    ),
+    uniqueIndex("baccarat_reveals_round_slot_unique").on(
+      table.roundId,
+      table.slot,
+    ),
+    index("baccarat_reveals_table_status_idx").on(table.tableId, table.status),
+    index("baccarat_reveals_squeezer_user_idx").on(table.squeezerUserId),
+    foreignKey({
+      name: "baccarat_reveals_round_table_fk",
+      columns: [table.tableId, table.roundId],
+      foreignColumns: [baccaratRounds.tableId, baccaratRounds.id],
+    }),
+    check("baccarat_reveals_sequence_positive", sql`${table.sequence} > 0`),
+    check(
+      "baccarat_reveals_slot_check",
+      sql`${table.slot} in (
+        'PLAYER_CARD_1',
+        'BANKER_CARD_1',
+        'PLAYER_CARD_2',
+        'BANKER_CARD_2',
+        'PLAYER_CARD_3',
+        'BANKER_CARD_3'
+      )`,
+    ),
+    check(
+      "baccarat_reveals_status_check",
+      sql`${table.status} in ('PENDING', 'ACTIVE', 'REVEALED', 'SKIPPED')`,
+    ),
+    check(
+      "baccarat_reveals_progress_check",
+      sql`${table.progress} between 0 and 100`,
+    ),
+    check(
+      "baccarat_reveals_card_snapshot_gate",
+      sql`(
+        (${table.status} <> 'REVEALED' and ${table.cardSnapshot} is null) or
+        (${table.status} = 'REVEALED' and ${table.cardSnapshot} is not null)
+      )`,
+    ),
+  ],
+);
+
+export const baccaratBets = pgTable(
+  "baccarat_bets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => baccaratRounds.id),
+    tableId: uuid("table_id")
+      .notNull()
+      .references(() => baccaratTables.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id),
+    betType: text("bet_type").default("PLAYER").notNull(),
+    betGroup: text("bet_group").default("MAIN").notNull(),
+    status: text("status").default("PLACED").notNull(),
+    amount: pointAmount("amount").notNull(),
+    oddsNumerator: integer("odds_numerator").notNull(),
+    oddsDenominator: integer("odds_denominator").notNull(),
+    commissionBpsSnapshot: integer("commission_bps_snapshot")
+      .default(0)
+      .notNull(),
+    payoutAmount: pointAmount("payout_amount")
+      .default(sql`0`)
+      .notNull(),
+    netAmount: pointAmount("net_amount")
+      .default(sql`0`)
+      .notNull(),
+    placedLedgerId: uuid("placed_ledger_id")
+      .notNull()
+      .references(() => pointLedgers.id),
+    settlementLedgerId: uuid("settlement_ledger_id").references(
+      () => pointLedgers.id,
+    ),
+    refundLedgerId: uuid("refund_ledger_id").references(() => pointLedgers.id),
+    commandId: text("command_id").notNull(),
+    createdAt: now(),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique("baccarat_bets_round_id_id_unique").on(table.roundId, table.id),
+    uniqueIndex("baccarat_bets_round_user_main_unique")
+      .on(table.roundId, table.userId)
+      .where(sql`${table.betGroup} = 'MAIN'`),
+    uniqueIndex("baccarat_bets_round_user_command_unique").on(
+      table.roundId,
+      table.userId,
+      table.commandId,
+    ),
+    uniqueIndex("baccarat_bets_placed_ledger_unique").on(table.placedLedgerId),
+    uniqueIndex("baccarat_bets_settlement_ledger_unique")
+      .on(table.settlementLedgerId)
+      .where(sql`${table.settlementLedgerId} is not null`),
+    uniqueIndex("baccarat_bets_refund_ledger_unique")
+      .on(table.refundLedgerId)
+      .where(sql`${table.refundLedgerId} is not null`),
+    index("baccarat_bets_round_id_idx").on(table.roundId),
+    index("baccarat_bets_table_id_idx").on(table.tableId),
+    index("baccarat_bets_user_id_idx").on(table.userId),
+    index("baccarat_bets_status_idx").on(table.status),
+    foreignKey({
+      name: "baccarat_bets_round_table_fk",
+      columns: [table.tableId, table.roundId],
+      foreignColumns: [baccaratRounds.tableId, baccaratRounds.id],
+    }),
+    check(
+      "baccarat_bets_type_check",
+      sql`${table.betType} in ('PLAYER', 'BANKER', 'TIE')`,
+    ),
+    check(
+      "baccarat_bets_group_check",
+      sql`${table.betGroup} in ('MAIN', 'SIDE')`,
+    ),
+    check(
+      "baccarat_bets_status_check",
+      sql`${table.status} in ('PLACED', 'SETTLED', 'CANCELLED')`,
+    ),
+    check("baccarat_bets_amount_positive", sql`${table.amount} > 0`),
+    check(
+      "baccarat_bets_odds_positive",
+      sql`${table.oddsNumerator} > 0 and ${table.oddsDenominator} > 0`,
+    ),
+    check(
+      "baccarat_bets_commission_check",
+      sql`${table.commissionBpsSnapshot} between 0 and 10000`,
+    ),
+    check(
+      "baccarat_bets_payout_non_negative",
+      sql`${table.payoutAmount} >= 0`,
+    ),
+  ],
+);
+
+export const baccaratActions = pgTable(
+  "baccarat_actions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => baccaratRounds.id),
+    betId: uuid("bet_id").references(() => baccaratBets.id),
+    userId: text("user_id").references(() => authUsers.id),
+    actorType: text("actor_type").notNull(),
+    actionType: text("action_type").notNull(),
+    actionSequence: integer("action_sequence").notNull(),
+    commandId: text("command_id"),
+    amount: pointAmount("amount"),
+    payload: jsonb("payload")
+      .$type<JsonObject>()
+      .default(emptyJsonObject)
+      .notNull(),
+    createdAt: now(),
+  },
+  (table) => [
+    uniqueIndex("baccarat_actions_round_sequence_unique").on(
+      table.roundId,
+      table.actionSequence,
+    ),
+    uniqueIndex("baccarat_actions_round_user_command_unique")
+      .on(table.roundId, table.userId, table.commandId)
+      .where(
+        sql`${table.userId} is not null and ${table.commandId} is not null`,
+      ),
+    index("baccarat_actions_round_id_idx").on(table.roundId),
+    index("baccarat_actions_bet_id_idx").on(table.betId),
+    index("baccarat_actions_user_id_idx").on(table.userId),
+    check(
+      "baccarat_actions_sequence_positive",
+      sql`${table.actionSequence} > 0`,
+    ),
+    check(
+      "baccarat_actions_actor_type_check",
+      sql`${table.actorType} in ('PLAYER', 'SYSTEM')`,
+    ),
+    check(
+      "baccarat_actions_action_type_check",
+      sql`${table.actionType} in (
+        'PLACE_BET',
+        'SHOE_START',
+        'DEAL',
+        'SQUEEZE_PROGRESS',
+        'REVEAL_CARD',
+        'AUTO_REVEAL',
+        'SETTLE',
+        'CANCEL'
+      )`,
+    ),
+    check(
+      "baccarat_actions_amount_non_negative",
+      sql`${table.amount} is null or ${table.amount} >= 0`,
     ),
   ],
 );

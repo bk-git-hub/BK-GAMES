@@ -1,3 +1,5 @@
+export * from "./roadmap.js";
+
 export const baccaratEngineVersion = "baccarat-engine-v1";
 
 export type BaccaratRank =

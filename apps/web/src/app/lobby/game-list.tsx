@@ -64,7 +64,10 @@ export function GameList() {
 
 function GameCard({ game }: { game: Game }) {
   return (
-    <article className="group overflow-hidden rounded-[1.25rem] border-[2px] border-[#111827] bg-[#fffaf0] shadow-[6px_7px_0_#0b3b73] transition hover:-translate-y-1 hover:shadow-[8px_10px_0_#c8272e]">
+    <Link
+      href={game.href}
+      className="group block overflow-hidden rounded-[1.25rem] border-[2px] border-[#111827] bg-[#fffaf0] shadow-[6px_7px_0_#0b3b73] transition hover:-translate-y-1 hover:shadow-[8px_10px_0_#c8272e] focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-[#c8272e]"
+    >
       <div className="border-b border-[#d8c09a] bg-white p-4">
         <GameVisual game={game} />
       </div>
@@ -80,15 +83,12 @@ function GameCard({ game }: { game: Game }) {
         <p className="mt-3 min-h-16 text-sm leading-6 text-[#4b5874]">
           {game.description}
         </p>
-        <Link
-          href={game.href}
-          className="mt-5 inline-flex items-center gap-2 text-sm font-black tracking-normal text-[#c8272e] uppercase transition group-hover:gap-3"
-        >
+        <span className="mt-5 inline-flex items-center gap-2 text-sm font-black tracking-normal text-[#c8272e] uppercase transition group-hover:gap-3">
           Open
           <ArrowRight className="size-4" />
-        </Link>
+        </span>
       </div>
-    </article>
+    </Link>
   );
 }
 

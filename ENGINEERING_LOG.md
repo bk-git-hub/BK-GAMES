@@ -325,6 +325,14 @@ Correction:
 - The visual only animates a safe cover/shine/edge mask while the card remains hidden; actual rank/suit card faces still render only from server-visible card payloads.
 - No socket contract, game-server, DB, auth, payout, settlement, result, or roadmap logic was changed.
 
+### Baccarat Table Background Readability Polish
+
+Correction:
+
+- Removed the dominant green felt/table background from the `/baccarat` table surface.
+- Rebalanced the table, card zones, betting zones, squeeze panel, and roadmap panels with higher-contrast charcoal, plum, blue, rose, and gold tones for clearer scanning.
+- This is frontend color polish only; no socket, betting, reveal, settlement, card identity, payout, result, or roadmap logic was changed.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

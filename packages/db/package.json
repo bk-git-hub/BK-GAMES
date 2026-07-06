@@ -14,6 +14,7 @@
     "smoke:blackjack-betting": "tsx scripts/blackjack-betting-smoke.ts",
     "smoke:blackjack-settlement": "tsx scripts/blackjack-settlement-smoke.ts",
     "smoke:baccarat-betting": "tsx scripts/baccarat-betting-smoke.ts",
+    "smoke:baccarat-settlement": "tsx scripts/baccarat-settlement-smoke.ts",
     "smoke:racing-wallet": "tsx scripts/racing-wallet-smoke.ts",
     "smoke:racing-scheduler": "tsx scripts/racing-scheduler-smoke.ts",
     "smoke:racing-runner": "tsx scripts/racing-runner-smoke.ts",

@@ -13,4 +13,5 @@ export * from "./racing-runner.js";
 export * from "./racing-seed.js";
 export * from "./baccarat-betting.js";
 export * from "./baccarat-seed.js";
+export * from "./baccarat-settlement.js";
 export * from "./admin.js";

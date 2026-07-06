@@ -266,6 +266,15 @@ Correction:
 - Accepted bets create exactly one `BACCARAT` / `BET` point ledger and store Player, Banker, or Tie odds snapshots plus commission bps on the bet row.
 - Added focused smoke coverage for success, duplicate same command, conflicting command, duplicate main bet, insufficient funds, amount bounds, closed betting window, and Baccarat odds snapshots.
 
+### Baccarat Settlement Transaction
+
+Correction:
+
+- Added DB-level Baccarat round settlement and cancellation helpers.
+- Settlement uses persisted bet odds and commission snapshots to handle Player wins, Banker wins, Tie wins, Player/Banker Tie pushes, and losing bets.
+- Winning credits use `PAYOUT`, Tie pushes use `PUSH_REFUND`, and cancelled round refunds use `CANCEL_REFUND`.
+- Added focused smoke coverage for payout amounts, Banker commission, push refunds, cancellation refunds, and idempotent settlement/cancel reruns.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

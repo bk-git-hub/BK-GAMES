@@ -306,6 +306,17 @@ Correction:
 - Existing active rounds keep their original shoe; cut-card/minimum-card checks only create a new shoe before a new round starts.
 - Added focused game-server coverage for non-squeezer rejection, reconnect-safe hidden-card snapshots, and disconnect auto reveal behavior.
 
+### Baccarat Web Table UI
+
+Correction:
+
+- Added the authenticated `/baccarat` web route and client table experience.
+- The Baccarat web client requests the existing game token, connects to the `/baccarat` Socket.IO namespace, joins/leaves the main table, and consumes table state, betting, squeeze/reveal, settlement, wallet, and error events.
+- The UI renders Player/Banker/Tie betting, private `myBet`/wallet feedback, hidden placeholders for unrevealed cards, server-revealed cards, squeeze controls only for the selected squeezer, recent results, Bead Plate, and basic Big Road.
+- Hidden-card safety stays client-side display-only: the frontend does not calculate card values, hand totals, outcomes, payouts, settlements, or roadmap results.
+- Verification passed: `corepack pnpm --filter web typecheck`; `corepack pnpm --filter web lint`.
+- Manual browser verification was skipped because the web dev server was not already available at `http://localhost:3000/baccarat`; no dev server was started or restarted by the worker.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

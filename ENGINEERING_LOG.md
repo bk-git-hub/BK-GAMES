@@ -379,6 +379,14 @@ Correction:
 - Public cards now render clearer cream cards with large rank/suit typography, crisp suit marks, and a small BK chip detail.
 - Hidden cards still render only card-back/cover visuals without rank, suit, or value access; no card identity, reveal, settlement, result, payout, or roadmap logic was changed.
 
+### Baccarat Personal Result Feedback Polish
+
+Correction:
+
+- Added a prominent personal result banner to the `/baccarat` My Round panel for server-provided win, loss, push, cancelled, settled, and placed bet states.
+- The banner visually separates the user's personal bet result from the overall round winner and uses only `myBet` plus `round:settled` result payload fields already emitted by the server.
+- No winner, payout, settlement, card identity, reveal, roadmap, socket contract, or backend logic was changed.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

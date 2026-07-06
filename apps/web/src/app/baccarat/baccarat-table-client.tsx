@@ -27,10 +27,12 @@ import {
   type BaccaratCardSuit,
   type BaccaratCardView,
   type BaccaratHandSnapshot,
+  type BaccaratBetOutcome,
   type BaccaratRevealSlot,
   type BaccaratRoadmapSnapshot,
   type BaccaratRoundOutcome,
   type BaccaratRoundResultView,
+  type BaccaratRoundSettledPlayerResult,
   type BaccaratTableState,
   type BaccaratVisibleCardView,
   type BaccaratWalletUpdatedPayload,
@@ -68,6 +70,16 @@ type PendingBet = {
 type SelectedBet = {
   betType: BaccaratBetType;
   roundId: string | null;
+};
+
+type PersonalResultTone = "cancelled" | "lost" | "neutral" | "pending" | "push" | "won";
+
+type PersonalResultView = {
+  amountLabel: string;
+  detail: string;
+  kicker: string;
+  title: string;
+  tone: PersonalResultTone;
 };
 
 const betChoices: BetChoice[] = [
@@ -1107,6 +1119,7 @@ function MyRoundPanel({
   const mySettlement = playerId
     ? lastSettlement?.results.find((result) => result.playerId === playerId)
     : null;
+  const personalResult = getPersonalResultView({ myBet, mySettlement });
 
   return (
     <section className="rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/95 p-3 shadow-xl shadow-black/25">
@@ -1114,6 +1127,10 @@ function MyRoundPanel({
         <WalletCards className="size-4 text-[#f5c95f]" />
         <h2 className="text-lg font-semibold">My Round</h2>
       </div>
+
+      {personalResult ? (
+        <PersonalResultBanner result={personalResult} />
+      ) : null}
 
       <div className="mt-3 grid gap-2">
         <InfoRow label="Wallet" value={`${formatPoints(walletBalance)} pts`} />
@@ -1128,7 +1145,7 @@ function MyRoundPanel({
         />
         <InfoRow label="Bet status" value={myBet?.status ?? "-"} />
         <InfoRow
-          label="Settlement"
+          label="Personal result"
           value={
             mySettlement
               ? `${mySettlement.outcome} ${formatSignedPoints(
@@ -1140,6 +1157,161 @@ function MyRoundPanel({
       </div>
     </section>
   );
+}
+
+function PersonalResultBanner({ result }: { result: PersonalResultView }) {
+  const toneClass = personalResultToneClass(result.tone);
+
+  return (
+    <div
+      className={cn(
+        "mt-3 overflow-hidden rounded-xl border p-3 shadow-lg sm:p-4",
+        toneClass.container,
+      )}
+      data-testid="baccarat-personal-result-banner"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className={cn("text-xs font-black uppercase tracking-normal", toneClass.kicker)}>
+            Personal result
+          </p>
+          <p className={cn("mt-1 text-2xl font-black leading-none sm:text-3xl", toneClass.title)}>
+            {result.title}
+          </p>
+          <p className="mt-2 text-sm font-semibold text-white/78">{result.kicker}</p>
+          <p className="mt-1 text-xs text-white/62 sm:text-sm">{result.detail}</p>
+        </div>
+        <div
+          className={cn(
+            "shrink-0 rounded-lg border px-3 py-2 text-center text-sm font-black sm:min-w-28",
+            toneClass.amount,
+          )}
+        >
+          {result.amountLabel}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getPersonalResultView({
+  myBet,
+  mySettlement,
+}: {
+  myBet: BaccaratTableState["betting"]["myBet"];
+  mySettlement: BaccaratRoundSettledPlayerResult | null | undefined;
+}): PersonalResultView | null {
+  if (mySettlement) {
+    return {
+      amountLabel: formatSignedPoints(mySettlement.netAmount),
+      detail: `Payout ${formatPoints(mySettlement.payoutAmount)} pts`,
+      kicker: `${formatOutcome(mySettlement.betType)} ${formatPoints(
+        mySettlement.betAmount,
+      )} pts`,
+      title: personalOutcomeTitle(mySettlement.outcome),
+      tone: personalOutcomeTone(mySettlement.outcome),
+    };
+  }
+
+  if (!myBet) {
+    return null;
+  }
+
+  if (myBet.status === "CANCELLED") {
+    return {
+      amountLabel: "Cancelled",
+      detail: myBet.payoutAmount
+        ? `Refund ${formatPoints(myBet.payoutAmount)} pts`
+        : "Server marked this bet cancelled.",
+      kicker: `${formatOutcome(myBet.betType)} ${formatPoints(myBet.amount)} pts`,
+      title: "Bet cancelled",
+      tone: "cancelled",
+    };
+  }
+
+  if (myBet.status === "SETTLED") {
+    return {
+      amountLabel: myBet.netAmount ? formatSignedPoints(myBet.netAmount) : "Settled",
+      detail: myBet.payoutAmount
+        ? `Payout ${formatPoints(myBet.payoutAmount)} pts`
+        : "Server marked this bet settled.",
+      kicker: `${formatOutcome(myBet.betType)} ${formatPoints(myBet.amount)} pts`,
+      title: "Settled",
+      tone: "neutral",
+    };
+  }
+
+  return {
+    amountLabel: "Placed",
+    detail: "Waiting for the server-settled personal result.",
+    kicker: `${formatOutcome(myBet.betType)} ${formatPoints(myBet.amount)} pts`,
+    title: "Bet placed",
+    tone: "pending",
+  };
+}
+
+function personalOutcomeTitle(outcome: BaccaratBetOutcome) {
+  if (outcome === "WIN") {
+    return "You won";
+  }
+
+  if (outcome === "LOSE") {
+    return "You lost";
+  }
+
+  return "Push";
+}
+
+function personalOutcomeTone(outcome: BaccaratBetOutcome): PersonalResultTone {
+  if (outcome === "WIN") {
+    return "won";
+  }
+
+  if (outcome === "LOSE") {
+    return "lost";
+  }
+
+  return "push";
+}
+
+function personalResultToneClass(tone: PersonalResultTone) {
+  if (tone === "won") {
+    return {
+      amount: "border-[#111827] bg-[#f5c95f] text-[#111827]",
+      container:
+        "border-[#f5c95f]/80 bg-[linear-gradient(135deg,rgba(128,95,18,0.92),rgba(7,28,63,0.94))] shadow-[#f5c95f]/15",
+      kicker: "text-[#fff8d6]",
+      title: "text-[#fff8d6]",
+    };
+  }
+
+  if (tone === "lost") {
+    return {
+      amount: "border-[#ffb8bd]/60 bg-[#7d161b] text-[#fff3f1]",
+      container:
+        "border-[#ff9aa0]/70 bg-[linear-gradient(135deg,rgba(125,22,27,0.94),rgba(7,28,63,0.94))] shadow-[#c8272e]/15",
+      kicker: "text-[#ffb8bd]",
+      title: "text-[#fff3f1]",
+    };
+  }
+
+  if (tone === "push" || tone === "cancelled") {
+    return {
+      amount: "border-[#d8ecff]/45 bg-[#0b3b73] text-[#eef7ff]",
+      container:
+        "border-[#8fc4e8]/60 bg-[linear-gradient(135deg,rgba(11,59,115,0.95),rgba(7,28,63,0.94))] shadow-[#8fc4e8]/15",
+      kicker: "text-[#d8ecff]",
+      title: "text-[#eef7ff]",
+    };
+  }
+
+  return {
+    amount: "border-[#d8c09a] bg-[#fffaf0] text-[#111827]",
+    container:
+      "border-[#d8ecff]/24 bg-[linear-gradient(135deg,rgba(6,24,51,0.94),rgba(11,59,115,0.82))]",
+    kicker: "text-[#d8ecff]",
+    title: "text-white",
+  };
 }
 
 function RoadmapPanel({

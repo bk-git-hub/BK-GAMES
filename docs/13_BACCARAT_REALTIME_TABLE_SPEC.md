@@ -24,6 +24,7 @@ BaccaratShoe
 BaccaratRound
 BaccaratBet
 BaccaratReveal
+BaccaratRoadmapSnapshot
 BaccaratAction
 ```
 
@@ -68,6 +69,12 @@ WAITING
 → WAITING_BETS
 ```
 
+예외 상태:
+
+```text
+CANCELLED
+```
+
 ### 4.1 WAITING
 
 라운드 시작 대기 상태다.
@@ -91,6 +98,8 @@ WAITING
 유저는 Player / Banker / Tie 중 하나에 베팅한다.
 MVP에서는 유저당 라운드 1개 bet만 허용한다.
 베팅은 선차감한다.
+accepted bet은 취소/수정할 수 없다.
+같은 commandId 재시도는 같은 bet details일 때만 idempotent 성공한다.
 ```
 
 ### 4.3 DEALING
@@ -105,9 +114,12 @@ Banker 초기 2장
 Natural 여부 확인
 필요하면 Player third card 결정
 필요하면 Banker third card 결정
+reveal slot 목록 생성
 ```
 
 DEALING 단계에서 클라이언트에는 hidden card placeholder만 전송한다.
+
+DEALING 단계에서 서버가 카드와 결과를 계산해도, reveal 전에는 카드 값과 hand total을 클라이언트에 보내지 않는다.
 
 ### 4.4 SQUEEZE
 
@@ -133,6 +145,19 @@ squeezer가 squeeze:complete 전송
 
 카드 값은 reveal 완료 시점에만 broadcast한다.
 
+SQUEEZE는 UX 단계이며 결과를 바꾸지 않는다.
+
+진행 원칙:
+
+```text
+현재 reveal slot만 active 상태다.
+squeezer만 squeeze:progress와 squeeze:complete를 보낼 수 있다.
+관전자는 squeeze:progressed와 card:revealed를 받는다.
+progress는 0-100 정수다.
+progress는 card value, suit, total을 포함하지 않는다.
+timeout 또는 disconnect 시 system auto reveal한다.
+```
+
 ### 4.5 SETTLING
 
 서버가 결과를 계산하고 포인트를 정산한다.
@@ -144,6 +169,8 @@ PLAYER
 BANKER
 TIE
 ```
+
+정산 중에는 모든 point change가 idempotent transaction으로 처리되어야 한다.
 
 ### 4.6 SETTLED
 
@@ -202,6 +229,104 @@ A = 1
 2-9 = face value
 10/J/Q/K = 0
 ```
+
+---
+
+## 5.5 Shoe, Roadmap, And Result History
+
+### 5.5.1 Shoe Policy
+
+MVP shoe settings:
+
+```text
+deckCount = 8
+shoePenetrationPercent = 75
+minimumCardsBeforeRound = 6
+```
+
+Round start rule:
+
+```text
+round 중에는 절대 reshuffle하지 않는다.
+round 시작 전 cut-card position을 넘겼거나 remaining card가 6장 미만이면 새 shoe를 시작한다.
+```
+
+Shoe state is server-only.
+
+Do not broadcast:
+
+```text
+remaining card order
+future cards
+server seed
+encrypted shoe state
+```
+
+Clients may receive only display-safe shoe metadata:
+
+```text
+shoeId
+shoeNo
+cardsDealt
+cardsRemaining
+penetrationPercent
+willShuffleAfterRound
+```
+
+### 5.5.2 Result History
+
+바카라 MVP는 두 가지 결과판을 제공한다.
+
+```text
+Bead Plate
+Basic Big Road
+```
+
+Both are display-only.
+
+They do not affect:
+
+```text
+card dealing
+bet validity
+payout
+settlement
+```
+
+Bead Plate:
+
+```text
+settled round를 시간순으로 grid에 채운다.
+Player = blue
+Banker = red
+Tie = green
+Natural은 optional badge로 표시할 수 있다.
+```
+
+Basic Big Road:
+
+```text
+Player/Banker streak을 표시한다.
+Tie는 새 streak cell을 만들지 않고 현재 cell에 tie badge/count로 표시한다.
+첫 결과가 Tie인 경우 별도 Tie marker를 허용한다.
+```
+
+MVP에서 제외:
+
+```text
+Big Eye Boy
+Small Road
+Cockroach Pig
+roadmap prediction
+```
+
+Roadmap source of truth:
+
+```text
+settled baccarat_rounds
+```
+
+Roadmap snapshots may be cached for fast table:state rendering, but they must be rebuildable from settled rounds.
 
 ---
 
@@ -298,9 +423,12 @@ type BaccaratTableState = {
     | "CANCELLED";
   round: BaccaratRoundSnapshot | null;
   betting: BaccaratBettingSnapshot;
+  shoe: BaccaratShoeSnapshot;
   player: BaccaratHandSnapshot;
   banker: BaccaratHandSnapshot;
   reveal: BaccaratRevealSnapshot | null;
+  roadmaps: BaccaratRoadmapSnapshot;
+  recentRounds: BaccaratRoundResultView[];
   timers: BaccaratTimerSnapshot;
   version: number;
   updatedAt: string;
@@ -316,6 +444,7 @@ type BaccaratTableEvent = {
     | "TABLE_JOINED"
     | "BET_PLACED"
     | "ROUND_STARTED"
+    | "SHOE_STARTED"
     | "SQUEEZE_STARTED"
     | "CARD_REVEALED"
     | "ROUND_SETTLED"
@@ -367,6 +496,8 @@ type BaccaratRoundSettledEvent = {
   outcome: "PLAYER" | "BANKER" | "TIE";
   playerTotal: number;
   bankerTotal: number;
+  isNatural: boolean;
+  totalCards: number;
   results: Array<{
     playerId: string;
     nickname: string;
@@ -375,6 +506,7 @@ type BaccaratRoundSettledEvent = {
     payoutAmount: string;
     netAmount: string;
   }>;
+  roadmaps: BaccaratRoadmapSnapshot;
 };
 ```
 
@@ -402,22 +534,48 @@ type BaccaratWalletUpdatedEvent = {
 ```ts
 type BaccaratRoundSnapshot = {
   roundId: string;
+  shoeId: string;
   roundNo: number;
+  status:
+    | "WAITING_BETS"
+    | "DEALING"
+    | "SQUEEZE"
+    | "SETTLING"
+    | "SETTLED"
+    | "CANCELLED";
   outcome: "PLAYER" | "BANKER" | "TIE" | null;
+  resultFlags: {
+    isNatural: boolean;
+    totalCards: number | null;
+  };
 };
 
 type BaccaratBettingSnapshot = {
   minBet: string;
   maxMainBet: string;
+  maxTotalBetPerUser: string;
+  canPlaceBet: boolean;
   totals: {
     player: string;
     banker: string;
     tie: string;
   };
   myBet: {
+    betId: string;
     betType: "PLAYER" | "BANKER" | "TIE";
     amount: string;
+    status: "PLACED" | "SETTLED" | "CANCELLED";
   } | null;
+};
+
+type BaccaratShoeSnapshot = {
+  shoeId: string;
+  shoeNo: number;
+  deckCount: number;
+  cardsDealt: number;
+  cardsRemaining: number;
+  penetrationPercent: number;
+  willShuffleAfterRound: boolean;
 };
 
 type BaccaratHandSnapshot = {
@@ -425,14 +583,41 @@ type BaccaratHandSnapshot = {
   total: number | null;
   isNatural: boolean;
 };
+```
 
+`BaccaratHandSnapshot.total` must remain `null` until the total can be shown without revealing hidden card values.
+
+Recommended:
+
+```text
+WAITING_BETS: null
+DEALING: null
+SQUEEZE: null until all cards in that hand are revealed
+SETTLING/SETTLED: final total
+```
+
+```ts
 type BaccaratCardView =
   | {
+      slot:
+        | "PLAYER_CARD_1"
+        | "BANKER_CARD_1"
+        | "PLAYER_CARD_2"
+        | "BANKER_CARD_2"
+        | "PLAYER_CARD_3"
+        | "BANKER_CARD_3";
       rank: "A" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "J" | "Q" | "K";
       suit: "clubs" | "diamonds" | "hearts" | "spades";
       hidden?: false;
     }
   | {
+      slot:
+        | "PLAYER_CARD_1"
+        | "BANKER_CARD_1"
+        | "PLAYER_CARD_2"
+        | "BANKER_CARD_2"
+        | "PLAYER_CARD_3"
+        | "BANKER_CARD_3";
       hidden: true;
     };
 
@@ -446,14 +631,46 @@ type BaccaratRevealSnapshot = {
     | "PLAYER_CARD_3"
     | "BANKER_CARD_3";
   squeezerUserId: string | null;
+  status: "PENDING" | "ACTIVE" | "REVEALED" | "SKIPPED";
+  startedAt: string | null;
   endsAt: string;
   progress: number;
+  isAutoReveal: boolean;
 };
 
 type BaccaratTimerSnapshot = {
   bettingEndsAt: string | null;
   revealEndsAt: string | null;
   roundEndsAt: string | null;
+};
+
+type BaccaratRoundResultView = {
+  roundId: string;
+  roundNo: number;
+  outcome: "PLAYER" | "BANKER" | "TIE";
+  playerTotal: number;
+  bankerTotal: number;
+  isNatural: boolean;
+  totalCards: number;
+};
+
+type BaccaratRoadmapSnapshot = {
+  beadPlate: Array<{
+    roundId: string;
+    row: number;
+    col: number;
+    outcome: "PLAYER" | "BANKER" | "TIE";
+    playerTotal: number;
+    bankerTotal: number;
+    isNatural: boolean;
+  }>;
+  bigRoad: Array<{
+    roundId: string;
+    row: number;
+    col: number;
+    outcome: "PLAYER" | "BANKER";
+    tieCount: number;
+  }>;
 };
 ```
 
@@ -482,6 +699,9 @@ ROUND_NOT_FOUND
 REVEAL_NOT_ACTIVE
 NOT_SQUEEZER
 INVALID_REVEAL_ID
+SQUEEZE_RATE_LIMITED
+SHOE_NOT_READY
+ROUND_CANCELLED
 SETTLEMENT_CONFLICT
 UNKNOWN_ERROR
 ```
@@ -500,10 +720,15 @@ UNKNOWN_ERROR
 현재 reveal slot
 이미 공개된 카드
 아직 공개되지 않은 hidden placeholders
+shoe display metadata
+recentRounds
+roadmaps
 private wallet:updated 또는 wallet snapshot
 ```
 
 reconnect 시에도 hidden card value는 공개 전까지 보내지 않는다.
+
+재접속 응답은 최근 이벤트 replay가 없어도 화면을 복구할 수 있는 full snapshot이어야 한다.
 
 ---
 

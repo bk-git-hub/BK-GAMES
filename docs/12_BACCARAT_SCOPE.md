@@ -45,6 +45,10 @@ interactive squeeze reveal
 포인트 원장 기록
 private wallet:updated
 최근 라운드 히스토리
+Bead Plate 결과판
+basic Big Road 결과판
+8-deck shoe / cut-card 운영
+재접속 시 squeeze/reveal 상태 복구
 ```
 
 ---
@@ -60,6 +64,10 @@ Super 6 / Lucky 6
 Dragon 7 / Panda 8
 Big / Small
 Exact Tie / Egalite
+Big Eye Boy / Small Road / Cockroach Pig
+roadmap prediction UI
+live betting
+베팅 취소/수정
 다중 테이블
 유료 결제
 포인트 송금
@@ -87,8 +95,18 @@ side bet은 제외하지만 DB/API 설계는 나중에 여러 bet type을 추가
 | Dragon 7 | Banker가 3-card 7로 승리 | 낮음 |
 | Panda 8 | Player가 3-card 8로 승리 | 낮음 |
 | Big / Small | 총 카드 수 4장 또는 5-6장 | 낮음 |
+| Big Eye Boy / Small Road / Cockroach Pig | Big Road에서 파생되는 고급 결과판 | 낮음 |
 
 side bet이 들어가면 한 유저가 한 라운드에 여러 bet을 가질 수 있어야 한다.
+
+MVP의 결과판은 다음으로 제한한다.
+
+```text
+Bead Plate: 라운드 결과를 시간순으로 표시
+Basic Big Road: Player/Banker streak 흐름 표시, Tie는 기존 칸에 badge로 표시
+```
+
+고급 road는 베팅/정산에 영향을 주지 않는 display-only 기능이지만, 구현 복잡도가 있어 Phase 2로 둔다.
 
 ---
 
@@ -174,10 +192,32 @@ netProfit = 95P
 | squeeze time per card | 8초 |
 | round end delay | 5초 |
 | deck count | 8 |
+| shoe penetration | 75% |
+| result board | Bead Plate + basic Big Road |
 | Tie payout | 8:1 |
 | Banker commission | 5% |
 
 max bet은 클라이언트가 아니라 서버에서 검증한다.
+
+MVP 베팅 정책:
+
+```text
+유저당 라운드 1개 main bet만 허용한다.
+accepted bet은 취소할 수 없다.
+accepted bet은 수정할 수 없다.
+같은 commandId 재시도는 같은 bet details일 때만 idempotent 성공한다.
+같은 commandId로 다른 details가 오면 IDEMPOTENCY_CONFLICT다.
+이미 bet이 있는데 새 commandId로 다시 bet하면 BET_ALREADY_PLACED다.
+```
+
+Shoe 정책:
+
+```text
+8 deck shoe를 사용한다.
+round 중에는 절대 reshuffle하지 않는다.
+round 시작 전에 남은 카드가 부족하거나 cut-card position을 넘겼으면 새 shoe를 생성한다.
+shuffle state와 남은 card order는 클라이언트에 공개하지 않는다.
+```
 
 ---
 
@@ -216,6 +256,17 @@ squeezer 선정 기본 규칙:
 없거나 연결이 끊기면 system auto reveal
 ```
 
+Squeeze UX 원칙:
+
+```text
+progress는 0-100 숫자만 공유한다.
+progress는 카드 값이나 suit를 암시하지 않는다.
+관전자에게는 같은 progress animation만 보인다.
+squeezer가 progress를 보내지 않아도 timeout으로 공개된다.
+reconnect한 유저는 이미 공개된 카드와 현재 reveal slot만 받는다.
+아직 공개되지 않은 card value는 reconnect에서도 숨긴다.
+```
+
 ---
 
 ## 9. 성공 기준
@@ -229,6 +280,9 @@ squeezer 선정 기본 규칙:
 서버가 카드를 결정하고 표준 3장 룰을 적용한다.
 reveal 전 hidden card value가 클라이언트에 노출되지 않는다.
 squeeze 완료 또는 timeout으로 카드가 공개된다.
+Bead Plate와 basic Big Road가 settled round 기준으로 갱신된다.
+shoe cut-card 이후 다음 라운드 전에 새 shoe가 시작된다.
+재접속 시 현재 betting/squeeze/settled 상태를 full snapshot으로 복구한다.
 정산 결과가 정확하게 wallet과 point ledger에 반영된다.
 wallet:updated는 private room에만 전송된다.
 서버 재시작/라운드 취소 시 미정산 베팅이 중복 없이 환불된다.

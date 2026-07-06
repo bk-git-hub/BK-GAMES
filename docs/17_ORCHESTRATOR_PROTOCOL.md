@@ -78,6 +78,7 @@ Backend / Frontend / Review thread용 Work Order 작성
 - Work Order 작성
 - `send_message_to_thread`로 개발 thread에 전달
 - `read_thread`로 결과 확인
+- Runtime Order 발행 및 dev server 상태 callback 수집
 - 다음 단계 진행 또는 사용자 호출 결정
 
 금지:
@@ -122,6 +123,34 @@ mock screens and visual QA
 - regression risk 확인
 - browser/play smoke 준비
 - 사용자 playtest 전 상태 요약
+
+### Runtime Manager Thread
+
+개발 서버 프로세스와 로컬 runtime 상태를 관리한다.
+
+기본 담당:
+
+```text
+dev server start / stop / restart / status
+port / PID / health check 확인
+runtime-state 기록
+runtime log 위치 관리
+Orchestrator callback
+```
+
+기본 명령:
+
+```text
+web: corepack pnpm --filter web dev
+game-server: corepack pnpm --filter game-server dev
+```
+
+금지:
+
+- Orchestrator의 Runtime Order 없이 공유 dev server 종료
+- 소유자가 불명확한 port/PID 강제 종료
+- runtime 작업 중 코드 수정
+- DB migration 또는 seed 실행
 
 ---
 
@@ -341,7 +370,116 @@ reconnect 시 latest authoritative tick으로 복구된다.
 
 ---
 
-## 7. Stop Conditions
+## 7. Dev Server Runtime Operations
+
+개발 서버는 thread 공용 로컬 자원이므로 일반 구현 작업과 분리해서 관리한다.
+
+### Ownership
+
+```text
+Orchestrator: 실행/종료/재시작 결정, Runtime Order 발행, 결과 수집
+Runtime Manager: 실제 start/stop/restart/status 수행
+Worker: dev server 필요 사항을 Orchestrator에게 요청
+Updater: Orchestrator가 보낸 Board Event만 상황판에 반영
+```
+
+전담 Runtime Manager thread가 없을 때는 Orchestrator가 임시로 Runtime Manager 역할을 겸임할 수 있다. 이 경우에도 Runtime Order와 상태 기록 규칙을 따른다.
+
+### Runtime State
+
+Runtime Manager는 로컬 상태를 아래 파일에 기록한다.
+
+```text
+.orchestrator/runtime-state.json
+```
+
+권장 필드:
+
+```text
+service
+status
+port
+pid
+command
+workingDirectory
+healthUrl
+owner
+startedAt
+lastHealthCheckAt
+lastError
+```
+
+로그 파일이 필요하면 아래 폴더를 사용한다.
+
+```text
+.orchestrator/runtime-logs/
+```
+
+`.orchestrator/runtime-state.json`과 `.orchestrator/runtime-logs/`는 local-only 운영 산출물이다. 공개 Git에 포함하려면 사용자 승인이 필요하다.
+
+### Runtime Order Format
+
+오케스트레이터가 Runtime Manager에게 보내는 메시지는 아래 형식을 따른다.
+
+```text
+[Role]
+너는 Runtime Manager thread다.
+
+[Runtime Order]
+Action: start / stop / restart / status
+Service: web / game-server / all
+
+[Command]
+Command:
+Working directory:
+Port:
+Health check URL:
+
+[State]
+State file:
+Log path:
+
+[Stop Conditions]
+아래가 필요하면 실행하지 말고 보고:
+- port가 이미 점유되어 있고 소유자가 runtime-state와 다름
+- 종료 대상 PID가 runtime-state에 기록되어 있지 않음
+- health check 실패 원인이 runtime 범위를 벗어남
+- DB migration, seed, schema 변경이 필요함
+
+[Done Criteria]
+- 실행/종료/재시작 결과 보고
+- runtime-state 업데이트
+- health check 결과 보고
+- 실행한 명령과 PID/port 보고
+```
+
+기본 서비스:
+
+```text
+web
+command: corepack pnpm --filter web dev
+port: 3000
+health: http://localhost:3000
+
+game-server
+command: corepack pnpm --filter game-server dev
+port: 4000
+health: http://localhost:4000/health
+```
+
+### Safety Rules
+
+```text
+Runtime Manager는 자신이 시작했고 runtime-state에 기록된 PID만 종료한다.
+포트가 이미 점유되어 있고 소유자가 불명확하면 kill하지 않고 Blocked로 보고한다.
+Worker thread는 공유 dev server를 직접 종료하거나 포트 kill을 실행하지 않는다.
+서버 재시작이 검증에 필요하면 Worker는 Orchestrator에게 Runtime 요청을 보낸다.
+runtime-state와 실제 프로세스 상태가 다르면 먼저 status 점검을 수행하고 결과를 보고한다.
+```
+
+---
+
+## 8. Stop Conditions
 
 오케스트레이터 또는 개발 thread는 아래 상황에서 구현을 멈추고 사용자에게 보고한다.
 
@@ -355,6 +493,8 @@ preview/mock route를 실제 게임 route로 승격해야 한다.
 명세와 현재 구현이 충돌한다.
 검증 실패 원인이 원래 작업 범위를 벗어난다.
 새 패키지 설치가 필요하다.
+dev server port가 소유자 불명 프로세스에 의해 점유되어 있다.
+runtime-state와 실제 PID/port 상태가 충돌한다.
 ```
 
 멈춤 보고에는 최소 아래를 포함한다.
@@ -369,7 +509,7 @@ preview/mock route를 실제 게임 route로 승격해야 한다.
 
 ---
 
-## 8. Adoption Plan
+## 9. Adoption Plan
 
 이 프로토콜은 단계적으로 도입한다.
 
@@ -414,6 +554,7 @@ thread 자동 전송 없음.
 실패한 테스트 재실행
 명세에 이미 적힌 다음 구현 단계
 문서에 적힌 검증 명령 수행
+runtime-state에 기록된 known PID 기반 dev server status/restart
 ```
 
 자동 금지:
@@ -424,6 +565,7 @@ thread 자동 전송 없음.
 socket contract 큰 변경
 DB schema 변경
 server-authoritative 구조 변경
+소유자 불명 port/PID kill
 ```
 
 ### Phase 5. Notion 상태판 연결
@@ -456,7 +598,7 @@ thread 전달
 
 ---
 
-## 9. Current Non-Goals
+## 10. Current Non-Goals
 
 이 문서는 아래를 구현하지 않는다.
 

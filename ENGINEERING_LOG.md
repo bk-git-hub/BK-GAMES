@@ -222,6 +222,20 @@ Correction:
 - Worker threads must not update the board directly; the Orchestrator owns Board Events to the Updater thread.
 - `.orchestrator/` remains an operational board artifact and requires explicit approval before being included in public Git history.
 
+### Dev Server Runtime Ownership
+
+Problem:
+
+- Development server start/stop/restart touches shared local resources: ports, PIDs, terminal processes, logs, browser QA, and backend health.
+- Letting individual worker threads stop or kill shared dev servers can interfere with other active work.
+
+Correction:
+
+- `AGENTS.md` and `docs/17_ORCHESTRATOR_PROTOCOL.md` now define a Runtime Manager role.
+- The Orchestrator decides when dev servers should start, stop, restart, or report status; the Runtime Manager executes the Runtime Order and reports back.
+- Worker threads request runtime changes through the Orchestrator instead of killing shared servers directly.
+- Runtime state and logs are local-only `.orchestrator/` artifacts unless explicitly approved for public Git.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

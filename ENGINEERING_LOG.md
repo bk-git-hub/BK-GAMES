@@ -371,6 +371,14 @@ Correction:
 - Aligned `/baccarat` route colors with the BK Games homepage/lobby palette: cream shell, ink borders, navy table surfaces, red Banker accents, gold action highlights, and ice-blue Player accents.
 - Preserved Player/Banker/Tie contrast, score/hidden badges, betting confirmation, roadmaps, and mobile layout without changing game behavior.
 
+### Baccarat Card Visual Refresh
+
+Correction:
+
+- Replaced `/baccarat` visible card faces with route-local JSX/SVG card rendering instead of the darker `royal-noir` image asset.
+- Public cards now render clearer cream cards with large rank/suit typography, crisp suit marks, and a small BK chip detail.
+- Hidden cards still render only card-back/cover visuals without rank, suit, or value access; no card identity, reveal, settlement, result, payout, or roadmap logic was changed.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

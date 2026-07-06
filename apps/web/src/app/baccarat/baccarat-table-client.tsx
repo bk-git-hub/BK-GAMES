@@ -7,7 +7,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -25,6 +24,7 @@ import {
 import {
   type BaccaratBetType,
   type BaccaratBigRoadCell,
+  type BaccaratCardSuit,
   type BaccaratCardView,
   type BaccaratHandSnapshot,
   type BaccaratRevealSlot,
@@ -32,6 +32,7 @@ import {
   type BaccaratRoundOutcome,
   type BaccaratRoundResultView,
   type BaccaratTableState,
+  type BaccaratVisibleCardView,
   type BaccaratWalletUpdatedPayload,
 } from "@bk-games/shared/src/socket-events";
 
@@ -96,6 +97,16 @@ const betChoices: BetChoice[] = [
 const quickBetAmounts = ["100", "500", "1000", "5000"] as const;
 const beadRows = 6;
 const bigRoadRows = 6;
+const redSuitTheme = {
+  borderClass: "border-[#ff9aa0]/55",
+  fillClass: "text-[#c8272e]",
+  textClass: "text-[#c8272e]",
+} as const;
+const darkSuitTheme = {
+  borderClass: "border-[#8fc4e8]/55",
+  fillClass: "text-[#071c3f]",
+  textClass: "text-[#071c3f]",
+} as const;
 
 export function BaccaratTableClient({
   initialWalletBalance,
@@ -534,17 +545,164 @@ function BaccaratCard({
   }
 
   return (
-    <Image
-      alt={`${card.rank} of ${card.suit}`}
-      className={cn(
-        "h-auto w-[56px] shrink-0 rounded-lg shadow-xl shadow-black/35 sm:w-[74px] md:w-[88px]",
-        index % 2 === 0 ? "rotate-[-2deg]" : "rotate-[2deg]",
-      )}
-      height={588}
-      src={`/cards/royal-noir/${card.rank}${suitCode(card.suit)}.svg`}
-      width={420}
+    <BaccaratCardFace
+      card={card}
+      rotationClass={index % 2 === 0 ? "rotate-[-2deg]" : "rotate-[2deg]"}
     />
   );
+}
+
+function BaccaratCardFace({
+  card,
+  rotationClass,
+}: {
+  card: BaccaratVisibleCardView;
+  rotationClass: string;
+}) {
+  const suitTheme = getSuitTheme(card.suit);
+
+  return (
+    <div
+      aria-label={`${card.rank} of ${card.suit}`}
+      className={cn(
+        "relative isolate aspect-[5/7] w-[56px] shrink-0 overflow-hidden rounded-lg border border-[#fff8d6] bg-[#fffaf0] text-[#111827] shadow-xl shadow-black/35 transition sm:w-[74px] md:w-[88px]",
+        rotationClass,
+      )}
+    >
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-[radial-gradient(circle_at_28%_18%,rgba(255,255,255,0.95),transparent_32%),linear-gradient(145deg,#fffaf0,#f7efe2_58%,#f5c95f_135%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-[5%] rounded-md border border-[#111827]/18"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-[18%] top-[17%] h-px bg-[#111827]/12"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-[18%] bottom-[17%] h-px bg-[#111827]/12"
+      />
+
+      <CardCorner card={card} placement="top" />
+      <CardCorner card={card} placement="bottom" />
+
+      <div className="absolute inset-x-[18%] top-[23%] grid place-items-center">
+        <div
+          className={cn(
+            "grid aspect-square w-[72%] max-w-14 place-items-center rounded-full border bg-white/82 shadow-inner sm:max-w-[4.25rem]",
+            suitTheme.borderClass,
+          )}
+        >
+          <SuitIcon
+            className={cn("size-[58%] drop-shadow-sm", suitTheme.fillClass)}
+            suit={card.suit}
+          />
+        </div>
+      </div>
+
+      <div className="absolute inset-x-[10%] bottom-[22%] grid place-items-center">
+        <p
+          className={cn(
+            "leading-none font-black tracking-normal",
+            card.rank === "10"
+              ? "text-[1.25rem] sm:text-[1.75rem] md:text-[2rem]"
+              : "text-[1.55rem] sm:text-[2.1rem] md:text-[2.45rem]",
+            suitTheme.textClass,
+          )}
+        >
+          {card.rank}
+        </p>
+      </div>
+
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-[31%] bottom-[8%] grid h-[11%] place-items-center rounded-full border border-[#d8c09a] bg-[#fff8ed] text-[0.48rem] font-black tracking-normal text-[#0b3b73] shadow-sm sm:text-[0.58rem]"
+      >
+        BK
+      </div>
+    </div>
+  );
+}
+
+function CardCorner({
+  card,
+  placement,
+}: {
+  card: BaccaratVisibleCardView;
+  placement: "bottom" | "top";
+}) {
+  const suitTheme = getSuitTheme(card.suit);
+
+  return (
+    <div
+      className={cn(
+        "absolute grid w-[25%] justify-items-center gap-0.5 leading-none",
+        placement === "top"
+          ? "left-[8%] top-[7%]"
+          : "bottom-[7%] right-[8%] rotate-180",
+      )}
+    >
+      <span
+        className={cn(
+          "text-[0.86rem] font-black tracking-normal sm:text-[1.08rem] md:text-[1.22rem]",
+          card.rank === "10" ? "tracking-tighter" : "",
+          suitTheme.textClass,
+        )}
+      >
+        {card.rank}
+      </span>
+      <SuitIcon
+        className={cn("size-3.5 sm:size-4 md:size-5", suitTheme.fillClass)}
+        suit={card.suit}
+      />
+    </div>
+  );
+}
+
+function SuitIcon({
+  className,
+  suit,
+}: {
+  className?: string;
+  suit: BaccaratCardSuit;
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      focusable="false"
+      viewBox="-56 -56 112 124"
+    >
+      <path d={suitPath(suit)} fill="currentColor" />
+    </svg>
+  );
+}
+
+function suitPath(suit: BaccaratCardSuit) {
+  if (suit === "clubs") {
+    return "M-24 42H24C13 29 7 18 8 7C17 20 44 16 44-8C44-29 20-36 8-20C12-43-12-43-8-20C-20-36-44-29-44-8C-44 16-17 20-8 7C-7 18-13 29-24 42Z";
+  }
+
+  if (suit === "diamonds") {
+    return "M0-50L42 0L0 50L-42 0Z";
+  }
+
+  if (suit === "hearts") {
+    return "M0 43C-34 16-54-8-44-31C-36-51-10-51 0-28C10-51 36-51 44-31C54-8 34 16 0 43Z";
+  }
+
+  return "M0-50C-30-22-50-3-42 23C-35 45-9 44-8 19C-10 38-18 52-31 65H31C18 52 10 38 8 19C9 44 35 45 42 23C50-3 30-22 0-50Z";
+}
+
+function getSuitTheme(suit: BaccaratCardSuit) {
+  if (suit === "hearts" || suit === "diamonds") {
+    return redSuitTheme;
+  }
+
+  return darkSuitTheme;
 }
 
 function SqueezeCardBack({
@@ -579,7 +737,7 @@ function SqueezeCardBack({
         isActive ? ` squeeze ${safeProgress}%` : ""
       }`}
       className={cn(
-        "relative isolate aspect-[5/7] shrink-0 overflow-hidden rounded-lg border border-[#f5c95f]/30 shadow-xl shadow-black/35 transition",
+        "relative isolate aspect-[5/7] shrink-0 overflow-hidden rounded-lg border border-[#fff8d6]/70 bg-[#fffaf0] shadow-xl shadow-black/35 transition",
         size === "featured"
           ? "w-[108px] sm:w-[128px]"
           : "w-[56px] sm:w-[74px] md:w-[88px]",
@@ -589,15 +747,27 @@ function SqueezeCardBack({
     >
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-[linear-gradient(135deg,#fffaf0,#d8ecff_48%,#f5c95f)]"
+        className="absolute inset-0 bg-[radial-gradient(circle_at_24%_16%,rgba(255,255,255,0.95),transparent_34%),linear-gradient(145deg,#fffaf0,#f7efe2_58%,#f5c95f_140%)]"
       />
       <div
         aria-hidden="true"
-        className="absolute inset-[9%] rounded-md border border-[#111827]/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.44),rgba(255,255,255,0.08))]"
+        className="absolute inset-[7%] rounded-md border border-[#111827]/18"
       />
       <div
         aria-hidden="true"
-        className="absolute bottom-[10%] left-[16%] right-[16%] h-1 rounded-full bg-[#111827]/10"
+        className="absolute inset-[13%] rounded-md bg-[linear-gradient(135deg,#0b3b73_0_42%,#c8272e_42%_58%,#f5c95f_58%_100%)] shadow-inner"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-[20%] rounded-md border border-[#fff8d6]/35 bg-[radial-gradient(circle_at_50%_50%,rgba(255,250,240,0.18),transparent_58%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute left-[18%] top-[18%] size-2 rounded-full bg-[#fff8d6]/70"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute bottom-[18%] right-[18%] size-2 rounded-full bg-[#fff8d6]/70"
       />
 
       {isActive ? (
@@ -617,15 +787,15 @@ function SqueezeCardBack({
 
       <div
         aria-hidden="true"
-        className="absolute inset-y-0 right-0 z-10 overflow-hidden rounded-r-lg border-l border-[#f5c95f]/30 bg-[linear-gradient(135deg,#071c3f,#0b3b73_55%,#c8272e)] shadow-[-10px_0_18px_rgba(0,0,0,0.24)] transition-[width]"
+        className="absolute inset-y-0 right-0 z-10 overflow-hidden rounded-r-lg border-l border-[#f5c95f]/30 bg-[linear-gradient(135deg,#071c3f,#0b3b73_48%,#c8272e)] shadow-[-10px_0_18px_rgba(0,0,0,0.24)] transition-[width]"
         style={coverStyle}
       >
-        <div className="absolute inset-2 rounded-md border border-[#f5c95f]/25 bg-[radial-gradient(circle_at_50%_50%,rgba(245,201,95,0.22),transparent_55%)]" />
-        <div className="absolute inset-0 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.09)_0_1px,transparent_1px_7px)] opacity-70" />
+        <div className="absolute inset-2 rounded-md border border-[#fff8d6]/35 bg-[radial-gradient(circle_at_50%_50%,rgba(245,201,95,0.24),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.1)_0_1px,transparent_1px_7px)] opacity-70" />
         <div className="absolute inset-0 grid place-items-center">
           <div
             className={cn(
-              "grid place-items-center rounded-full border border-[#f5c95f]/35 bg-black/25 font-semibold text-[#fff8d6]/85",
+              "grid place-items-center rounded-full border border-[#fff8d6]/45 bg-black/25 font-black tracking-normal text-[#fff8d6]/90",
               size === "featured" ? "size-14 text-base" : "size-12 text-sm",
             )}
           >
@@ -1410,22 +1580,6 @@ function slotLabel(slot: BaccaratRevealSlot) {
     .split("_")
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function suitCode(suit: "clubs" | "diamonds" | "hearts" | "spades") {
-  if (suit === "clubs") {
-    return "C";
-  }
-
-  if (suit === "diamonds") {
-    return "D";
-  }
-
-  if (suit === "hearts") {
-    return "H";
-  }
-
-  return "S";
 }
 
 function clampPercent(value: number) {

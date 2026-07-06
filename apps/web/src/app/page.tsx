@@ -6,7 +6,6 @@ import {
   BadgeCheck,
   Club,
   Coins,
-  Dumbbell,
   Gift,
   Sparkles,
   Trophy,
@@ -21,7 +20,7 @@ import { cn } from "@/lib/utils";
 type Game = {
   description: string;
   href: string;
-  image: "blackjack" | "derby" | "boxing";
+  image: "blackjack" | "derby" | "baccarat";
   name: string;
   status: string;
 };
@@ -44,11 +43,11 @@ const games: Game[] = [
   },
   {
     description:
-      "A broadcast-style fight preview for the next live game format.",
-    href: "/boxing",
-    image: "boxing",
-    name: "Boxing",
-    status: "Preview",
+      "Player, Banker, and Tie bets with server-revealed rounds.",
+    href: "/baccarat",
+    image: "baccarat",
+    name: "Baccarat",
+    status: "Open",
   },
 ];
 
@@ -405,12 +404,32 @@ function GameVisual({
     <div
       className={cn(
         sizeClassName,
-        "relative grid place-items-center overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#c8272e_0_48%,#0b3b73_48%_100%)]",
+        "relative grid place-items-center overflow-hidden rounded-2xl bg-[#0b3b73]",
       )}
     >
-      <div className="absolute inset-4 rounded-2xl border border-white/35" />
-      <div className="relative grid size-20 place-items-center rounded-full bg-[#fff8ed] text-[#0b3b73] shadow-[0_9px_0_rgba(7,28,63,0.25)]">
-        <Dumbbell className={cn("size-10", compact && "size-8")} />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(216,236,255,0.32),transparent_32%),radial-gradient(circle_at_78%_70%,rgba(200,39,46,0.4),transparent_35%)]" />
+      <div className="absolute inset-x-4 top-3 flex items-center justify-between text-[0.62rem] font-black tracking-normal text-[#d8ecff] uppercase">
+        <span>Player</span>
+        <span>Banker</span>
+      </div>
+      <div className="relative flex items-center justify-center gap-2">
+        <Image
+          alt=""
+          className={cn("h-auto w-18 rotate-[-9deg]", compact && "w-11")}
+          height={588}
+          src="/cards/royal-noir/9D.svg"
+          width={420}
+        />
+        <div className="grid size-12 place-items-center rounded-full border border-[#f5c95f] bg-[#fff8ed] text-xs font-black text-[#0b3b73] shadow-[0_7px_0_rgba(7,28,63,0.22)]">
+          Tie
+        </div>
+        <Image
+          alt=""
+          className={cn("h-auto w-18 rotate-[9deg]", compact && "w-11")}
+          height={588}
+          src="/cards/royal-noir/8C.svg"
+          width={420}
+        />
       </div>
     </div>
   );

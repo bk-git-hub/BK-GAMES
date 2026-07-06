@@ -14,6 +14,7 @@ import {
   WalletCards,
 } from "lucide-react";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { auth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -115,25 +116,25 @@ function SiteHeader({ isSignedIn }: { isSignedIn: boolean }) {
           </span>
         </Link>
 
-        <nav className="flex items-center gap-3 text-sm font-bold sm:gap-7">
-          <a
-            href="#rewards"
-            className="hidden text-[#24344d] transition hover:text-[#c8272e] sm:inline-flex"
-          >
-            Rewards
-          </a>
-          <Link
-            href={isSignedIn ? "/lobby" : "/auth"}
-            className="hidden text-[#24344d] transition hover:text-[#c8272e] sm:inline-flex"
-          >
-            {isSignedIn ? "My points" : "Sign in"}
-          </Link>
+        <nav className="flex items-center gap-3 text-sm font-bold sm:gap-5">
           <Link
             href="/lobby"
             className="inline-flex h-11 items-center justify-center rounded-md border border-[#071c3f] bg-[#0b3b73] px-6 text-sm font-black tracking-normal text-white uppercase shadow-[0_5px_0_#071c3f] transition hover:-translate-y-0.5 hover:bg-[#c8272e] hover:shadow-[0_6px_0_#7d161b]"
           >
             Games
           </Link>
+          {isSignedIn ? (
+            <SignOutButton className="h-11 rounded-md border-[#071c3f] bg-[#fffaf0] px-5 text-sm font-black tracking-normal text-[#0b3b73] uppercase transition hover:-translate-y-0.5 hover:bg-[#d8ecff]">
+              Logout
+            </SignOutButton>
+          ) : (
+            <Link
+              href="/auth"
+              className="inline-flex h-11 items-center justify-center rounded-md border border-[#071c3f] bg-[#fffaf0] px-5 text-sm font-black tracking-normal text-[#0b3b73] uppercase transition hover:-translate-y-0.5 hover:bg-[#d8ecff]"
+            >
+              Login
+            </Link>
+          )}
         </nav>
       </div>
     </header>

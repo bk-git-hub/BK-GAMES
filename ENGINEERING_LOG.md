@@ -294,6 +294,18 @@ Correction:
 - Public table snapshots hide unrevealed cards and omit per-user `myBet`; viewer-specific state is emitted directly to that user's socket.
 - Added focused game-server tests for hidden-card state, reveal safety, squeezer selection, and private `myBet` visibility.
 
+### Baccarat Reveal Safety Hardening
+
+Correction:
+
+- Hardened Baccarat reveal/squeeze lifecycle checks in the game server runtime.
+- Reveal activation, progress, and completion now validate round identity and active reveal status before mutating DB state.
+- Active reveal progress can only be written by the selected authenticated squeezer with a current accepted round bet and an active socket connection.
+- Disconnecting the final active squeezer socket now schedules a system auto reveal path so the round can continue without user intervention.
+- Reconnect/table snapshots now restore revealed cards as visible, unrevealed cards as hidden placeholders, active squeeze progress/timers, and private `myBet` only for the viewer socket.
+- Existing active rounds keep their original shoe; cut-card/minimum-card checks only create a new shoe before a new round starts.
+- Added focused game-server coverage for non-squeezer rejection, reconnect-safe hidden-card snapshots, and disconnect auto reveal behavior.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

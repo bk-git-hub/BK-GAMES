@@ -89,6 +89,20 @@ export class BaccaratGateway implements OnModuleDestroy {
 
     for (const update of updates) {
       this.emitTableUpdate(update);
+      const actorUserId = update.event?.actorUserId;
+
+      if (!actorUserId || actorUserId === 'SYSTEM') {
+        continue;
+      }
+
+      const autoReveal = this.tableService.getAutoRevealAfterDisconnectedUser(
+        update.state.tableId,
+        actorUserId,
+      );
+
+      if (autoReveal) {
+        void this.completeReveal({ ...autoReveal, system: true });
+      }
     }
   }
 
@@ -215,8 +229,10 @@ export class BaccaratGateway implements OnModuleDestroy {
         });
 
         await this.tableConfigService.markRevealProgress({
-          revealId: body.revealId,
-          progress: body.progress,
+          roundId: update.squeezeProgressed?.roundId ?? body.roundId,
+          revealId: update.squeezeProgressed?.revealId ?? body.revealId,
+          squeezerUserId: user.userId,
+          progress: update.squeezeProgressed?.progress ?? body.progress,
         });
         this.emitTableUpdate(update);
       },
@@ -330,8 +346,9 @@ export class BaccaratGateway implements OnModuleDestroy {
       return;
     }
 
-    if (update.state.reveal) {
+    if (update.state.reveal && update.state.round) {
       await this.tableConfigService.markRevealActive({
+        roundId: update.state.round.roundId,
         revealId: update.state.reveal.revealId,
         squeezerUserId: update.state.reveal.squeezerUserId,
         startedAt: update.state.reveal.startedAt ?? new Date().toISOString(),
@@ -355,6 +372,7 @@ export class BaccaratGateway implements OnModuleDestroy {
     if (card) {
       await this.tableConfigService.markRevealCompleted({
         revealId: input.revealId,
+        roundId: input.roundId,
         revealedBy: input.system
           ? 'SYSTEM'
           : input.user?.userId ?? 'SYSTEM',

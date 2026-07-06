@@ -205,9 +205,14 @@ export class BaccaratTableService {
 
     if (existing.round?.roundId !== input.round?.roundId) {
       existing.round = input.round ? createRoundRuntime(input.round) : null;
-      existing.reveals = input.reveals.map(createRevealRuntime);
+      existing.reveals = createRevealRuntimes(input.reveals);
       existing.bets = createBetMap(input.bets);
       existing.phase = input.round ? toTablePhase(input.round.status) : 'WAITING';
+
+      if (existing.round) {
+        markRevealedCards(existing.round, existing.reveals);
+        applyRevealDerivedPhase(existing);
+      }
     } else if (input.round) {
       syncRoundRuntime(existing, input.round, input.reveals, input.bets);
     } else {
@@ -340,7 +345,7 @@ export class BaccaratTableService {
 
     table.round = createRoundRuntime(input.round);
     table.shoe = input.shoe;
-    table.reveals = input.reveals.map(createRevealRuntime);
+    table.reveals = createRevealRuntimes(input.reveals);
     table.phase = 'DEALING';
     this.bump(table);
 
@@ -360,6 +365,9 @@ export class BaccaratTableService {
   }): BaccaratTableMutationResult | null {
     const table = this.getTable(input.tableId);
     const round = requireRound(table);
+
+    assertRevealPhase(table);
+
     const existingActive = table.reveals.find(
       (reveal) => reveal.status === 'ACTIVE',
     );
@@ -371,8 +379,19 @@ export class BaccaratTableService {
     const reveal = table.reveals.find((candidate) => candidate.status === 'PENDING');
 
     if (!reveal) {
+      if (
+        table.reveals.length > 0 &&
+        table.reveals.every((candidate) => candidate.status === 'REVEALED')
+      ) {
+        table.phase = 'SETTLING';
+        round.status = 'SETTLING';
+        this.bump(table);
+      }
+
       return null;
     }
+
+    assertRevealOrder(table, reveal);
 
     const now = input.now ?? new Date();
     const endsAt = new Date(
@@ -414,12 +433,7 @@ export class BaccaratTableService {
     const reveal = requireActiveReveal(table, input.roundId, input.revealId);
     const progress = normalizeProgress(input.progress);
 
-    if (reveal.squeezerUserId !== user.userId) {
-      throw new BaccaratTableError(
-        'NOT_SQUEEZER',
-        `User ${user.userId} is not the active Baccarat squeezer.`,
-      );
-    }
+    assertUserCanControlSqueeze(table, reveal, user);
 
     reveal.progress = progress;
     this.bump(table);
@@ -460,11 +474,8 @@ export class BaccaratTableService {
       ? 'SYSTEM'
       : normalizeSocketUser(input.user).userId;
 
-    if (!input.system && reveal.squeezerUserId !== actorUserId) {
-      throw new BaccaratTableError(
-        'NOT_SQUEEZER',
-        `User ${actorUserId} is not the active Baccarat squeezer.`,
-      );
+    if (!input.system) {
+      assertUserCanControlSqueeze(table, reveal, normalizeSocketUser(input.user));
     }
 
     const card = requireRevealCard(round, reveal.slot);
@@ -599,12 +610,14 @@ export class BaccaratTableService {
 
     table.round = createRoundRuntime(input.round);
     table.shoe = input.shoe;
-    table.reveals = input.reveals.map(createRevealRuntime);
+    table.reveals = createRevealRuntimes(input.reveals);
     table.bets = createBetMap(input.bets);
     table.phase = toTablePhase(input.round.status);
     table.roundEndsAt = null;
     table.recentRounds = [...input.recentRounds];
     table.roadmaps = buildRoadmapsFromRecentRounds(input.recentRounds);
+    markRevealedCards(table.round, table.reveals);
+    applyRevealDerivedPhase(table);
     this.bump(table);
 
     return {
@@ -645,6 +658,29 @@ export class BaccaratTableService {
     return this.getTable(tableId).config.roundEndDelaySeconds;
   }
 
+  getAutoRevealAfterDisconnectedUser(tableId: string, userId: string) {
+    const table = this.getTable(tableId);
+    const round = table.round;
+    const reveal = table.reveals.find(
+      (candidate) => candidate.status === 'ACTIVE',
+    );
+
+    if (
+      !round ||
+      !reveal ||
+      reveal.squeezerUserId !== userId ||
+      hasConnectedUser(table, userId)
+    ) {
+      return null;
+    }
+
+    return {
+      tableId: table.tableId,
+      roundId: round.roundId,
+      revealId: reveal.revealId,
+    };
+  }
+
   getTableState(tableId: string, viewerUserId?: string): BaccaratTableState {
     return this.toState(this.getTable(tableId), viewerUserId);
   }
@@ -656,13 +692,13 @@ export class BaccaratTableService {
   ): BaccaratTableRuntime {
     const now = new Date().toISOString();
     const round = input.round ? createRoundRuntime(input.round) : null;
-    const reveals = input.reveals.map(createRevealRuntime);
+    const reveals = createRevealRuntimes(input.reveals);
 
     if (round) {
       markRevealedCards(round, reveals);
     }
 
-    return {
+    const table: BaccaratTableRuntime = {
       tableId,
       status: config.status,
       phase: round ? toTablePhase(round.status) : 'WAITING',
@@ -678,6 +714,10 @@ export class BaccaratTableService {
       version: 0,
       updatedAt: now,
     };
+
+    applyRevealDerivedPhase(table);
+
+    return table;
   }
 
   private getTable(tableId: string) {
@@ -846,6 +886,12 @@ function createRevealRuntime(
   };
 }
 
+function createRevealRuntimes(input: BaccaratRuntimeRevealSnapshot[]) {
+  return input
+    .map(createRevealRuntime)
+    .sort((left, right) => left.sequence - right.sequence);
+}
+
 function createBetMap(input: BaccaratRuntimeBetSnapshot[]) {
   return new Map(input.map((bet) => [bet.userId, { ...bet }]));
 }
@@ -883,10 +929,11 @@ function syncRoundRuntime(
     }
   }
 
-  table.reveals = reveals.map(createRevealRuntime);
+  table.reveals = createRevealRuntimes(reveals);
   markRevealedCards(table.round, table.reveals);
   table.bets = createBetMap(bets);
   table.phase = toTablePhase(input.status);
+  applyRevealDerivedPhase(table);
 }
 
 function isRevealSlotRevealed(
@@ -910,6 +957,33 @@ function markRevealedCards(
     if (card) {
       card.revealed = true;
     }
+  }
+}
+
+function applyRevealDerivedPhase(table: BaccaratTableRuntime) {
+  if (!table.round) {
+    return;
+  }
+
+  const hasActiveReveal = table.reveals.some(
+    (reveal) => reveal.status === 'ACTIVE',
+  );
+  const allRevealed =
+    table.reveals.length > 0 &&
+    table.reveals.every((reveal) => reveal.status === 'REVEALED');
+
+  if (hasActiveReveal && table.round.status === 'DEALING') {
+    table.round.status = 'SQUEEZE';
+    table.phase = 'SQUEEZE';
+    return;
+  }
+
+  if (
+    allRevealed &&
+    (table.round.status === 'DEALING' || table.round.status === 'SQUEEZE')
+  ) {
+    table.round.status = 'SETTLING';
+    table.phase = 'SETTLING';
   }
 }
 
@@ -1043,6 +1117,13 @@ function requireActiveReveal(
 ) {
   const round = requireRound(table);
 
+  if (table.phase !== 'SQUEEZE' || round.status !== 'SQUEEZE') {
+    throw new BaccaratTableError(
+      'REVEAL_NOT_ACTIVE',
+      `Baccarat table ${table.tableId} does not have an active squeeze.`,
+    );
+  }
+
   if (round.roundId !== roundId.trim()) {
     throw new BaccaratTableError(
       'ROUND_NOT_FOUND',
@@ -1062,6 +1143,60 @@ function requireActiveReveal(
   }
 
   return reveal;
+}
+
+function assertRevealPhase(table: BaccaratTableRuntime) {
+  const round = requireRound(table);
+  const tablePhaseAllowsReveal =
+    table.phase === 'DEALING' || table.phase === 'SQUEEZE';
+  const roundStatusAllowsReveal =
+    round.status === 'DEALING' || round.status === 'SQUEEZE';
+
+  if (!tablePhaseAllowsReveal || !roundStatusAllowsReveal) {
+    throw new BaccaratTableError(
+      'REVEAL_NOT_ACTIVE',
+      `Baccarat table ${table.tableId} is not in a reveal phase.`,
+    );
+  }
+}
+
+function assertRevealOrder(
+  table: BaccaratTableRuntime,
+  reveal: BaccaratRevealRuntime,
+) {
+  const earlierUnrevealed = table.reveals.some(
+    (candidate) =>
+      candidate.sequence < reveal.sequence && candidate.status !== 'REVEALED',
+  );
+
+  if (earlierUnrevealed) {
+    throw new BaccaratTableError(
+      'INVALID_REVEAL_ID',
+      `Baccarat reveal ${reveal.revealId} is not the next reveal slot.`,
+    );
+  }
+}
+
+function assertUserCanControlSqueeze(
+  table: BaccaratTableRuntime,
+  reveal: BaccaratRevealRuntime,
+  user: BaccaratSocketUser,
+) {
+  if (reveal.squeezerUserId !== user.userId) {
+    throw new BaccaratTableError(
+      'NOT_SQUEEZER',
+      `User ${user.userId} is not the active Baccarat squeezer.`,
+    );
+  }
+
+  const bet = table.bets.get(user.userId);
+
+  if (!bet || bet.status !== 'PLACED' || !hasConnectedUser(table, user.userId)) {
+    throw new BaccaratTableError(
+      'NOT_SQUEEZER',
+      `User ${user.userId} is not an active Baccarat squeezer.`,
+    );
+  }
 }
 
 function requireRevealCard(
@@ -1167,6 +1302,12 @@ function countUniqueViewers(table: BaccaratTableRuntime) {
   return new Set(
     Array.from(table.connections.values()).map((user) => user.userId),
   ).size;
+}
+
+function hasConnectedUser(table: BaccaratTableRuntime, userId: string) {
+  return Array.from(table.connections.values()).some(
+    (user) => user.userId === userId,
+  );
 }
 
 function buildBettingSnapshot(

@@ -26,7 +26,10 @@ jest.mock('./baccarat-engine.port', () => ({
   },
 }));
 
-import { BaccaratTableService } from './baccarat-table.service';
+import {
+  BaccaratTableError,
+  BaccaratTableService,
+} from './baccarat-table.service';
 import type {
   BaccaratConfigureTableInput,
   BaccaratRuntimeBetSnapshot,
@@ -146,6 +149,181 @@ describe('BaccaratTableService', () => {
       }),
     );
   });
+
+  it('rejects squeeze progress and completion from non-squeezer clients', () => {
+    const service = new BaccaratTableService();
+
+    service.configureTable(createConfiguredTable({ bets: [aliceBet(), bobBet()] }));
+    service.joinTable({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+    });
+    service.joinTable({
+      tableId: 'main',
+      socketId: 'socket-bob',
+      user: bob,
+    });
+
+    const squeeze = service.startNextReveal({
+      tableId: 'main',
+      now: new Date('2026-07-06T00:00:00.000Z'),
+    });
+
+    expect(squeeze?.state.reveal).toEqual(
+      expect.objectContaining({
+        revealId: 'reveal-player-1',
+        squeezerUserId: bob.userId,
+      }),
+    );
+    expectBaccaratErrorCode(
+      () =>
+        service.recordSqueezeProgress({
+          tableId: 'main',
+          roundId: 'round-1',
+          revealId: 'reveal-player-1',
+          user: alice,
+          progress: 50,
+        }),
+      'NOT_SQUEEZER',
+    );
+    expectBaccaratErrorCode(
+      () =>
+        service.completeActiveReveal({
+          tableId: 'main',
+          roundId: 'round-1',
+          revealId: 'reveal-player-1',
+          user: alice,
+        }),
+      'NOT_SQUEEZER',
+    );
+
+    const state = service.getTableState('main');
+
+    expect(state.player.cards[0]).toEqual({
+      slot: 'PLAYER_CARD_1',
+      hidden: true,
+    });
+    expect(state.player.cards[0]).not.toHaveProperty('rank');
+    expect(state.reveal).toEqual(
+      expect.objectContaining({
+        revealId: 'reveal-player-1',
+        status: 'ACTIVE',
+        progress: 0,
+      }),
+    );
+  });
+
+  it('creates reconnect-safe snapshots with only revealed cards visible', () => {
+    const service = new BaccaratTableService();
+
+    service.configureTable(
+      createConfiguredTable({
+        round: createRound({ status: 'SQUEEZE' }),
+        reveals: createReconnectReveals(),
+        bets: [bobBet()],
+      }),
+    );
+
+    const publicState = service.getTableState('main');
+
+    expect(publicState.phase).toBe('SQUEEZE');
+    expect(publicState.round?.outcome).toBeNull();
+    expect(publicState.player.cards[0]).toEqual({
+      slot: 'PLAYER_CARD_1',
+      rank: 'A',
+      suit: 'clubs',
+      value: 1,
+      hidden: false,
+    });
+    expect(publicState.banker.cards[0]).toEqual({
+      slot: 'BANKER_CARD_1',
+      hidden: true,
+    });
+    expect(publicState.banker.cards[0]).not.toHaveProperty('rank');
+    expect(publicState.reveal).toEqual(
+      expect.objectContaining({
+        revealId: 'reveal-banker-1',
+        slot: 'BANKER_CARD_1',
+        squeezerUserId: bob.userId,
+        status: 'ACTIVE',
+        progress: 40,
+      }),
+    );
+    expect(publicState.squeeze).toEqual(
+      expect.objectContaining({
+        revealId: 'reveal-banker-1',
+        status: 'ACTIVE',
+        progress: 40,
+      }),
+    );
+    expect(publicState.betting.myBet).toBeNull();
+
+    service.joinTable({
+      tableId: 'main',
+      socketId: 'socket-bob-reconnect',
+      user: bob,
+    });
+
+    expect(service.getTableState('main', bob.userId).betting.myBet).toEqual(
+      expect.objectContaining({
+        betId: 'bet-bob',
+        betType: 'BANKER',
+        amount: '500',
+      }),
+    );
+  });
+
+  it('auto-reveals when the active squeezer fully disconnects', () => {
+    const service = new BaccaratTableService();
+
+    service.configureTable(createConfiguredTable({ bets: [bobBet()] }));
+    service.joinTable({
+      tableId: 'main',
+      socketId: 'socket-bob-primary',
+      user: bob,
+    });
+    service.joinTable({
+      tableId: 'main',
+      socketId: 'socket-bob-backup',
+      user: bob,
+    });
+    service.startNextReveal({
+      tableId: 'main',
+      now: new Date('2026-07-06T00:00:00.000Z'),
+    });
+
+    service.disconnectSocket('socket-bob-primary');
+
+    expect(
+      service.getAutoRevealAfterDisconnectedUser('main', bob.userId),
+    ).toBeNull();
+
+    service.disconnectSocket('socket-bob-backup');
+
+    expect(service.getAutoRevealAfterDisconnectedUser('main', bob.userId)).toEqual({
+      tableId: 'main',
+      roundId: 'round-1',
+      revealId: 'reveal-player-1',
+    });
+
+    const revealed = service.completeActiveReveal({
+      tableId: 'main',
+      roundId: 'round-1',
+      revealId: 'reveal-player-1',
+      system: true,
+      now: new Date('2026-07-06T00:00:05.000Z'),
+    });
+
+    expect(revealed.cardRevealed?.card).toEqual({
+      slot: 'PLAYER_CARD_1',
+      rank: 'A',
+      suit: 'clubs',
+      value: 1,
+      hidden: false,
+    });
+    expect(revealed.event?.actorUserId).toBe('SYSTEM');
+  });
 });
 
 function createConfiguredTable(
@@ -191,7 +369,9 @@ function createConfig(): BaccaratTableConfig {
   };
 }
 
-function createRound(): BaccaratRuntimeRoundSnapshot {
+function createRound(
+  overrides: Partial<BaccaratRuntimeRoundSnapshot> = {},
+): BaccaratRuntimeRoundSnapshot {
   return {
     roundId: 'round-1',
     shoeId: 'shoe-1',
@@ -206,6 +386,7 @@ function createRound(): BaccaratRuntimeRoundSnapshot {
     outcome: 'PLAYER',
     isNatural: true,
     totalCards: 4,
+    ...overrides,
   };
 }
 
@@ -262,6 +443,33 @@ function createReveals(): BaccaratRuntimeRevealSnapshot[] {
   ];
 }
 
+function createReconnectReveals(): BaccaratRuntimeRevealSnapshot[] {
+  return createReveals().map((reveal) => {
+    if (reveal.revealId === 'reveal-player-1') {
+      return {
+        ...reveal,
+        status: 'REVEALED',
+        progress: 100,
+        revealedAt: '2026-07-06T00:00:03.000Z',
+        card: card('A'),
+      };
+    }
+
+    if (reveal.revealId === 'reveal-banker-1') {
+      return {
+        ...reveal,
+        status: 'ACTIVE',
+        squeezerUserId: bob.userId,
+        progress: 40,
+        startedAt: '2026-07-06T00:00:03.000Z',
+        endsAt: '2026-07-06T00:00:11.000Z',
+      };
+    }
+
+    return reveal;
+  });
+}
+
 function aliceBet(): BaccaratRuntimeBetSnapshot {
   return {
     betId: 'bet-alice',
@@ -297,4 +505,20 @@ function card(
   suit: BaccaratCard['suit'] = 'clubs',
 ): BaccaratCard {
   return { rank, suit };
+}
+
+function expectBaccaratErrorCode(
+  operation: () => unknown,
+  code: BaccaratTableError['code'],
+) {
+  let error: unknown;
+
+  try {
+    operation();
+  } catch (caught) {
+    error = caught;
+  }
+
+  expect(error).toBeInstanceOf(BaccaratTableError);
+  expect((error as BaccaratTableError).code).toBe(code);
 }

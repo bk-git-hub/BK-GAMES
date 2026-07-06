@@ -75,6 +75,7 @@ export class BaccaratTableConfigService {
   }
 
   async markRevealActive(input: {
+    roundId: string;
     revealId: string;
     squeezerUserId: string | null;
     startedAt: string;
@@ -82,36 +83,84 @@ export class BaccaratTableConfigService {
   }) {
     const db = (await import(dbPackageName)) as BaccaratDbModule;
 
-    await db.pool.query(
-      `
-        update baccarat_reveals
-        set
-          status = 'ACTIVE',
-          squeezer_user_id = $2,
-          progress = 0,
-          started_at = $3,
-          ends_at = $4,
-          updated_at = now()
-        where id = $1
-      `,
-      [input.revealId, input.squeezerUserId, input.startedAt, input.endsAt],
-    );
+    await db.pool.query('begin');
+
+    try {
+      const result = await db.pool.query<{ revealId: string }>(
+        `
+          update baccarat_reveals
+          set
+            status = 'ACTIVE',
+            squeezer_user_id = $3,
+            progress = 0,
+            started_at = $4,
+            ends_at = $5,
+            updated_at = now()
+          where id = $1 and round_id = $2 and status = 'PENDING'
+          returning id as "revealId"
+        `,
+        [
+          input.revealId,
+          input.roundId,
+          input.squeezerUserId,
+          input.startedAt,
+          input.endsAt,
+        ],
+      );
+
+      if (!result.rows[0]) {
+        throw new BaccaratTableError(
+          'REVEAL_NOT_ACTIVE',
+          `Baccarat reveal ${input.revealId} cannot be activated.`,
+        );
+      }
+
+      await db.pool.query(
+        `
+          update baccarat_rounds
+          set status = 'SQUEEZE', updated_at = now()
+          where id = $1 and status in ('DEALING', 'SQUEEZE')
+        `,
+        [input.roundId],
+      );
+      await db.pool.query('commit');
+    } catch (error) {
+      await db.pool.query('rollback');
+      throw error;
+    }
   }
 
-  async markRevealProgress(input: { revealId: string; progress: number }) {
+  async markRevealProgress(input: {
+    roundId: string;
+    revealId: string;
+    squeezerUserId: string;
+    progress: number;
+  }) {
     const db = (await import(dbPackageName)) as BaccaratDbModule;
 
-    await db.pool.query(
+    const result = await db.pool.query<{ revealId: string }>(
       `
         update baccarat_reveals
-        set progress = $2, updated_at = now()
-        where id = $1 and status = 'ACTIVE'
+        set progress = $4, updated_at = now()
+        where id = $1
+          and round_id = $2
+          and squeezer_user_id = $3
+          and status = 'ACTIVE'
+        returning id as "revealId"
       `,
-      [input.revealId, input.progress],
+      [input.revealId, input.roundId, input.squeezerUserId, input.progress],
     );
+
+    if (!result.rows[0]) {
+      throw new BaccaratTableError(
+        'REVEAL_NOT_ACTIVE',
+        `Baccarat reveal ${input.revealId} cannot record progress.`,
+      );
+    }
   }
 
   async markRevealCompleted(input: {
+    roundId: string;
     revealId: string;
     revealedBy: string;
     revealedAt: string;
@@ -119,25 +168,64 @@ export class BaccaratTableConfigService {
   }) {
     const db = (await import(dbPackageName)) as BaccaratDbModule;
 
-    await db.pool.query(
-      `
-        update baccarat_reveals
-        set
-          status = 'REVEALED',
-          progress = 100,
-          revealed_at = $2,
-          revealed_by = $3,
-          card_snapshot = $4::jsonb,
-          updated_at = now()
-        where id = $1 and status = 'ACTIVE'
-      `,
-      [
-        input.revealId,
-        input.revealedAt,
-        input.revealedBy,
-        JSON.stringify(input.card),
-      ],
-    );
+    await db.pool.query('begin');
+
+    try {
+      const result = await db.pool.query<{ revealId: string }>(
+        `
+          update baccarat_reveals
+          set
+            status = 'REVEALED',
+            progress = 100,
+            revealed_at = $3,
+            revealed_by = $4,
+            card_snapshot = $5::jsonb,
+            updated_at = now()
+          where id = $1 and round_id = $2 and status = 'ACTIVE'
+          returning id as "revealId"
+        `,
+        [
+          input.revealId,
+          input.roundId,
+          input.revealedAt,
+          input.revealedBy,
+          JSON.stringify(input.card),
+        ],
+      );
+
+      if (!result.rows[0]) {
+        throw new BaccaratTableError(
+          'REVEAL_NOT_ACTIVE',
+          `Baccarat reveal ${input.revealId} cannot be completed.`,
+        );
+      }
+
+      const pending = await db.pool.query<{ count: string }>(
+        `
+          select count(*) as count
+          from baccarat_reveals
+          where round_id = $1 and status in ('PENDING', 'ACTIVE')
+        `,
+        [input.roundId],
+      );
+      const pendingCount = Number(pending.rows[0]?.count ?? 0);
+
+      if (pendingCount === 0) {
+        await db.pool.query(
+          `
+            update baccarat_rounds
+            set status = 'SETTLING', updated_at = now()
+            where id = $1 and status in ('DEALING', 'SQUEEZE')
+          `,
+          [input.roundId],
+        );
+      }
+
+      await db.pool.query('commit');
+    } catch (error) {
+      await db.pool.query('rollback');
+      throw error;
+    }
   }
 
   async listRecentSettledRounds(tableId: string) {
@@ -168,7 +256,7 @@ type QueryPool = {
   query<T extends Record<string, unknown> = Record<string, unknown>>(
     text: string,
     values?: readonly unknown[],
-  ): Promise<{ rows: T[] }>;
+  ): Promise<{ rows: T[]; rowCount?: number | null }>;
 };
 
 type BaccaratTableRow = {
@@ -286,6 +374,25 @@ async function ensureActiveBaccaratRound(
   await pool.query('begin');
 
   try {
+    const existingRound = await findCurrentRoundForUpdate(pool, table.tableId);
+
+    if (existingRound) {
+      const currentShoe = await findShoeByIdForUpdate(pool, existingRound.shoeId);
+
+      if (!currentShoe) {
+        throw new BaccaratTableError(
+          'SHOE_NOT_READY',
+          `Baccarat shoe ${existingRound.shoeId} was not found.`,
+        );
+      }
+
+      await pool.query('commit');
+      return {
+        shoe: toShoeSnapshot(currentShoe, table),
+        round: toRuntimeRoundSnapshot(existingRound),
+      };
+    }
+
     let shoe = await findActiveShoeForUpdate(pool, table);
 
     if (!shoe || shouldStartNewShoe(table, shoe)) {
@@ -303,16 +410,6 @@ async function ensureActiveBaccaratRound(
       shoe = await createShoe(pool, table);
     }
 
-    const existingRound = await findCurrentRoundForUpdate(pool, table.tableId);
-
-    if (existingRound) {
-      await pool.query('commit');
-      return {
-        shoe: toShoeSnapshot(shoe, table),
-        round: toRuntimeRoundSnapshot(existingRound),
-      };
-    }
-
     const round = await createWaitingRound(pool, table, shoe);
 
     await pool.query('commit');
@@ -324,6 +421,33 @@ async function ensureActiveBaccaratRound(
     await pool.query('rollback');
     throw error;
   }
+}
+
+async function findShoeByIdForUpdate(
+  pool: QueryPool,
+  shoeId: string,
+): Promise<BaccaratShoeRow | null> {
+  const { rows } = await pool.query<BaccaratShoeRow>(
+    `
+      select
+        id as "shoeId",
+        shoe_no as "shoeNo",
+        status,
+        deck_count as "deckCount",
+        cards_total as "cardsTotal",
+        cards_dealt as "cardsDealt",
+        cards_remaining as "cardsRemaining",
+        cut_card_position as "cutCardPosition",
+        encrypted_state as "encryptedState"
+      from baccarat_shoes
+      where id = $1
+      limit 1
+      for update
+    `,
+    [shoeId],
+  );
+
+  return rows[0] ?? null;
 }
 
 async function dealBaccaratRoundInDb(

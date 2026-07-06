@@ -397,6 +397,15 @@ Correction:
 - Hidden-card safety is preserved: rank, suit, value, hand totals, and final outcome become client-visible only after the server completes the relevant reveal path.
 - Legacy/reconnect snapshots that already contain a human `squeezerUserId` still retain selected-squeezer validation and disconnect auto reveal safety.
 
+### Baccarat Flip Reveal UI
+
+Correction:
+
+- Removed the player-facing squeeze progress slider and complete button from the `/baccarat` table UI.
+- The web client now treats existing squeeze/reveal snapshots as server timing metadata and no longer exposes frontend methods that emit normal-play `squeeze:progress` or `squeeze:complete`.
+- Added a per-card flip animation when server table state transitions a card from hidden to visible.
+- Hidden cards still render only the safe card back/cover using server reveal timing; rank, suit, and value are rendered only after the server sends visible card data.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

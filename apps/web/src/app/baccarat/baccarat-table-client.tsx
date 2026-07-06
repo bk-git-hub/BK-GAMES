@@ -5,6 +5,7 @@ import {
   type ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import Link from "next/link";
@@ -129,15 +130,19 @@ export function BaccaratTableClient({
   const [betAmount, setBetAmount] = useState("100");
   const [pendingBet, setPendingBet] = useState<PendingBet | null>(null);
   const [selectedBet, setSelectedBet] = useState<SelectedBet | null>(null);
+  const [flippingSlots, setFlippingSlots] = useState<
+    ReadonlySet<BaccaratRevealSlot>
+  >(() => new Set());
+  const revealedSlotStateRef = useRef<Map<BaccaratRevealSlot, boolean>>(
+    new Map(),
+  );
+  const flipAddTimeoutsRef = useRef<Set<number>>(new Set());
+  const flipTimeoutsRef = useRef<Map<BaccaratRevealSlot, number>>(new Map());
   const state = table.tableState;
   const myBet = table.myBet;
   const currentRoundId = state?.round?.roundId ?? null;
   const activeReveal = getActiveReveal(state);
-  const isSqueezer =
-    Boolean(activeReveal?.squeezerUserId) &&
-    activeReveal?.squeezerUserId === table.player?.id &&
-    state?.phase === "SQUEEZE" &&
-    activeReveal?.status === "ACTIVE";
+  const revealProgress = useRevealProgress(activeReveal);
   const isBettingOpen =
     table.connectionStatus === "connected" &&
     state?.status === "OPEN" &&
@@ -164,6 +169,91 @@ export function BaccaratTableClient({
     () => state?.recentRounds[0] ?? null,
     [state?.recentRounds],
   );
+
+  useEffect(() => {
+    const flipAddTimeouts = flipAddTimeoutsRef.current;
+    const flipTimeouts = flipTimeoutsRef.current;
+
+    return () => {
+      for (const timeoutId of flipAddTimeouts.values()) {
+        window.clearTimeout(timeoutId);
+      }
+
+      for (const timeoutId of flipTimeouts.values()) {
+        window.clearTimeout(timeoutId);
+      }
+
+      flipAddTimeouts.clear();
+      flipTimeouts.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!state) {
+      revealedSlotStateRef.current = new Map();
+      return;
+    }
+
+    const nextVisibility = new Map<BaccaratRevealSlot, boolean>();
+    const newlyVisibleSlots: BaccaratRevealSlot[] = [];
+    const previousVisibility = revealedSlotStateRef.current;
+    const cards = [...state.player.cards, ...state.banker.cards];
+
+    for (const card of cards) {
+      const isVisible = card.hidden !== true;
+      const wasVisible = previousVisibility.get(card.slot);
+
+      nextVisibility.set(card.slot, isVisible);
+
+      if (wasVisible === false && isVisible) {
+        newlyVisibleSlots.push(card.slot);
+      }
+    }
+
+    revealedSlotStateRef.current = nextVisibility;
+
+    if (!newlyVisibleSlots.length) {
+      return;
+    }
+
+    const addTimeoutId = window.setTimeout(() => {
+      flipAddTimeoutsRef.current.delete(addTimeoutId);
+      setFlippingSlots((currentSlots) => {
+        const nextSlots = new Set(currentSlots);
+
+        for (const slot of newlyVisibleSlots) {
+          nextSlots.add(slot);
+        }
+
+        return nextSlots;
+      });
+    }, 0);
+
+    flipAddTimeoutsRef.current.add(addTimeoutId);
+
+    for (const slot of newlyVisibleSlots) {
+      const existingTimeout = flipTimeoutsRef.current.get(slot);
+
+      if (existingTimeout !== undefined) {
+        window.clearTimeout(existingTimeout);
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        flipTimeoutsRef.current.delete(slot);
+        setFlippingSlots((currentSlots) => {
+          if (!currentSlots.has(slot)) {
+            return currentSlots;
+          }
+
+          const nextSlots = new Set(currentSlots);
+          nextSlots.delete(slot);
+          return nextSlots;
+        });
+      }, 850);
+
+      flipTimeoutsRef.current.set(slot, timeoutId);
+    }
+  }, [state]);
 
   function addChip(amount: string) {
     setBetAmount((currentAmount) => addPointStrings(currentAmount, amount));
@@ -202,6 +292,7 @@ export function BaccaratTableClient({
 
   return (
     <main className="min-h-screen bg-[#f7efe2] text-white">
+      <FlipRevealStyles />
       <section className="mx-auto flex min-h-screen w-full max-w-[1540px] flex-col gap-3 px-3 py-3 sm:px-4 lg:px-5">
         <BaccaratHeader
           balance={table.walletBalance}
@@ -241,45 +332,27 @@ export function BaccaratTableClient({
                   <div className="min-w-0">
                     <HandPanel
                       activeReveal={activeReveal}
+                      flippingSlots={flippingSlots}
                       hand={state?.player ?? null}
                       label="Player"
+                      revealProgress={revealProgress}
                       tone="player"
                     />
                   </div>
                   <div className="order-3 col-span-2 min-w-0 lg:order-none lg:col-span-1">
-                    <SqueezePanel
+                    <RevealPanel
                       activeReveal={activeReveal}
-                      isSqueezer={isSqueezer}
-                      onComplete={(revealId) => {
-                        if (!currentRoundId) {
-                          return;
-                        }
-
-                        table.completeSqueeze({
-                          revealId,
-                          roundId: currentRoundId,
-                        });
-                      }}
-                      onProgress={(revealId, progress) => {
-                        if (!currentRoundId) {
-                          return;
-                        }
-
-                        table.sendSqueezeProgress({
-                          progress,
-                          revealId,
-                          roundId: currentRoundId,
-                        });
-                      }}
-                      playerName={table.player?.nickname ?? userName}
+                      revealProgress={revealProgress}
                       state={state}
                     />
                   </div>
                   <div className="min-w-0">
                     <HandPanel
                       activeReveal={activeReveal}
+                      flippingSlots={flippingSlots}
                       hand={state?.banker ?? null}
                       label="Banker"
+                      revealProgress={revealProgress}
                       tone="banker"
                     />
                   </div>
@@ -321,6 +394,30 @@ export function BaccaratTableClient({
         </div>
       </section>
     </main>
+  );
+}
+
+function FlipRevealStyles() {
+  return (
+    <style>{`
+      @keyframes baccarat-card-flip {
+        0% {
+          transform: rotateY(88deg) scale(0.94);
+          filter: brightness(0.88);
+        }
+        48% {
+          transform: rotateY(-14deg) scale(1.04);
+          filter: brightness(1.08);
+        }
+        72% {
+          transform: rotateY(7deg) scale(1.02);
+        }
+        100% {
+          transform: rotateY(0deg) scale(1);
+          filter: brightness(1);
+        }
+      }
+    `}</style>
   );
 }
 
@@ -423,7 +520,7 @@ function TableStatusStrip({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <MiniBadge>{state?.status ?? "NO_STATE"}</MiniBadge>
-          <MiniBadge>{state?.phase ?? "CONNECTING"}</MiniBadge>
+          <MiniBadge>{formatPhaseLabel(state?.phase)}</MiniBadge>
           <MiniBadge>
             <Timer className="size-3" />
             {countdown ?? "No timer"}
@@ -474,13 +571,17 @@ function TableStatusStrip({
 
 function HandPanel({
   activeReveal,
+  flippingSlots,
   hand,
   label,
+  revealProgress,
   tone,
 }: {
   activeReveal: ReturnType<typeof getActiveReveal>;
+  flippingSlots: ReadonlySet<BaccaratRevealSlot>;
   hand: BaccaratHandSnapshot | null;
   label: string;
+  revealProgress: number;
   tone: "player" | "banker";
 }) {
   const cards = hand?.cards ?? [];
@@ -521,8 +622,10 @@ function HandPanel({
             <BaccaratCard
               activeReveal={activeReveal}
               card={card}
+              flippingSlots={flippingSlots}
               index={index}
               key={`${card.slot}:${index}`}
+              revealProgress={revealProgress}
             />
           ))
         ) : (
@@ -536,41 +639,55 @@ function HandPanel({
 function BaccaratCard({
   activeReveal,
   card,
+  flippingSlots,
   index,
+  revealProgress,
 }: {
   activeReveal: ReturnType<typeof getActiveReveal>;
   card: BaccaratCardView;
+  flippingSlots: ReadonlySet<BaccaratRevealSlot>;
   index: number;
+  revealProgress: number;
 }) {
+  const rotationClass = index % 2 === 0 ? "rotate-[-2deg]" : "rotate-[2deg]";
+
   if (card.hidden === true) {
-    const isActiveSqueezeCard =
+    const isActiveRevealCard =
       activeReveal?.slot === card.slot && activeReveal.status === "ACTIVE";
 
     return (
-      <SqueezeCardBack
-        isActive={isActiveSqueezeCard}
-        progress={isActiveSqueezeCard ? activeReveal.progress : 0}
-        rotationClass={index % 2 === 0 ? "rotate-[-2deg]" : "rotate-[2deg]"}
+      <BaccaratCardBack
+        isActive={isActiveRevealCard}
+        progress={isActiveRevealCard ? revealProgress : 0}
+        rotationClass={rotationClass}
         slot={card.slot}
       />
     );
   }
 
+  const isFlipping = flippingSlots.has(card.slot);
+
   return (
-    <BaccaratCardFace
-      card={card}
-      rotationClass={index % 2 === 0 ? "rotate-[-2deg]" : "rotate-[2deg]"}
-    />
+    <div
+      className={cn("relative shrink-0 [perspective:720px]", rotationClass)}
+      data-card-slot={card.slot}
+      data-reveal-state={isFlipping ? "flipping" : "visible"}
+    >
+      <div
+        className={cn(
+          "origin-center [transform-style:preserve-3d]",
+          isFlipping
+            ? "will-change-transform motion-safe:animate-[baccarat-card-flip_760ms_ease-out_both]"
+            : "",
+        )}
+      >
+        <BaccaratCardFace card={card} />
+      </div>
+    </div>
   );
 }
 
-function BaccaratCardFace({
-  card,
-  rotationClass,
-}: {
-  card: BaccaratVisibleCardView;
-  rotationClass: string;
-}) {
+function BaccaratCardFace({ card }: { card: BaccaratVisibleCardView }) {
   const suitTheme = getSuitTheme(card.suit);
 
   return (
@@ -578,7 +695,6 @@ function BaccaratCardFace({
       aria-label={`${card.rank} of ${card.suit}`}
       className={cn(
         "relative isolate aspect-[5/7] w-[56px] shrink-0 overflow-hidden rounded-lg border border-[#fff8d6] bg-[#fffaf0] text-[#111827] shadow-xl shadow-black/35 transition sm:w-[74px] md:w-[88px]",
-        rotationClass,
       )}
     >
       <div
@@ -717,7 +833,7 @@ function getSuitTheme(suit: BaccaratCardSuit) {
   return darkSuitTheme;
 }
 
-function SqueezeCardBack({
+function BaccaratCardBack({
   isActive,
   progress,
   rotationClass,
@@ -746,8 +862,10 @@ function SqueezeCardBack({
   return (
     <div
       aria-label={`${slotLabel(slot)} hidden${
-        isActive ? ` squeeze ${safeProgress}%` : ""
+        isActive ? ` auto reveal ${safeProgress}%` : ""
       }`}
+      data-card-slot={slot}
+      data-reveal-state={isActive ? "revealing" : "hidden"}
       className={cn(
         "relative isolate aspect-[5/7] shrink-0 overflow-hidden rounded-lg border border-[#fff8d6]/70 bg-[#fffaf0] shadow-xl shadow-black/35 transition",
         size === "featured"
@@ -832,22 +950,16 @@ function EmptyCardRow() {
   );
 }
 
-function SqueezePanel({
+function RevealPanel({
   activeReveal,
-  isSqueezer,
-  onComplete,
-  onProgress,
-  playerName,
+  revealProgress,
   state,
 }: {
   activeReveal: ReturnType<typeof getActiveReveal>;
-  isSqueezer: boolean;
-  onComplete: (revealId: string) => void;
-  onProgress: (revealId: string, progress: number) => void;
-  playerName: string;
+  revealProgress: number;
   state: BaccaratTableState | null;
 }) {
-  const progress = clampPercent(activeReveal?.progress ?? 0);
+  const progress = revealProgress;
   const countdown = useCountdown(activeReveal?.endsAt);
 
   if (!state || !activeReveal) {
@@ -856,11 +968,11 @@ function SqueezePanel({
         <div className="mx-auto grid size-12 place-items-center rounded-lg border border-[#d8ecff]/25 bg-[#0b3b73] text-[#f5c95f]">
           <Sparkles className="size-5" />
         </div>
-        <h2 className="mt-3 text-lg font-semibold">Squeeze</h2>
+        <h2 className="mt-3 text-lg font-semibold">Card Reveal</h2>
         <p className="mt-1 text-sm text-white/65">
           {state?.phase === "WAITING_BETS"
             ? "Betting window is open."
-            : "Reveal state will appear here."}
+            : "Waiting for the next server reveal."}
         </p>
       </section>
     );
@@ -874,14 +986,12 @@ function SqueezePanel({
       <h2 className="mt-3 text-lg font-semibold">{slotLabel(activeReveal.slot)}</h2>
       <p className="mt-1 text-sm text-white/65">
         {activeReveal.isAutoReveal
-          ? "System auto reveal"
-          : isSqueezer
-            ? `${playerName} is squeezing`
-            : "Squeeze in progress"}
+          ? "Automatic server reveal"
+          : "Server reveal in progress"}
       </p>
 
       <div className="mt-4 flex justify-center">
-        <SqueezeCardBack
+        <BaccaratCardBack
           isActive={activeReveal.status === "ACTIVE"}
           progress={progress}
           size="featured"
@@ -902,29 +1012,6 @@ function SqueezePanel({
         </div>
         <p className="mt-2 text-sm font-semibold">{progress}%</p>
       </div>
-
-      {isSqueezer ? (
-        <div className="mt-4 space-y-3">
-          <input
-            aria-label="Squeeze progress"
-            className="w-full accent-[#f5c95f]"
-            max={100}
-            min={0}
-            onChange={(event) => {
-              const nextProgress = Number(event.target.value);
-              onProgress(activeReveal.revealId, nextProgress);
-            }}
-            type="range"
-            value={progress}
-          />
-          <Button
-            className="w-full bg-[#f5c95f] text-[#111827] hover:bg-[#ffe08a]"
-            onClick={() => onComplete(activeReveal.revealId)}
-          >
-            Complete Reveal
-          </Button>
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -1134,7 +1221,7 @@ function MyRoundPanel({
 
       <div className="mt-3 grid gap-2">
         <InfoRow label="Wallet" value={`${formatPoints(walletBalance)} pts`} />
-        <InfoRow label="Phase" value={state?.phase ?? "Connecting"} />
+        <InfoRow label="Phase" value={formatPhaseLabel(state?.phase)} />
         <InfoRow
           label="My bet"
           value={
@@ -1631,6 +1718,42 @@ function useCountdown(endsAt: string | null | undefined) {
   return `${minutes}:${String(secondRemainder).padStart(2, "0")}`;
 }
 
+function useRevealProgress(activeReveal: ReturnType<typeof getActiveReveal>) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!activeReveal?.endsAt || activeReveal.status !== "ACTIVE") {
+      return;
+    }
+
+    const interval = window.setInterval(() => setNowMs(Date.now()), 100);
+    return () => window.clearInterval(interval);
+  }, [activeReveal?.endsAt, activeReveal?.revealId, activeReveal?.status]);
+
+  const serverProgress = clampPercent(activeReveal?.progress ?? 0);
+
+  if (
+    !activeReveal ||
+    activeReveal.status !== "ACTIVE" ||
+    !activeReveal.startedAt ||
+    !activeReveal.endsAt
+  ) {
+    return serverProgress;
+  }
+
+  const startedAtMs = new Date(activeReveal.startedAt).getTime();
+  const endsAtMs = new Date(activeReveal.endsAt).getTime();
+  const durationMs = endsAtMs - startedAtMs;
+
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return serverProgress;
+  }
+
+  const timerProgress = ((nowMs - startedAtMs) / durationMs) * 100;
+
+  return Math.max(serverProgress, clampPercent(timerProgress));
+}
+
 function isPositivePointAmount(value: string) {
   const normalizedValue = value.trim();
 
@@ -1692,6 +1815,24 @@ function formatOutcome(value: BaccaratBetType | BaccaratRoundOutcome) {
     .split("_")
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function formatPhaseLabel(
+  phase: BaccaratTableState["phase"] | null | undefined,
+) {
+  if (!phase) {
+    return "Connecting";
+  }
+
+  if (phase === "SQUEEZE") {
+    return "REVEAL";
+  }
+
+  if (phase === "WAITING_BETS") {
+    return "BETTING";
+  }
+
+  return phase.replaceAll("_", " ");
 }
 
 function outcomeInitial(outcome: BaccaratRoundOutcome) {

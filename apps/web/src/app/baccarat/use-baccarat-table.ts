@@ -13,9 +13,7 @@ import {
   type BaccaratPlaceBetPayload,
   type BaccaratRoundSettledPayload,
   type BaccaratSocketErrorPayload,
-  type BaccaratSqueezeCompletePayload,
   type BaccaratSqueezeCompletedPayload,
-  type BaccaratSqueezeProgressPayload,
   type BaccaratSqueezeProgressedPayload,
   type BaccaratSqueezeStartedPayload,
   type BaccaratSqueezeTimeoutPayload,
@@ -76,10 +74,6 @@ export function useBaccaratTable({
 }: UseBaccaratTableInput) {
   const socketRef = useRef<Socket | null>(null);
   const latestTableStateRef = useRef<BaccaratTableState | null>(null);
-  const lastProgressSentRef = useRef<{
-    progress: number;
-    sentAtMs: number;
-  } | null>(null);
   const [connectionAttempt, setConnectionAttempt] = useState(0);
   const [connectionStatus, setConnectionStatus] =
     useState<BaccaratConnectionStatus>("requesting-token");
@@ -266,8 +260,8 @@ export function useBaccaratTable({
             recordTimeline({
               createdAt: payload.createdAt,
               detail: slotLabel(payload.reveal.slot),
-              id: `squeeze-started:${payload.reveal.revealId}`,
-              title: "Squeeze started",
+              id: `reveal-started:${payload.reveal.revealId}`,
+              title: "Reveal started",
               tone: "neutral",
             });
           },
@@ -279,8 +273,8 @@ export function useBaccaratTable({
             recordTimeline({
               createdAt: payload.createdAt,
               detail: `${slotLabelFromRevealId(payload.revealId)} ${payload.progress}%`,
-              id: `squeeze-progress:${payload.revealId}:${payload.stateVersion}`,
-              title: "Squeeze progress",
+              id: `reveal-progress:${payload.revealId}:${payload.stateVersion}`,
+              title: "Reveal progress",
               tone: "neutral",
             });
           },
@@ -291,9 +285,9 @@ export function useBaccaratTable({
           (payload: BaccaratSqueezeCompletedPayload) => {
             recordTimeline({
               createdAt: payload.createdAt,
-              detail: "Server accepted the reveal completion.",
-              id: `squeeze-complete:${payload.revealId}:${payload.stateVersion}`,
-              title: "Squeeze complete",
+              detail: "Server completed the reveal.",
+              id: `reveal-complete:${payload.revealId}:${payload.stateVersion}`,
+              title: "Reveal complete",
               tone: "success",
             });
           },
@@ -305,8 +299,8 @@ export function useBaccaratTable({
             recordTimeline({
               createdAt: payload.createdAt,
               detail: "The active reveal timed out.",
-              id: `squeeze-timeout:${payload.revealId}:${payload.stateVersion}`,
-              title: "Squeeze timeout",
+              id: `reveal-timeout:${payload.revealId}:${payload.stateVersion}`,
+              title: "Reveal timeout",
               tone: "warning",
             });
           },
@@ -451,50 +445,7 @@ export function useBaccaratTable({
     return commandId;
   }, []);
 
-  const sendSqueezeProgress = useCallback(
-    (input: { progress: number; revealId: string; roundId: string }) => {
-      const progress = clampProgress(input.progress);
-      const lastSent = lastProgressSentRef.current;
-      const nowMs = Date.now();
-
-      if (
-        lastSent &&
-        Math.abs(lastSent.progress - progress) < 4 &&
-        nowMs - lastSent.sentAtMs < 250 &&
-        progress !== 0 &&
-        progress !== 100
-      ) {
-        return;
-      }
-
-      lastProgressSentRef.current = {
-        progress,
-        sentAtMs: nowMs,
-      };
-
-      socketRef.current?.emit(BACCARAT_CLIENT_EVENTS.SQUEEZE_PROGRESS, {
-        progress,
-        revealId: input.revealId,
-        roundId: input.roundId,
-        tableId,
-      } satisfies BaccaratSqueezeProgressPayload);
-    },
-    [],
-  );
-
-  const completeSqueeze = useCallback(
-    (input: { revealId: string; roundId: string }) => {
-      socketRef.current?.emit(BACCARAT_CLIENT_EVENTS.SQUEEZE_COMPLETE, {
-        revealId: input.revealId,
-        roundId: input.roundId,
-        tableId,
-      } satisfies BaccaratSqueezeCompletePayload);
-    },
-    [],
-  );
-
   return {
-    completeSqueeze,
     connectionStatus,
     joinTable,
     lastBetAccepted,
@@ -506,7 +457,6 @@ export function useBaccaratTable({
     placeBet,
     player,
     reconnect,
-    sendSqueezeProgress,
     socketError,
     statusMessage,
     tableId,
@@ -565,14 +515,6 @@ function createCommandId(prefix: string) {
   return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
-function clampProgress(value: number) {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
 function tableEventTitle(type: BaccaratTableEventPayload["type"]) {
   const labels: Record<BaccaratTableEventPayload["type"], string> = {
     BET_PLACED: "Bet placed",
@@ -584,10 +526,10 @@ function tableEventTitle(type: BaccaratTableEventPayload["type"]) {
     ROUND_SETTLED: "Round settled",
     ROUND_STARTED: "Round started",
     SHOE_STARTED: "Shoe started",
-    SQUEEZE_COMPLETED: "Squeeze complete",
-    SQUEEZE_PROGRESS: "Squeeze progress",
-    SQUEEZE_STARTED: "Squeeze started",
-    SQUEEZE_TIMEOUT: "Squeeze timeout",
+    SQUEEZE_COMPLETED: "Reveal complete",
+    SQUEEZE_PROGRESS: "Reveal progress",
+    SQUEEZE_STARTED: "Reveal started",
+    SQUEEZE_TIMEOUT: "Reveal timeout",
     TABLE_JOINED: "Table joined",
     TABLE_LEFT: "Table left",
   };

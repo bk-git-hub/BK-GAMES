@@ -1,0 +1,7 @@
+interface:
+  display_name: "BK Games Runtime"
+  short_description: "User-owned BK-Games runtime helper"
+  default_prompt: "Use $bk-games-runtime in the Runtime Helper thread to operate the BK-Games local dev servers."
+
+policy:
+  allow_implicit_invocation: false

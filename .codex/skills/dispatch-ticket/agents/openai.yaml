@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dispatch Ticket"
+  short_description: "Assign tickets to one idle matching thread"
+  default_prompt: "Use $dispatch-ticket to assign this ticket to one idle matching worker thread and update the board."

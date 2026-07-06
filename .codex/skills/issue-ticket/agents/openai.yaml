@@ -1,0 +1,4 @@
+interface:
+  display_name: "Issue Ticket"
+  short_description: "Create board-only orchestration tickets"
+  default_prompt: "Use $issue-ticket to turn this request into a board ticket without contacting worker threads."

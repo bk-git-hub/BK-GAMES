@@ -364,6 +364,13 @@ Correction:
 - Hidden hands still show `Hidden` until the server-provided hand total is safe to display; the frontend does not calculate or infer hidden card values.
 - Removed recent-round card-count copy while keeping outcome and settled score information visible.
 
+### Baccarat Brand Palette Alignment
+
+Correction:
+
+- Aligned `/baccarat` route colors with the BK Games homepage/lobby palette: cream shell, ink borders, navy table surfaces, red Banker accents, gold action highlights, and ice-blue Player accents.
+- Preserved Player/Banker/Tie contrast, score/hidden badges, betting confirmation, roadmaps, and mobile layout without changing game behavior.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

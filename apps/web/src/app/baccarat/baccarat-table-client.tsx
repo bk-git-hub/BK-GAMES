@@ -71,21 +71,21 @@ type SelectedBet = {
 
 const betChoices: BetChoice[] = [
   {
-    accentClass: "border-sky-200/55 bg-[#13365a] text-sky-50",
+    accentClass: "border-[#8fc4e8]/70 bg-[#0b3b73] text-[#eef7ff]",
     betType: "PLAYER",
     label: "Player",
     odds: "1:1",
     totalKey: "player",
   },
   {
-    accentClass: "border-rose-200/55 bg-[#5a1d2d] text-rose-50",
+    accentClass: "border-[#ff9aa0]/70 bg-[#7d161b] text-[#fff3f1]",
     betType: "BANKER",
     label: "Banker",
     odds: "0.95:1",
     totalKey: "banker",
   },
   {
-    accentClass: "border-amber-200/55 bg-[#4b3516] text-amber-50",
+    accentClass: "border-[#f5c95f]/75 bg-[#805f12] text-[#fff8d6]",
     betType: "TIE",
     label: "Tie",
     odds: "8:1",
@@ -178,7 +178,7 @@ export function BaccaratTableClient({
   }
 
   return (
-    <main className="min-h-screen bg-[#12111a] text-white">
+    <main className="min-h-screen bg-[#f7efe2] text-white">
       <section className="mx-auto flex min-h-screen w-full max-w-[1540px] flex-col gap-3 px-3 py-3 sm:px-4 lg:px-5">
         <BaccaratHeader
           balance={table.walletBalance}
@@ -201,10 +201,10 @@ export function BaccaratTableClient({
 
         <div className="grid flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0">
-            <section className="relative min-h-[620px] overflow-hidden rounded-[1.25rem] border border-white/12 bg-[#171827] shadow-2xl shadow-black/40 lg:min-h-[calc(100svh-8.6rem)]">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_46%_18%,rgba(245,201,95,0.16),transparent_30%),radial-gradient(circle_at_16%_78%,rgba(143,196,232,0.11),transparent_32%),radial-gradient(circle_at_84%_76%,rgba(200,39,46,0.14),transparent_32%)]" />
-              <div className="absolute inset-x-[4%] bottom-[5%] top-[16%] rounded-[45%] border-[18px] border-[#3a2430] bg-[#242536] shadow-[inset_0_0_90px_rgba(0,0,0,0.46),0_35px_90px_rgba(0,0,0,0.4)] sm:border-[24px]" />
-              <div className="absolute inset-x-[10%] bottom-[12%] top-[24%] rounded-[45%] border border-amber-100/20 bg-[radial-gradient(circle_at_50%_38%,rgba(255,255,255,0.055),transparent_45%)]" />
+            <section className="relative min-h-[620px] overflow-hidden rounded-[1.25rem] border-[2px] border-[#111827] bg-[#071c3f] shadow-[10px_12px_0_#0b3b73] lg:min-h-[calc(100svh-8.6rem)]">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_46%_18%,rgba(245,201,95,0.2),transparent_30%),radial-gradient(circle_at_16%_78%,rgba(143,196,232,0.16),transparent_32%),radial-gradient(circle_at_84%_76%,rgba(200,39,46,0.18),transparent_32%)]" />
+              <div className="absolute inset-x-[4%] bottom-[5%] top-[16%] rounded-[45%] border-[18px] border-[#111827] bg-[#0b3b73] shadow-[inset_0_0_90px_rgba(7,28,63,0.72),0_35px_90px_rgba(7,28,63,0.38)] sm:border-[24px]" />
+              <div className="absolute inset-x-[10%] bottom-[12%] top-[24%] rounded-[45%] border border-[#d8ecff]/25 bg-[radial-gradient(circle_at_50%_38%,rgba(216,236,255,0.08),transparent_45%)]" />
 
               <div className="relative z-10 flex flex-col gap-3 p-3 sm:p-4">
                 <TableStatusStrip
@@ -317,11 +317,11 @@ function BaccaratHeader({
   userName: string;
 }) {
   return (
-    <header className="grid gap-3 rounded-[1rem] border border-white/12 bg-[#171827]/90 px-3 py-2.5 shadow-xl shadow-black/25 backdrop-blur md:grid-cols-[1fr_auto] md:items-center">
+    <header className="grid gap-3 rounded-[1rem] border-[2px] border-[#111827] bg-[#fff8ed]/95 px-3 py-2.5 text-[#111827] shadow-[6px_7px_0_#0b3b73] backdrop-blur md:grid-cols-[1fr_auto] md:items-center">
       <div className="flex min-w-0 items-center gap-3">
         <Link
           href="/lobby"
-          className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-[#24283a] text-white transition hover:bg-[#30364d]"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[#071c3f] bg-[#0b3b73] text-white transition hover:bg-[#c8272e]"
           aria-label="Back to lobby"
         >
           <ArrowLeft className="size-4" />
@@ -333,7 +333,7 @@ function BaccaratHeader({
             </h1>
             <StatusBadge status={connectionStatus} />
           </div>
-          <p className="truncate text-sm text-white/55">
+          <p className="truncate text-sm text-[#4b5874]">
             {userName} · {userEmail}
           </p>
         </div>
@@ -369,14 +369,14 @@ function HeaderMetric({
   value: string;
 }) {
   return (
-    <div className="rounded-lg border border-white/12 bg-[#0f1220]/90 px-3 py-2">
-      <div className="flex items-center gap-2 text-xs text-white/50">
+    <div className="rounded-lg border border-[#d8c09a] bg-[#fffaf0] px-3 py-2">
+      <div className="flex items-center gap-2 text-xs font-bold text-[#4b5874]">
         {icon}
         {label}
       </div>
       <div className="mt-1 flex items-end justify-between gap-3">
-        <p className="truncate text-base font-semibold">{value}</p>
-        <p className="truncate text-xs text-amber-100/80">{detail}</p>
+        <p className="truncate text-base font-black text-[#111827]">{value}</p>
+        <p className="truncate text-xs font-bold text-[#c8272e]">{detail}</p>
       </div>
     </div>
   );
@@ -396,7 +396,7 @@ function TableStatusStrip({
   const countdown = useCountdown(getPrimaryTimer(state));
 
   return (
-    <div className="grid gap-2 rounded-lg border border-white/12 bg-[#101320]/90 p-3 backdrop-blur sm:grid-cols-[1fr_auto] sm:items-center">
+    <div className="grid gap-2 rounded-lg border border-[#d8ecff]/20 bg-[#071c3f]/92 p-3 backdrop-blur sm:grid-cols-[1fr_auto] sm:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <MiniBadge>{state?.status ?? "NO_STATE"}</MiniBadge>
@@ -416,7 +416,7 @@ function TableStatusStrip({
 
       <div className="flex flex-wrap gap-2">
         {latestResult ? (
-          <div className="rounded-lg border border-white/12 bg-[#202337]/90 px-3 py-2 text-sm">
+          <div className="rounded-lg border border-[#d8ecff]/20 bg-[#0b3b73]/90 px-3 py-2 text-sm">
             <span className={outcomeTextClass(latestResult.outcome)}>
               {formatOutcome(latestResult.outcome)}
             </span>
@@ -427,7 +427,7 @@ function TableStatusStrip({
           </div>
         ) : null}
         <Button
-          className="border-white/12 bg-[#202337] text-white hover:bg-[#2c3149]"
+          className="border-[#d8ecff]/20 bg-[#0b3b73] text-white hover:bg-[#c8272e]"
           onClick={onJoin}
           size="sm"
           variant="outline"
@@ -436,7 +436,7 @@ function TableStatusStrip({
           Join
         </Button>
         <Button
-          className="border-white/12 bg-[#202337] text-white hover:bg-[#2c3149]"
+          className="border-[#d8ecff]/20 bg-[#0b3b73] text-white hover:bg-[#c8272e]"
           onClick={onReconnect}
           size="sm"
           variant="outline"
@@ -468,8 +468,8 @@ function HandPanel({
       className={cn(
         "h-full min-w-0 rounded-[1rem] border p-2.5 shadow-xl shadow-black/25 sm:p-3",
         tone === "player"
-          ? "border-sky-200/45 bg-[#11243a]/90"
-          : "border-rose-200/45 bg-[#321924]/90",
+          ? "border-[#8fc4e8]/65 bg-[#082b55]/92"
+          : "border-[#ff9aa0]/65 bg-[#67191f]/92",
       )}
     >
       <div className="flex items-start justify-between gap-2 sm:gap-3">
@@ -483,8 +483,8 @@ function HandPanel({
           className={cn(
             "shrink-0 rounded-lg border px-2 py-1.5 text-center sm:px-3 sm:py-2",
             tone === "player"
-              ? "border-sky-100/35 bg-[#17385b] text-sky-50"
-              : "border-rose-100/35 bg-[#4b2030] text-rose-50",
+              ? "border-[#d8ecff]/45 bg-[#0b3b73] text-[#eef7ff]"
+              : "border-[#ffb8bd]/45 bg-[#7d161b] text-[#fff3f1]",
           )}
         >
           <p className="text-xs text-white/65">Score</p>
@@ -579,12 +579,12 @@ function SqueezeCardBack({
         isActive ? ` squeeze ${safeProgress}%` : ""
       }`}
       className={cn(
-        "relative isolate aspect-[5/7] shrink-0 overflow-hidden rounded-lg border border-amber-100/25 shadow-xl shadow-black/35 transition",
+        "relative isolate aspect-[5/7] shrink-0 overflow-hidden rounded-lg border border-[#f5c95f]/30 shadow-xl shadow-black/35 transition",
         size === "featured"
           ? "w-[108px] sm:w-[128px]"
           : "w-[56px] sm:w-[74px] md:w-[88px]",
         rotationClass,
-        isActive ? "ring-2 ring-amber-200/70 ring-offset-2 ring-offset-black/30" : "",
+        isActive ? "ring-2 ring-[#f5c95f]/75 ring-offset-2 ring-offset-black/30" : "",
       )}
     >
       <div
@@ -593,11 +593,11 @@ function SqueezeCardBack({
       />
       <div
         aria-hidden="true"
-        className="absolute inset-[9%] rounded-md border border-amber-950/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.44),rgba(255,255,255,0.08))]"
+        className="absolute inset-[9%] rounded-md border border-[#111827]/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.44),rgba(255,255,255,0.08))]"
       />
       <div
         aria-hidden="true"
-        className="absolute bottom-[10%] left-[16%] right-[16%] h-1 rounded-full bg-amber-950/10"
+        className="absolute bottom-[10%] left-[16%] right-[16%] h-1 rounded-full bg-[#111827]/10"
       />
 
       {isActive ? (
@@ -617,15 +617,15 @@ function SqueezeCardBack({
 
       <div
         aria-hidden="true"
-        className="absolute inset-y-0 right-0 z-10 overflow-hidden rounded-r-lg border-l border-amber-100/25 bg-[linear-gradient(135deg,#101828,#19213a_55%,#5a2135)] shadow-[-10px_0_18px_rgba(0,0,0,0.24)] transition-[width]"
+        className="absolute inset-y-0 right-0 z-10 overflow-hidden rounded-r-lg border-l border-[#f5c95f]/30 bg-[linear-gradient(135deg,#071c3f,#0b3b73_55%,#c8272e)] shadow-[-10px_0_18px_rgba(0,0,0,0.24)] transition-[width]"
         style={coverStyle}
       >
-        <div className="absolute inset-2 rounded-md border border-amber-100/20 bg-[radial-gradient(circle_at_50%_50%,rgba(251,191,36,0.2),transparent_55%)]" />
+        <div className="absolute inset-2 rounded-md border border-[#f5c95f]/25 bg-[radial-gradient(circle_at_50%_50%,rgba(245,201,95,0.22),transparent_55%)]" />
         <div className="absolute inset-0 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.09)_0_1px,transparent_1px_7px)] opacity-70" />
         <div className="absolute inset-0 grid place-items-center">
           <div
             className={cn(
-              "grid place-items-center rounded-full border border-amber-100/30 bg-black/25 font-semibold text-amber-50/80",
+              "grid place-items-center rounded-full border border-[#f5c95f]/35 bg-black/25 font-semibold text-[#fff8d6]/85",
               size === "featured" ? "size-14 text-base" : "size-12 text-sm",
             )}
           >
@@ -642,7 +642,7 @@ function EmptyCardRow() {
     <div className="flex gap-2 opacity-70 sm:gap-3">
       {[0, 1].map((slot) => (
         <div
-          className="aspect-[5/7] w-[56px] rounded-lg border border-dashed border-white/20 bg-[#202337]/65 sm:w-[74px] md:w-[88px]"
+          className="aspect-[5/7] w-[56px] rounded-lg border border-dashed border-[#d8ecff]/25 bg-[#0b3b73]/65 sm:w-[74px] md:w-[88px]"
           key={slot}
         />
       ))}
@@ -670,8 +670,8 @@ function SqueezePanel({
 
   if (!state || !activeReveal) {
     return (
-      <section className="rounded-[1rem] border border-white/12 bg-[#141827]/90 p-3 text-center shadow-xl shadow-black/25">
-        <div className="mx-auto grid size-12 place-items-center rounded-lg border border-white/12 bg-[#24283a] text-amber-100">
+      <section className="rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/92 p-3 text-center shadow-xl shadow-black/25">
+        <div className="mx-auto grid size-12 place-items-center rounded-lg border border-[#d8ecff]/25 bg-[#0b3b73] text-[#f5c95f]">
           <Sparkles className="size-5" />
         </div>
         <h2 className="mt-3 text-lg font-semibold">Squeeze</h2>
@@ -685,8 +685,8 @@ function SqueezePanel({
   }
 
   return (
-    <section className="rounded-[1rem] border border-amber-200/30 bg-[#16131e]/95 p-3 text-center shadow-xl shadow-black/25">
-      <div className="mx-auto grid size-12 place-items-center rounded-lg border border-amber-100/25 bg-[#4b3516] text-amber-100">
+    <section className="rounded-[1rem] border border-[#f5c95f]/45 bg-[#071c3f]/95 p-3 text-center shadow-xl shadow-black/25">
+      <div className="mx-auto grid size-12 place-items-center rounded-lg border border-[#f5c95f]/35 bg-[#805f12] text-[#fff8d6]">
         <Gauge className="size-5" />
       </div>
       <h2 className="mt-3 text-lg font-semibold">{slotLabel(activeReveal.slot)}</h2>
@@ -707,14 +707,14 @@ function SqueezePanel({
         />
       </div>
 
-      <div className="mt-4 rounded-lg border border-white/12 bg-[#202337]/90 p-3">
+      <div className="mt-4 rounded-lg border border-[#d8ecff]/20 bg-[#0b3b73]/90 p-3">
         <div className="flex items-center justify-between text-xs text-white/65">
           <span>{activeReveal.status}</span>
           <span>{countdown ?? "No timer"}</span>
         </div>
         <div className="mt-3 h-3 overflow-hidden rounded-full bg-black/35">
           <div
-            className="h-full rounded-full bg-[linear-gradient(90deg,#38bdf8,#facc15,#fb7185)] transition-[width]"
+            className="h-full rounded-full bg-[linear-gradient(90deg,#8fc4e8,#f5c95f,#c8272e)] transition-[width]"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -725,7 +725,7 @@ function SqueezePanel({
         <div className="mt-4 space-y-3">
           <input
             aria-label="Squeeze progress"
-            className="w-full accent-amber-300"
+            className="w-full accent-[#f5c95f]"
             max={100}
             min={0}
             onChange={(event) => {
@@ -736,7 +736,7 @@ function SqueezePanel({
             value={progress}
           />
           <Button
-            className="w-full bg-amber-300 text-zinc-950 hover:bg-amber-200"
+            className="w-full bg-[#f5c95f] text-[#111827] hover:bg-[#ffe08a]"
             onClick={() => onComplete(activeReveal.revealId)}
           >
             Complete Reveal
@@ -801,7 +801,7 @@ function BettingPanel({
           : "Betting closed";
 
   return (
-    <section className="rounded-[1rem] border border-white/12 bg-[#141827]/95 p-3 shadow-xl shadow-black/25">
+    <section className="rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/95 p-3 shadow-xl shadow-black/25">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Main Bet</h2>
@@ -816,7 +816,7 @@ function BettingPanel({
         <div className="flex flex-wrap gap-2">
           {quickBetAmounts.map((chip) => (
             <Button
-              className="border-white/12 bg-[#202337] text-white hover:bg-[#2c3149]"
+              className="border-[#d8ecff]/20 bg-[#0b3b73] text-white hover:bg-[#c8272e]"
               disabled={Boolean(myBet) || isBetSubmitting}
               key={chip}
               onClick={() => onAddChip(chip)}
@@ -831,7 +831,7 @@ function BettingPanel({
 
       <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <input
-          className="h-10 min-w-0 rounded-lg border border-white/15 bg-[#0f1220] px-3 text-sm font-semibold text-white outline-none transition placeholder:text-white/40 focus:border-amber-200/65"
+          className="h-10 min-w-0 rounded-lg border border-[#d8ecff]/20 bg-[#061833] px-3 text-sm font-semibold text-white outline-none transition placeholder:text-white/40 focus:border-[#f5c95f]/80"
           disabled={Boolean(myBet) || isBetSubmitting}
           inputMode="numeric"
           onChange={(event) => onAmountChange(normalizePointInput(event.target.value))}
@@ -839,7 +839,7 @@ function BettingPanel({
           value={amount}
         />
         <Button
-          className="border-white/12 bg-[#202337] text-white hover:bg-[#2c3149]"
+          className="border-[#d8ecff]/20 bg-[#0b3b73] text-white hover:bg-[#c8272e]"
           disabled={Boolean(myBet) || isBetSubmitting || !amount}
           onClick={onClear}
           variant="outline"
@@ -863,9 +863,9 @@ function BettingPanel({
                 "min-h-[122px] rounded-[0.9rem] border p-3 text-left transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45",
                 choice.accentClass,
                 isSubmitted
-                  ? "ring-2 ring-emerald-200/90"
+                  ? "ring-2 ring-[#d8ecff]/90"
                   : isPending
-                    ? "ring-2 ring-amber-200/90"
+                    ? "ring-2 ring-[#f5c95f]/90"
                     : isSelected
                       ? "ring-2 ring-white/85"
                       : "ring-0",
@@ -880,7 +880,7 @@ function BettingPanel({
             >
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xl font-semibold">{choice.label}</span>
-                <span className="rounded-md border border-white/12 bg-[#0f1220]/90 px-2 py-1 text-xs">
+                <span className="rounded-md border border-[#d8ecff]/20 bg-[#061833]/90 px-2 py-1 text-xs">
                   {choice.odds}
                 </span>
               </div>
@@ -900,7 +900,7 @@ function BettingPanel({
         })}
       </div>
 
-      <div className="mt-3 grid gap-2 rounded-lg border border-white/12 bg-[#101320]/90 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+      <div className="mt-3 grid gap-2 rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-normal text-white/45">
             Bet confirmation
@@ -910,7 +910,7 @@ function BettingPanel({
           </p>
         </div>
         <Button
-          className="bg-amber-300 text-zinc-950 hover:bg-amber-200 disabled:opacity-45"
+          className="bg-[#f5c95f] text-[#111827] hover:bg-[#ffe08a] disabled:opacity-45"
           disabled={!canConfirmBet}
           onClick={onConfirmBet}
         >
@@ -939,9 +939,9 @@ function MyRoundPanel({
     : null;
 
   return (
-    <section className="rounded-[1rem] border border-white/12 bg-[#141827]/95 p-3 shadow-xl shadow-black/25">
+    <section className="rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/95 p-3 shadow-xl shadow-black/25">
       <div className="flex items-center gap-2">
-        <WalletCards className="size-4 text-amber-100" />
+        <WalletCards className="size-4 text-[#f5c95f]" />
         <h2 className="text-lg font-semibold">My Round</h2>
       </div>
 
@@ -978,9 +978,9 @@ function RoadmapPanel({
   roadmaps: BaccaratRoadmapSnapshot | null;
 }) {
   return (
-    <section className="rounded-[1rem] border border-white/12 bg-[#171827]/95 p-3 shadow-xl shadow-black/25">
+    <section className="rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/95 p-3 shadow-xl shadow-black/25">
       <div className="flex items-center gap-2">
-        <CircleDot className="size-4 text-amber-100" />
+        <CircleDot className="size-4 text-[#f5c95f]" />
         <h2 className="text-lg font-semibold">Roadmaps</h2>
       </div>
       <div className="mt-3 grid gap-3">
@@ -1018,7 +1018,7 @@ function BeadPlateGrid({
 
   return (
     <div
-      className="grid overflow-hidden rounded-lg border border-white/12 bg-[#0f1220]/90"
+      className="grid overflow-hidden rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90"
       style={{
         gridTemplateColumns: `repeat(${maxCol + 1}, minmax(22px, 1fr))`,
       }}
@@ -1055,12 +1055,12 @@ function BigRoadGrid({
   return (
     <div>
       {leadingTies ? (
-        <p className="mb-2 text-xs text-emerald-100/75">
+        <p className="mb-2 text-xs text-[#d8ecff]/75">
           Leading ties: {leadingTies}
         </p>
       ) : null}
       <div
-        className="grid overflow-hidden rounded-lg border border-white/12 bg-[#0f1220]/90"
+        className="grid overflow-hidden rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90"
         style={{
           gridTemplateColumns: `repeat(${maxCol + 1}, minmax(22px, 1fr))`,
         }}
@@ -1094,7 +1094,7 @@ function RoadCell({
   tieCount?: number;
 }) {
   return (
-    <div className="relative grid aspect-square min-h-6 place-items-center border-r border-b border-white/[0.1] text-[11px] font-semibold">
+    <div className="relative grid aspect-square min-h-6 place-items-center border-r border-b border-[#d8ecff]/[0.12] text-[11px] font-semibold">
       {cell ? (
         <span
           className={cn(
@@ -1106,7 +1106,7 @@ function RoadCell({
         </span>
       ) : null}
       {tieCount ? (
-        <span className="absolute -right-0.5 -top-0.5 grid size-4 place-items-center rounded-full bg-emerald-300 text-[9px] font-bold text-zinc-950">
+        <span className="absolute -right-0.5 -top-0.5 grid size-4 place-items-center rounded-full bg-[#f5c95f] text-[9px] font-bold text-[#111827]">
           {tieCount}
         </span>
       ) : null}
@@ -1116,16 +1116,16 @@ function RoadCell({
 
 function RecentRoundsPanel({ rounds }: { rounds: BaccaratRoundResultView[] }) {
   return (
-    <section className="rounded-[1rem] border border-white/12 bg-[#171827]/95 p-3 shadow-xl shadow-black/25">
+    <section className="rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/95 p-3 shadow-xl shadow-black/25">
       <div className="flex items-center gap-2">
-        <History className="size-4 text-amber-100" />
+        <History className="size-4 text-[#f5c95f]" />
         <h2 className="text-lg font-semibold">Recent</h2>
       </div>
       <div className="mt-3 grid max-h-[214px] gap-2 overflow-auto pr-1">
         {rounds.length ? (
           rounds.slice(0, 8).map((round) => (
             <div
-              className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg border border-white/12 bg-[#101320]/90 px-3 py-2 text-sm"
+              className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90 px-3 py-2 text-sm"
               key={round.roundId}
             >
               <span
@@ -1150,7 +1150,7 @@ function RecentRoundsPanel({ rounds }: { rounds: BaccaratRoundResultView[] }) {
             </div>
           ))
         ) : (
-          <p className="rounded-lg border border-white/12 bg-[#101320]/90 px-3 py-5 text-center text-sm text-white/65">
+          <p className="rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90 px-3 py-5 text-center text-sm text-white/65">
             No settled rounds yet.
           </p>
         )}
@@ -1165,16 +1165,16 @@ function TimelinePanel({
   timeline: BaccaratTimelineEntry[];
 }) {
   return (
-    <section className="min-h-0 rounded-[1rem] border border-white/12 bg-[#171827]/95 p-3 shadow-xl shadow-black/25">
+    <section className="min-h-0 rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/95 p-3 shadow-xl shadow-black/25">
       <div className="flex items-center gap-2">
-        <PlugZap className="size-4 text-amber-100" />
+        <PlugZap className="size-4 text-[#f5c95f]" />
         <h2 className="text-lg font-semibold">Live Events</h2>
       </div>
       <div className="mt-3 grid max-h-[360px] gap-2 overflow-auto pr-1 xl:max-h-none">
         {timeline.length ? (
           timeline.map((event) => (
             <div
-              className="rounded-lg border border-white/12 bg-[#101320]/90 px-3 py-2 text-sm"
+              className="rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90 px-3 py-2 text-sm"
               key={event.id}
             >
               <div className="flex items-center justify-between gap-3">
@@ -1189,7 +1189,7 @@ function TimelinePanel({
             </div>
           ))
         ) : (
-          <p className="rounded-lg border border-white/12 bg-[#101320]/90 px-3 py-5 text-center text-sm text-white/65">
+          <p className="rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90 px-3 py-5 text-center text-sm text-white/65">
             Waiting for table events.
           </p>
         )}
@@ -1200,7 +1200,7 @@ function TimelinePanel({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-white/12 bg-[#202337]/80 px-3 py-2 text-sm">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-[#d8ecff]/20 bg-[#0b3b73]/80 px-3 py-2 text-sm">
       <span className="text-white/65">{label}</span>
       <span className="truncate font-semibold">{value}</span>
     </div>
@@ -1215,8 +1215,8 @@ function StatusBadge({ status }: { status: BaccaratConnectionStatus }) {
       className={cn(
         "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold",
         isConnected
-          ? "bg-amber-300 text-zinc-950"
-          : "border border-white/15 bg-[#202337] text-white/70",
+          ? "bg-[#f5c95f] text-[#111827]"
+          : "border border-[#0b3b73] bg-[#d8ecff] text-[#0b3b73]",
       )}
     >
       <CircleDot className="size-3" />
@@ -1227,7 +1227,7 @@ function StatusBadge({ status }: { status: BaccaratConnectionStatus }) {
 
 function MiniBadge({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-md border border-white/12 bg-[#101320]/90 px-2.5 py-1 text-xs font-medium text-white/80">
+    <span className="inline-flex items-center gap-1 rounded-md border border-[#d8ecff]/20 bg-[#061833]/90 px-2.5 py-1 text-xs font-medium text-white/80">
       {children}
     </span>
   );
@@ -1366,39 +1366,39 @@ function outcomeInitial(outcome: BaccaratRoundOutcome) {
 
 function outcomeCellClass(outcome: BaccaratRoundOutcome) {
   if (outcome === "PLAYER") {
-    return "border-sky-200/60 bg-sky-400/20 text-sky-50";
+    return "border-[#8fc4e8]/70 bg-[#0b3b73]/65 text-[#d8ecff]";
   }
 
   if (outcome === "BANKER") {
-    return "border-rose-200/60 bg-rose-400/20 text-rose-50";
+    return "border-[#ff9aa0]/70 bg-[#c8272e]/45 text-[#fff3f1]";
   }
 
-  return "border-emerald-200/60 bg-emerald-400/20 text-emerald-50";
+  return "border-[#f5c95f]/75 bg-[#f5c95f]/25 text-[#fff8d6]";
 }
 
 function outcomeTextClass(outcome: BaccaratRoundOutcome) {
   if (outcome === "PLAYER") {
-    return "text-sky-200";
+    return "text-[#d8ecff]";
   }
 
   if (outcome === "BANKER") {
-    return "text-rose-200";
+    return "text-[#ffb8bd]";
   }
 
-  return "text-emerald-200";
+  return "text-[#f5c95f]";
 }
 
 function timelineToneClass(tone: BaccaratTimelineEntry["tone"]) {
   if (tone === "success") {
-    return "text-emerald-100";
+    return "text-[#d8ecff]";
   }
 
   if (tone === "warning") {
-    return "text-amber-100";
+    return "text-[#f5c95f]";
   }
 
   if (tone === "danger") {
-    return "text-red-100";
+    return "text-[#ffb8bd]";
   }
 
   return "text-white";

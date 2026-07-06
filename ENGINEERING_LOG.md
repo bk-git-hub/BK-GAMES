@@ -222,19 +222,31 @@ Correction:
 - Worker threads must not update the board directly; the Orchestrator owns Board Events to the Updater thread.
 - `.orchestrator/` remains an operational board artifact and requires explicit approval before being included in public Git history.
 
-### Dev Server Runtime Ownership
+### Dev Server Runtime Ownership (Superseded)
 
 Problem:
 
 - Development server start/stop/restart touches shared local resources: ports, PIDs, terminal processes, logs, browser QA, and backend health.
 - Letting individual worker threads stop or kill shared dev servers can interfere with other active work.
 
+Earlier correction, now superseded:
+
+- `AGENTS.md` and `docs/17_ORCHESTRATOR_PROTOCOL.md` briefly defined a Runtime Manager role.
+- This was replaced by the manual-operation rule below because runtime thread delegation created too much overhead.
+- Runtime state and logs are local-only `.orchestrator/` artifacts unless explicitly approved for public Git.
+
+### Dev Server Manual Operation
+
+Problem:
+
+- Even delegated dev server start/stop/restart adds too much orchestration overhead for the current workflow.
+
 Correction:
 
-- `AGENTS.md` and `docs/17_ORCHESTRATOR_PROTOCOL.md` now define a Runtime Manager role.
-- The Orchestrator decides when dev servers should start, stop, restart, or report status; the Runtime Manager executes the Runtime Order and reports back.
-- Worker threads request runtime changes through the Orchestrator instead of killing shared servers directly.
-- Runtime state and logs are local-only `.orchestrator/` artifacts unless explicitly approved for public Git.
+- Dev server start/stop/restart is now user-operated.
+- Runtime Helper is a user-owned thread. Orchestrator, Worker, and Updater threads must not send messages to it.
+- Agents and worker threads may request that the user start, restart, or inspect a server, but must not start, stop, restart, kill, or message the Runtime Helper thread without explicit user instruction.
+- `runtime-state` is treated as an observation record, not process ownership.
 
 ## Current Public Status
 

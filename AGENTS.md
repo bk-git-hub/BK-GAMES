@@ -232,22 +232,23 @@ Updater thread는 Orchestrator 외 thread가 보낸 보드 변경 요청을 반�
 
 `.orchestrator/`는 운영 상황판 산출물이며, 공개 Git 커밋 대상에 포함하려면 사용자의 명시 승인이 필요하다.
 
-## 9. Dev Server Runtime 운영 규칙
+## 9. Dev Server 수동 운영 규칙
 
-개발 서버 start/stop/restart는 코드 구현 작업과 분리된 runtime 작업으로 취급한다.
+개발 서버 start/stop/restart는 사용자가 수동으로 수행한다.
 
 기본 역할:
 
 ```text
-Orchestrator thread: dev server 실행/종료/재시작 필요 여부 결정, Runtime Order 발행, callback 수집
-Runtime Manager thread: 실제 프로세스 start/stop/restart, port/PID/health/log 상태 관리
-Worker thread: 서버가 필요하면 Orchestrator에게 요청하고, 임의로 공유 dev server를 종료하지 않음
+User: dev server start / stop / restart 직접 수행, 필요하면 Runtime Helper thread에 직접 입력
+Runtime Helper thread: 사용자 전용 dev server 운영 thread
+Orchestrator thread: 서버 필요 여부 판단, 사용자에게 수동 실행/재시작/상태확인 요청
+Worker thread: 서버가 필요하면 Orchestrator에게 요청하고, 직접 서버를 켜거나 끄지 않음
 Updater thread: Orchestrator가 보낸 Board Event로 runtime 상태만 반영
 ```
 
-전담 Runtime Manager thread가 아직 없으면 Orchestrator가 임시로 Runtime Manager 역할을 겸임할 수 있다. 이 경우에도 아래 Runtime Order와 상태 기록 규칙을 따른다.
+에이전트와 thread는 사용자의 명시 지시 없이 dev server를 start/stop/restart하지 않는다. 포트 kill도 하지 않는다. Orchestrator, Worker, Updater는 Runtime Helper thread에 메시지를 보내지 않는다.
 
-기본 dev server 명령:
+사용자가 수동으로 실행할 기본 명령:
 
 ```text
 web: corepack pnpm --filter web dev
@@ -261,17 +262,15 @@ web: http://localhost:3000
 game-server: http://localhost:4000/health
 ```
 
-Runtime Order에는 최소 아래 항목을 포함한다.
+사용자에게 수동 작업을 요청할 때는 최소 아래 항목을 포함한다.
 
 ```text
 Action: start / stop / restart / status
 Service: web / game-server / all
-Command:
-Working directory:
 Port:
 Health check URL:
-Stop Conditions:
-Done Criteria:
+Command if needed:
+Why needed:
 ```
 
 Runtime 상태 파일:
@@ -284,11 +283,12 @@ Runtime 상태 파일:
 Runtime 안전 규칙:
 
 ```text
-Runtime Manager는 자신이 시작했고 runtime-state에 기록된 PID만 종료한다.
-포트가 이미 점유되어 있고 소유자가 불명확하면 kill하지 않고 Blocked로 보고한다.
-Worker thread는 공유 dev server를 직접 종료하거나 포트 kill을 실행하지 않는다.
-서버 재시작이 검증에 필요하면 Worker는 Orchestrator에게 Runtime 요청을 보낸다.
-runtime-state와 실제 프로세스 상태가 다르면 먼저 status 점검을 수행하고 결과를 보고한다.
+에이전트는 사용자의 명시 지시 없이 dev server를 start/stop/restart하지 않는다.
+에이전트는 포트 kill 또는 PID 종료를 수행하지 않는다.
+Worker thread는 공유 dev server를 직접 조작하지 않는다.
+Orchestrator, Worker, Updater는 Runtime Helper thread에 메시지를 보내지 않는다.
+서버 재시작이 검증에 필요하면 Worker는 Orchestrator에게 보고하고, Orchestrator는 사용자에게 수동 재시작을 요청한다.
+runtime-state는 관측 기록일 뿐 프로세스 종료 권한의 근거가 아니다.
 ```
 
 `.orchestrator/runtime-state.json`과 `.orchestrator/runtime-logs/`는 local-only 운영 산출물이며, 공개 Git 커밋 대상에 포함하려면 사용자의 명시 승인이 필요하다.

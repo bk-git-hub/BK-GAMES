@@ -430,14 +430,25 @@ export function useBaccaratTable({
   }, []);
 
   const placeBet = useCallback((betType: BaccaratBetType, amount: string) => {
+    const socket = socketRef.current;
+
+    if (!socket?.connected) {
+      return null;
+    }
+
     const commandId = createCommandId("baccarat-bet");
 
-    socketRef.current?.emit(BACCARAT_CLIENT_EVENTS.BET_PLACE, {
+    setLastBetRejected(null);
+    setSocketError(null);
+
+    socket.emit(BACCARAT_CLIENT_EVENTS.BET_PLACE, {
       amount,
       betType,
       commandId,
       tableId,
     } satisfies BaccaratPlaceBetPayload);
+
+    return commandId;
   }, []);
 
   const sendSqueezeProgress = useCallback(

@@ -333,6 +333,14 @@ Correction:
 - Rebalanced the table, card zones, betting zones, squeeze panel, and roadmap panels with higher-contrast charcoal, plum, blue, rose, and gold tones for clearer scanning.
 - This is frontend color polish only; no socket, betting, reveal, settlement, card identity, payout, result, or roadmap logic was changed.
 
+### Baccarat Bet Confirmation UI
+
+Correction:
+
+- Changed `/baccarat` main bet zones so Player, Banker, and Tie clicks select a bet preview instead of immediately submitting `bet:place`.
+- Added an explicit confirmation button that submits the selected bet through the existing socket flow, with pending feedback to avoid duplicate submissions.
+- This is frontend interaction polish only; server betting validation, socket payloads, bet rules, payouts, settlement, and roadmap logic were not changed.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

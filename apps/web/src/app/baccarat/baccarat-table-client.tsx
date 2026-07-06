@@ -57,6 +57,18 @@ type BetChoice = {
   totalKey: "player" | "banker" | "tie";
 };
 
+type PendingBet = {
+  amount: string;
+  betType: BaccaratBetType;
+  commandId: string;
+  roundId: string | null;
+};
+
+type SelectedBet = {
+  betType: BaccaratBetType;
+  roundId: string | null;
+};
+
 const betChoices: BetChoice[] = [
   {
     accentClass: "border-sky-200/55 bg-[#13365a] text-sky-50",
@@ -92,6 +104,8 @@ export function BaccaratTableClient({
 }: BaccaratTableClientProps) {
   const table = useBaccaratTable({ initialWalletBalance });
   const [betAmount, setBetAmount] = useState("100");
+  const [pendingBet, setPendingBet] = useState<PendingBet | null>(null);
+  const [selectedBet, setSelectedBet] = useState<SelectedBet | null>(null);
   const state = table.tableState;
   const myBet = table.myBet;
   const currentRoundId = state?.round?.roundId ?? null;
@@ -101,13 +115,27 @@ export function BaccaratTableClient({
     activeReveal?.squeezerUserId === table.player?.id &&
     state?.phase === "SQUEEZE" &&
     activeReveal?.status === "ACTIVE";
-  const canPlaceBet =
+  const isBettingOpen =
     table.connectionStatus === "connected" &&
     state?.status === "OPEN" &&
     state?.phase === "WAITING_BETS" &&
     state.betting.canPlaceBet &&
-    !myBet &&
-    isPositivePointAmount(betAmount);
+    !myBet;
+  const activePendingBet = getActivePendingBet(pendingBet, {
+    acceptedCommandId: table.lastBetAccepted?.commandId ?? null,
+    connectionStatus: table.connectionStatus,
+    currentRoundId,
+    hasMyBet: Boolean(myBet),
+    rejectedCommandId: table.lastBetRejected?.commandId ?? null,
+  });
+  const isBetSubmitting = Boolean(activePendingBet);
+  const selectedBetType =
+    selectedBet?.roundId === currentRoundId && isBettingOpen
+      ? selectedBet.betType
+      : null;
+  const canSelectBet = isBettingOpen && !isBetSubmitting;
+  const canConfirmBet =
+    canSelectBet && Boolean(selectedBetType) && isPositivePointAmount(betAmount);
 
   const latestResult = useMemo(
     () => state?.recentRounds[0] ?? null,
@@ -118,12 +146,35 @@ export function BaccaratTableClient({
     setBetAmount((currentAmount) => addPointStrings(currentAmount, amount));
   }
 
-  function placeBet(betType: BaccaratBetType) {
-    if (!canPlaceBet) {
+  function confirmBet() {
+    if (!canConfirmBet || !selectedBetType) {
       return;
     }
 
-    table.placeBet(betType, betAmount.trim());
+    const amount = betAmount.trim();
+    const commandId = table.placeBet(selectedBetType, amount);
+
+    if (!commandId) {
+      return;
+    }
+
+    setPendingBet({
+      amount,
+      betType: selectedBetType,
+      commandId,
+      roundId: currentRoundId,
+    });
+  }
+
+  function selectBet(betType: BaccaratBetType) {
+    if (!canSelectBet) {
+      return;
+    }
+
+    setSelectedBet({
+      betType,
+      roundId: currentRoundId,
+    });
   }
 
   return (
@@ -208,12 +259,17 @@ export function BaccaratTableClient({
                 <div className="mt-auto grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
                   <BettingPanel
                     amount={betAmount}
-                    canPlaceBet={canPlaceBet}
+                    canConfirmBet={canConfirmBet}
+                    canSelectBet={canSelectBet}
+                    isBetSubmitting={isBetSubmitting}
                     myBet={myBet}
                     onAddChip={addChip}
                     onAmountChange={setBetAmount}
                     onClear={() => setBetAmount("")}
-                    onPlaceBet={placeBet}
+                    onConfirmBet={confirmBet}
+                    onSelectBet={selectBet}
+                    pendingBet={activePendingBet}
+                    selectedBetType={selectedBetType}
                     state={state}
                   />
                   <MyRoundPanel
@@ -687,27 +743,56 @@ function SqueezePanel({
 
 function BettingPanel({
   amount,
-  canPlaceBet,
+  canConfirmBet,
+  canSelectBet,
+  isBetSubmitting,
   myBet,
   onAddChip,
   onAmountChange,
   onClear,
-  onPlaceBet,
+  onConfirmBet,
+  onSelectBet,
+  pendingBet,
+  selectedBetType,
   state,
 }: {
   amount: string;
-  canPlaceBet: boolean;
+  canConfirmBet: boolean;
+  canSelectBet: boolean;
+  isBetSubmitting: boolean;
   myBet: BaccaratTableState["betting"]["myBet"];
   onAddChip: (amount: string) => void;
   onAmountChange: (amount: string) => void;
   onClear: () => void;
-  onPlaceBet: (betType: BaccaratBetType) => void;
+  onConfirmBet: () => void;
+  onSelectBet: (betType: BaccaratBetType) => void;
+  pendingBet: PendingBet | null;
+  selectedBetType: BaccaratBetType | null;
   state: BaccaratTableState | null;
 }) {
   const totals = state?.betting.totals;
   const betTypes = state?.betting.betTypes.length
     ? state.betting.betTypes
     : betChoices.map((choice) => choice.betType);
+  const selectedChoice = selectedBetType
+    ? betChoices.find((choice) => choice.betType === selectedBetType) ?? null
+    : null;
+  const confirmLabel = isBetSubmitting
+    ? "Submitting..."
+    : selectedChoice
+      ? `Place ${selectedChoice.label} Bet`
+      : "Select Bet";
+  const confirmDetail = myBet
+    ? `${formatOutcome(myBet.betType)} ${formatPoints(myBet.amount)} pts placed`
+    : pendingBet
+      ? `${formatOutcome(pendingBet.betType)} ${formatPoints(
+          pendingBet.amount,
+        )} pts pending`
+      : selectedChoice
+        ? `${selectedChoice.label} ${formatPoints(amount || "0")} pts`
+        : state?.phase === "WAITING_BETS"
+          ? "No bet selected"
+          : "Betting closed";
 
   return (
     <section className="rounded-[1rem] border border-white/12 bg-[#141827]/95 p-3 shadow-xl shadow-black/25">
@@ -726,7 +811,7 @@ function BettingPanel({
           {quickBetAmounts.map((chip) => (
             <Button
               className="border-white/12 bg-[#202337] text-white hover:bg-[#2c3149]"
-              disabled={Boolean(myBet)}
+              disabled={Boolean(myBet) || isBetSubmitting}
               key={chip}
               onClick={() => onAddChip(chip)}
               size="sm"
@@ -741,7 +826,7 @@ function BettingPanel({
       <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <input
           className="h-10 min-w-0 rounded-lg border border-white/15 bg-[#0f1220] px-3 text-sm font-semibold text-white outline-none transition placeholder:text-white/40 focus:border-amber-200/65"
-          disabled={Boolean(myBet)}
+          disabled={Boolean(myBet) || isBetSubmitting}
           inputMode="numeric"
           onChange={(event) => onAmountChange(normalizePointInput(event.target.value))}
           placeholder="Bet amount"
@@ -749,7 +834,7 @@ function BettingPanel({
         />
         <Button
           className="border-white/12 bg-[#202337] text-white hover:bg-[#2c3149]"
-          disabled={Boolean(myBet) || !amount}
+          disabled={Boolean(myBet) || isBetSubmitting || !amount}
           onClick={onClear}
           variant="outline"
         >
@@ -760,20 +845,31 @@ function BettingPanel({
       <div className="mt-3 grid gap-2 md:grid-cols-3">
         {betChoices.map((choice) => {
           const isEnabled = betTypes.includes(choice.betType);
+          const isPending = pendingBet?.betType === choice.betType;
+          const isSelected = selectedBetType === choice.betType;
+          const isSubmitted = myBet?.betType === choice.betType;
           const total = totals?.[choice.totalKey] ?? "0";
 
           return (
             <button
+              aria-pressed={isSelected}
               className={cn(
                 "min-h-[122px] rounded-[0.9rem] border p-3 text-left transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45",
                 choice.accentClass,
-                myBet?.betType === choice.betType
-                  ? "ring-2 ring-amber-200/90"
+                isSubmitted
+                  ? "ring-2 ring-emerald-200/90"
+                  : isPending
+                    ? "ring-2 ring-amber-200/90"
+                    : isSelected
+                      ? "ring-2 ring-white/85"
+                      : "ring-0",
+                isSelected || isPending || isSubmitted
+                  ? "shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_16px_28px_rgba(0,0,0,0.22)]"
                   : "ring-0",
               )}
-              disabled={!canPlaceBet || !isEnabled}
+              disabled={!canSelectBet || !isEnabled}
               key={choice.betType}
-              onClick={() => onPlaceBet(choice.betType)}
+              onClick={() => onSelectBet(choice.betType)}
               type="button"
             >
               <div className="flex items-center justify-between gap-3">
@@ -784,9 +880,36 @@ function BettingPanel({
               </div>
               <p className="mt-7 text-sm text-white/65">Table total</p>
               <p className="text-lg font-semibold">{formatPoints(total)} pts</p>
+              <p className="mt-2 text-xs font-semibold text-white/75">
+                {isSubmitted
+                  ? "Placed"
+                  : isPending
+                    ? "Pending"
+                    : isSelected
+                      ? "Selected"
+                      : "Available"}
+              </p>
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-3 grid gap-2 rounded-lg border border-white/12 bg-[#101320]/90 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-normal text-white/45">
+            Bet confirmation
+          </p>
+          <p className="mt-1 truncate text-sm font-semibold text-white">
+            {confirmDetail}
+          </p>
+        </div>
+        <Button
+          className="bg-amber-300 text-zinc-950 hover:bg-amber-200 disabled:opacity-45"
+          disabled={!canConfirmBet}
+          onClick={onConfirmBet}
+        >
+          {confirmLabel}
+        </Button>
       </div>
     </section>
   );
@@ -1297,6 +1420,33 @@ function clampPercent(value: number) {
   }
 
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function getActivePendingBet(
+  pendingBet: PendingBet | null,
+  input: {
+    acceptedCommandId: string | null;
+    connectionStatus: BaccaratConnectionStatus;
+    currentRoundId: string | null;
+    hasMyBet: boolean;
+    rejectedCommandId: string | null;
+  },
+) {
+  if (!pendingBet) {
+    return null;
+  }
+
+  if (
+    input.connectionStatus !== "connected" ||
+    input.hasMyBet ||
+    pendingBet.roundId !== input.currentRoundId ||
+    pendingBet.commandId === input.acceptedCommandId ||
+    pendingBet.commandId === input.rejectedCommandId
+  ) {
+    return null;
+  }
+
+  return pendingBet;
 }
 
 function formatTime(value: string) {

@@ -257,6 +257,15 @@ Correction:
 - This is schema/seed only: no betting transaction, settlement transaction, socket contract, game-server runtime, or web UI behavior was introduced.
 - Reveal `card_snapshot` remains nullable before reveal, and shoe encrypted state/card order/server seed fields stay DB/server-only.
 
+### Baccarat Betting Transaction
+
+Correction:
+
+- Added the DB-level Baccarat bet placement helper for active `WAITING_BETS` rounds.
+- Bet acceptance now validates table status, betting window, MVP bet types, min/max amount, max total per user, one-main-bet-per-round, wallet balance, and command idempotency.
+- Accepted bets create exactly one `BACCARAT` / `BET` point ledger and store Player, Banker, or Tie odds snapshots plus commission bps on the bet row.
+- Added focused smoke coverage for success, duplicate same command, conflicting command, duplicate main bet, insufficient funds, amount bounds, closed betting window, and Baccarat odds snapshots.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

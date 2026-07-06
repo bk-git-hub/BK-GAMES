@@ -275,6 +275,15 @@ Correction:
 - Winning credits use `PAYOUT`, Tie pushes use `PUSH_REFUND`, and cancelled round refunds use `CANCEL_REFUND`.
 - Added focused smoke coverage for payout amounts, Banker commission, push refunds, cancellation refunds, and idempotent settlement/cancel reruns.
 
+### Baccarat Socket Contract
+
+Correction:
+
+- Added shared Baccarat realtime socket event constants and payload/view types.
+- Client-visible card state now uses visible/hidden discriminated unions; hidden cards cannot carry rank, suit, or value fields.
+- Added table state, betting, reveal, squeeze, wallet update, settlement, error, recent-result, and Bead Plate/basic Big Road contract types.
+- This is contract-only: no game-server runtime, DB behavior, frontend UI, or wallet/settlement behavior was introduced.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

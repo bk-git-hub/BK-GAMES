@@ -628,3 +628,502 @@ export function racingTableRoom(tableId: string) {
 export function racingUserRoom(userId: string) {
   return `user:${userId}`;
 }
+
+export const BACCARAT_NAMESPACE = "/baccarat";
+
+export const BACCARAT_CLIENT_EVENTS = {
+  TABLE_JOIN: "table:join",
+  TABLE_LEAVE: "table:leave",
+  BET_PLACE: "bet:place",
+  SQUEEZE_PROGRESS: "squeeze:progress",
+  SQUEEZE_COMPLETE: "squeeze:complete",
+} as const;
+
+export const BACCARAT_SERVER_EVENTS = {
+  TABLE_STATE: "table:state",
+  TABLE_EVENT: "table:event",
+  ROUND_STARTED: "round:started",
+  BET_ACCEPTED: "bet:accepted",
+  BET_REJECTED: "bet:rejected",
+  SQUEEZE_STARTED: "squeeze:started",
+  SQUEEZE_PROGRESS: "squeeze:progressed",
+  SQUEEZE_COMPLETED: "squeeze:completed",
+  SQUEEZE_TIMEOUT: "squeeze:timeout",
+  CARD_REVEALED: "card:revealed",
+  ROUND_SETTLED: "round:settled",
+  WALLET_UPDATED: "wallet:updated",
+  ERROR: "error",
+} as const;
+
+export type BaccaratClientEvent =
+  (typeof BACCARAT_CLIENT_EVENTS)[keyof typeof BACCARAT_CLIENT_EVENTS];
+
+export type BaccaratServerEvent =
+  (typeof BACCARAT_SERVER_EVENTS)[keyof typeof BACCARAT_SERVER_EVENTS];
+
+export type BaccaratTableStatus = "OPEN" | "MAINTENANCE" | "CLOSED";
+
+export type BaccaratTablePhase =
+  | "WAITING"
+  | "WAITING_BETS"
+  | "DEALING"
+  | "SQUEEZE"
+  | "SETTLING"
+  | "SETTLED"
+  | "ROUND_END"
+  | "CANCELLED";
+
+export type BaccaratRoundStatus =
+  | "WAITING_BETS"
+  | "DEALING"
+  | "SQUEEZE"
+  | "SETTLING"
+  | "SETTLED"
+  | "CANCELLED";
+
+export type BaccaratBetType = "PLAYER" | "BANKER" | "TIE";
+export type BaccaratBetGroup = "MAIN" | "SIDE";
+export type BaccaratBetStatus = "PLACED" | "SETTLED" | "CANCELLED";
+export type BaccaratRoundOutcome = "PLAYER" | "BANKER" | "TIE";
+export type BaccaratBetOutcome = "WIN" | "LOSE" | "PUSH";
+
+export type BaccaratRevealSlot =
+  | "PLAYER_CARD_1"
+  | "BANKER_CARD_1"
+  | "PLAYER_CARD_2"
+  | "BANKER_CARD_2"
+  | "PLAYER_CARD_3"
+  | "BANKER_CARD_3";
+
+export type BaccaratCardRank =
+  | "A"
+  | "2"
+  | "3"
+  | "4"
+  | "5"
+  | "6"
+  | "7"
+  | "8"
+  | "9"
+  | "10"
+  | "J"
+  | "Q"
+  | "K";
+
+export type BaccaratCardSuit = "clubs" | "diamonds" | "hearts" | "spades";
+export type BaccaratCardValue = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+export type BaccaratVisibleCardView = {
+  slot: BaccaratRevealSlot;
+  rank: BaccaratCardRank;
+  suit: BaccaratCardSuit;
+  value: BaccaratCardValue;
+  hidden?: false;
+};
+
+export type BaccaratHiddenCardView = {
+  slot: BaccaratRevealSlot;
+  hidden: true;
+  rank?: never;
+  suit?: never;
+  value?: never;
+};
+
+export type BaccaratCardView =
+  | BaccaratVisibleCardView
+  | BaccaratHiddenCardView;
+
+export type BaccaratSocketUser = {
+  userId: string;
+  nickname: string;
+  role: "USER" | "ADMIN";
+};
+
+export type BaccaratTableJoinPayload = {
+  tableId: string;
+  nickname?: string;
+};
+
+export type BaccaratTableLeavePayload = {
+  tableId: string;
+};
+
+export type BaccaratPlaceBetPayload = {
+  commandId: string;
+  tableId: string;
+  betType: BaccaratBetType;
+  amount: string;
+};
+
+export type BaccaratSqueezeProgressPayload = {
+  tableId: string;
+  roundId: string;
+  revealId: string;
+  progress: number;
+};
+
+export type BaccaratSqueezeCompletePayload = {
+  tableId: string;
+  roundId: string;
+  revealId: string;
+};
+
+export type BaccaratRoundSnapshot = {
+  roundId: string;
+  shoeId: string;
+  roundNo: number;
+  status: BaccaratRoundStatus;
+  outcome: BaccaratRoundOutcome | null;
+  resultFlags: {
+    isNatural: boolean;
+    totalCards: number | null;
+  };
+};
+
+export type BaccaratMyBetSnapshot = {
+  betId: string;
+  betType: BaccaratBetType;
+  betGroup: "MAIN";
+  amount: string;
+  status: BaccaratBetStatus;
+  payoutAmount: string | null;
+  netAmount: string | null;
+};
+
+export type BaccaratBettingSnapshot = {
+  minBet: string;
+  maxMainBet: string;
+  maxTotalBetPerUser: string;
+  canPlaceBet: boolean;
+  betTypes: BaccaratBetType[];
+  totals: {
+    player: string;
+    banker: string;
+    tie: string;
+  };
+  participantCount: number;
+  myBet: BaccaratMyBetSnapshot | null;
+};
+
+export type BaccaratShoeSnapshot = {
+  shoeId: string;
+  shoeNo: number;
+  deckCount: number;
+  cardsDealt: number;
+  cardsRemaining: number;
+  penetrationPercent: number;
+  willShuffleAfterRound: boolean;
+};
+
+export type BaccaratHandSnapshot = {
+  cards: BaccaratCardView[];
+  total: number | null;
+  isNatural: boolean;
+};
+
+export type BaccaratRevealStatus =
+  | "PENDING"
+  | "ACTIVE"
+  | "REVEALED"
+  | "SKIPPED";
+
+export type BaccaratRevealSnapshot = {
+  revealId: string;
+  slot: BaccaratRevealSlot;
+  squeezerUserId: string | null;
+  status: BaccaratRevealStatus;
+  startedAt: string | null;
+  endsAt: string | null;
+  revealedAt: string | null;
+  progress: number;
+  isAutoReveal: boolean;
+  card?: never;
+  rank?: never;
+  suit?: never;
+  value?: never;
+};
+
+export type BaccaratSqueezeSnapshot = {
+  revealId: string;
+  slot: BaccaratRevealSlot;
+  squeezerUserId: string | null;
+  status: "ACTIVE" | "COMPLETED" | "TIMEOUT";
+  startedAt: string | null;
+  endsAt: string | null;
+  progress: number;
+  isAutoReveal: boolean;
+  card?: never;
+  rank?: never;
+  suit?: never;
+  value?: never;
+};
+
+export type BaccaratTimerSnapshot = {
+  bettingEndsAt: string | null;
+  revealEndsAt: string | null;
+  roundEndsAt: string | null;
+};
+
+export type BaccaratRoundResultView = {
+  roundId: string;
+  roundNo: number;
+  outcome: BaccaratRoundOutcome;
+  playerTotal: number;
+  bankerTotal: number;
+  isNatural: boolean;
+  totalCards: number;
+};
+
+export type BaccaratBeadPlateCell = BaccaratRoundResultView & {
+  row: number;
+  col: number;
+};
+
+export type BaccaratBigRoadCell = Omit<BaccaratRoundResultView, "outcome"> & {
+  row: number;
+  col: number;
+  outcome: Exclude<BaccaratRoundOutcome, "TIE">;
+  tieCount: number;
+};
+
+export type BaccaratLeadingTieMarker = BaccaratRoundResultView & {
+  tieIndex: number;
+};
+
+export type BaccaratRoadmapSnapshot = {
+  beadPlate: BaccaratBeadPlateCell[];
+  bigRoad: BaccaratBigRoadCell[];
+  leadingTies: BaccaratLeadingTieMarker[];
+};
+
+export type BaccaratTableState = {
+  tableId: string;
+  status: BaccaratTableStatus;
+  phase: BaccaratTablePhase;
+  viewerCount: number;
+  round: BaccaratRoundSnapshot | null;
+  betting: BaccaratBettingSnapshot;
+  shoe: BaccaratShoeSnapshot | null;
+  player: BaccaratHandSnapshot;
+  banker: BaccaratHandSnapshot;
+  reveal: BaccaratRevealSnapshot | null;
+  squeeze: BaccaratSqueezeSnapshot | null;
+  roadmaps: BaccaratRoadmapSnapshot;
+  recentRounds: BaccaratRoundResultView[];
+  timers: BaccaratTimerSnapshot;
+  version: number;
+  updatedAt: string;
+};
+
+export type BaccaratTableSummary = {
+  tableId: string;
+  gameType: "BACCARAT";
+  status: BaccaratTableStatus;
+  phase: BaccaratTablePhase;
+  viewerCount: number;
+  bettingLimits: {
+    minBet: string;
+    maxMainBet: string;
+    maxTotalBetPerUser: string;
+  };
+  round: BaccaratRoundSnapshot | null;
+  timers: BaccaratTimerSnapshot;
+  version: number;
+  updatedAt: string;
+};
+
+export type BaccaratTablesResponse = {
+  tables: BaccaratTableSummary[];
+};
+
+export type BaccaratRoundStartedPayload = {
+  tableId: string;
+  roundId: string;
+  roundNo: number;
+  shoeId: string;
+  stateVersion: number;
+  createdAt: string;
+};
+
+export type BaccaratBetAcceptedPayload = {
+  tableId: string;
+  roundId: string;
+  betId: string;
+  commandId: string;
+  betType: BaccaratBetType;
+  amount: string;
+  status: "PLACED";
+  stateVersion: number;
+  createdAt: string;
+};
+
+export type BaccaratBetRejectedPayload = {
+  tableId: string;
+  roundId: string | null;
+  commandId: string | null;
+  code: BaccaratSocketErrorCode;
+  message: string;
+  createdAt: string;
+};
+
+export type BaccaratSqueezeStartedPayload = {
+  tableId: string;
+  roundId: string;
+  reveal: BaccaratRevealSnapshot;
+  stateVersion: number;
+  createdAt: string;
+};
+
+export type BaccaratSqueezeProgressedPayload = {
+  tableId: string;
+  roundId: string;
+  revealId: string;
+  squeezerUserId: string | null;
+  progress: number;
+  stateVersion: number;
+  createdAt: string;
+};
+
+export type BaccaratSqueezeCompletedPayload = {
+  tableId: string;
+  roundId: string;
+  revealId: string;
+  squeezerUserId: string | null;
+  stateVersion: number;
+  createdAt: string;
+};
+
+export type BaccaratSqueezeTimeoutPayload = {
+  tableId: string;
+  roundId: string;
+  revealId: string;
+  stateVersion: number;
+  createdAt: string;
+};
+
+export type BaccaratCardRevealedPayload = {
+  tableId: string;
+  roundId: string;
+  revealId: string;
+  slot: BaccaratRevealSlot;
+  card: BaccaratVisibleCardView;
+  nextReveal: BaccaratRevealSnapshot | null;
+  player: BaccaratHandSnapshot;
+  banker: BaccaratHandSnapshot;
+  stateVersion: number;
+  createdAt: string;
+};
+
+export type BaccaratRoundSettledPlayerResult = {
+  playerId: string;
+  nickname: string;
+  betType: BaccaratBetType;
+  outcome: BaccaratBetOutcome;
+  betAmount: string;
+  payoutAmount: string;
+  netAmount: string;
+};
+
+export type BaccaratRoundSettledPayload = {
+  tableId: string;
+  roundId: string;
+  outcome: BaccaratRoundOutcome;
+  playerTotal: number;
+  bankerTotal: number;
+  isNatural: boolean;
+  totalCards: number;
+  results: BaccaratRoundSettledPlayerResult[];
+  roadmaps: BaccaratRoadmapSnapshot;
+  stateVersion: number;
+  createdAt: string;
+};
+
+export type BaccaratTableEventType =
+  | "TABLE_JOINED"
+  | "TABLE_LEFT"
+  | "BET_PLACED"
+  | "BET_REJECTED"
+  | "ROUND_STARTED"
+  | "SHOE_STARTED"
+  | "SQUEEZE_STARTED"
+  | "SQUEEZE_PROGRESS"
+  | "SQUEEZE_COMPLETED"
+  | "SQUEEZE_TIMEOUT"
+  | "CARD_REVEALED"
+  | "ROUND_SETTLED"
+  | "ROUND_RESET"
+  | "ROUND_CANCELLED"
+  | "PLAYER_DISCONNECTED";
+
+export type BaccaratTableEventPayload = {
+  tableId: string;
+  type: BaccaratTableEventType;
+  actorUserId: string | null;
+  roundId?: string;
+  roundNo?: number;
+  shoeId?: string;
+  betId?: string;
+  commandId?: string;
+  betType?: BaccaratBetType;
+  amount?: string;
+  revealId?: string;
+  slot?: BaccaratRevealSlot;
+  progress?: number;
+  card?: BaccaratVisibleCardView;
+  outcome?: BaccaratRoundOutcome;
+  roadmaps?: BaccaratRoadmapSnapshot;
+  stateVersion: number;
+  createdAt: string;
+};
+
+export type BaccaratSocketErrorCode =
+  | "UNAUTHORIZED"
+  | "TABLE_NOT_FOUND"
+  | "TABLE_NOT_OPEN"
+  | "INVALID_TABLE_ID"
+  | "INVALID_COMMAND_ID"
+  | "INVALID_BET_TYPE"
+  | "INVALID_BET_AMOUNT"
+  | "INVALID_SOCKET_USER"
+  | "BETTING_CLOSED"
+  | "BET_ALREADY_PLACED"
+  | "BET_TOO_LOW"
+  | "BET_TOO_HIGH"
+  | "WALLET_NOT_FOUND"
+  | "WALLET_NOT_ACTIVE"
+  | "INSUFFICIENT_BALANCE"
+  | "IDEMPOTENCY_CONFLICT"
+  | "ROUND_NOT_ACTIVE"
+  | "ROUND_NOT_FOUND"
+  | "ROUND_CANCELLED"
+  | "REVEAL_NOT_ACTIVE"
+  | "NOT_SQUEEZER"
+  | "INVALID_REVEAL_ID"
+  | "SQUEEZE_RATE_LIMITED"
+  | "SQUEEZE_TIMEOUT"
+  | "SHOE_NOT_READY"
+  | "INVALID_SETTLEMENT"
+  | "SETTLEMENT_CONFLICT"
+  | "RECONNECT_STATE_UNAVAILABLE"
+  | "UNKNOWN_ERROR";
+
+export type BaccaratSocketErrorPayload = {
+  code: BaccaratSocketErrorCode;
+  message: string;
+  event?: BaccaratClientEvent;
+};
+
+export type BaccaratWalletUpdatedPayload = {
+  balance: string;
+  delta: string;
+  reason: "BET_PLACED" | "PAYOUT" | "PUSH_REFUND" | "CANCEL_REFUND";
+  ledgerId: string;
+};
+
+export function baccaratTableRoom(tableId: string) {
+  return `table:${tableId}`;
+}
+
+export function baccaratUserRoom(userId: string) {
+  return `user:${userId}`;
+}

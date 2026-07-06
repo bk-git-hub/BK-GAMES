@@ -350,7 +350,7 @@ function BaccaratHeader({
           icon={<PlugZap className="size-3.5" />}
           label="Connection"
           value={message ?? connectionStatus.replaceAll("-", " ")}
-          detail="main table"
+          detail=""
         />
       </div>
     </header>
@@ -407,13 +407,11 @@ function TableStatusStrip({
           </MiniBadge>
           <MiniBadge>{state ? `${state.viewerCount} viewers` : "Syncing"}</MiniBadge>
         </div>
-        <p className="mt-2 truncate text-sm text-white/65">
-          {state
-            ? `Table ${state.tableId} · Version ${state.version} · Updated ${formatTime(
-                state.updatedAt,
-              )}`
-            : "Waiting for an authenticated Baccarat table snapshot."}
-        </p>
+        {!state ? (
+          <p className="mt-2 truncate text-sm text-white/65">
+            Waiting for an authenticated Baccarat table snapshot.
+          </p>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2">

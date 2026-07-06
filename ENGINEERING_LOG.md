@@ -349,6 +349,13 @@ Correction:
 - The Squeeze panel now spans the next mobile row while desktop keeps the Player / Squeeze / Banker table layout.
 - Tightened small-screen card, label, and count sizing to avoid overlap without changing socket, betting, reveal, settlement, card identity, payout, result, or roadmap behavior.
 
+### Baccarat Table Metadata Cleanup
+
+Correction:
+
+- Removed the visible table id, state version, and updated-at timestamp chrome from the `/baccarat` status strip.
+- Kept player-facing status, phase, timer, viewer count, connection, wallet, bet, reveal, and result UI intact without changing socket state or sync behavior.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

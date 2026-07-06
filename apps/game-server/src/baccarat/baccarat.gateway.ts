@@ -228,11 +228,16 @@ export class BaccaratGateway implements OnModuleDestroy {
           progress: body.progress,
         });
 
+        if (!update.squeezeProgressed) {
+          this.emitPersonalTableState(socket, update.state.tableId, user.userId);
+          return;
+        }
+
         await this.tableConfigService.markRevealProgress({
-          roundId: update.squeezeProgressed?.roundId ?? body.roundId,
-          revealId: update.squeezeProgressed?.revealId ?? body.revealId,
+          roundId: update.squeezeProgressed.roundId,
+          revealId: update.squeezeProgressed.revealId,
           squeezerUserId: user.userId,
-          progress: update.squeezeProgressed?.progress ?? body.progress,
+          progress: update.squeezeProgressed.progress,
         });
         this.emitTableUpdate(update);
       },
@@ -249,11 +254,25 @@ export class BaccaratGateway implements OnModuleDestroy {
       BACCARAT_CLIENT_EVENTS.SQUEEZE_COMPLETE,
       async () => {
         const user = this.resolveSocketUser(socket);
+        const tableId = readRequiredTableId(body.tableId);
+        const roundId = readRequiredRoundId(body.roundId);
+        const revealId = readRequiredRevealId(body.revealId);
+
+        if (
+          this.tableService.isAutomaticRevealActive({
+            tableId,
+            roundId,
+            revealId,
+          })
+        ) {
+          this.emitPersonalTableState(socket, tableId, user.userId);
+          return;
+        }
 
         await this.completeReveal({
-          tableId: readRequiredTableId(body.tableId),
-          roundId: readRequiredRoundId(body.roundId),
-          revealId: readRequiredRevealId(body.revealId),
+          tableId,
+          roundId,
+          revealId,
           user,
         });
       },

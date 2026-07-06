@@ -71,8 +71,9 @@ describe('BaccaratTableService', () => {
     expect(configured?.state.banker.cards[0]).not.toHaveProperty('value');
   });
 
-  it('reveals only the active completed card and keeps later cards hidden', () => {
+  it('starts automatic fast reveal and keeps later cards hidden after completion', () => {
     const service = new BaccaratTableService();
+    const startedAt = new Date('2026-07-06T00:00:00.000Z');
 
     service.configureTable(createConfiguredTable({ bets: [aliceBet(), bobBet()] }));
     service.joinTable({
@@ -88,22 +89,31 @@ describe('BaccaratTableService', () => {
 
     const squeeze = service.startNextReveal({
       tableId: 'main',
-      now: new Date('2026-07-06T00:00:00.000Z'),
+      now: startedAt,
     });
 
     expect(squeeze?.state.reveal).toEqual(
       expect.objectContaining({
         slot: 'PLAYER_CARD_1',
-        squeezerUserId: 'user-bob',
+        squeezerUserId: null,
         status: 'ACTIVE',
+        startedAt: '2026-07-06T00:00:00.000Z',
+        endsAt: '2026-07-06T00:00:01.500Z',
+        isAutoReveal: true,
       }),
     );
+    expect(squeeze?.event?.actorUserId).toBe('SYSTEM');
+    expect(service.isAutomaticRevealActive({
+      tableId: 'main',
+      roundId: 'round-1',
+      revealId: 'reveal-player-1',
+    })).toBe(true);
 
     const revealed = service.completeActiveReveal({
       tableId: 'main',
       roundId: 'round-1',
       revealId: 'reveal-player-1',
-      user: bob,
+      system: true,
       now: new Date('2026-07-06T00:00:03.000Z'),
     });
 
@@ -150,7 +160,7 @@ describe('BaccaratTableService', () => {
     );
   });
 
-  it('rejects squeeze progress and completion from non-squeezer clients', () => {
+  it('ignores client squeeze progress while automatic reveal is active', () => {
     const service = new BaccaratTableService();
 
     service.configureTable(createConfiguredTable({ bets: [aliceBet(), bobBet()] }));
@@ -173,20 +183,60 @@ describe('BaccaratTableService', () => {
     expect(squeeze?.state.reveal).toEqual(
       expect.objectContaining({
         revealId: 'reveal-player-1',
-        squeezerUserId: bob.userId,
+        squeezerUserId: null,
+        isAutoReveal: true,
       }),
     );
-    expectBaccaratErrorCode(
-      () =>
-        service.recordSqueezeProgress({
-          tableId: 'main',
-          roundId: 'round-1',
-          revealId: 'reveal-player-1',
-          user: alice,
-          progress: 50,
-        }),
-      'NOT_SQUEEZER',
+
+    const ignored = service.recordSqueezeProgress({
+      tableId: 'main',
+      roundId: 'round-1',
+      revealId: 'reveal-player-1',
+      user: alice,
+      progress: 50,
+    });
+
+    expect(ignored.event).toBeUndefined();
+    expect(ignored.squeezeProgressed).toBeUndefined();
+    expect(ignored.state.reveal).toEqual(
+      expect.objectContaining({
+        revealId: 'reveal-player-1',
+        squeezerUserId: null,
+        progress: 0,
+        isAutoReveal: true,
+      }),
     );
+
+    const state = service.getTableState('main');
+
+    expect(state.player.cards[0]).toEqual({
+      slot: 'PLAYER_CARD_1',
+      hidden: true,
+    });
+    expect(state.player.cards[0]).not.toHaveProperty('rank');
+  });
+
+  it('keeps selected-squeezer validation for legacy active reveal snapshots', () => {
+    const service = new BaccaratTableService();
+
+    service.configureTable(
+      createConfiguredTable({
+        round: createRound({ status: 'SQUEEZE' }),
+        reveals: createLegacySqueezerReveals(),
+        bets: [aliceBet(), bobBet()],
+      }),
+    );
+    service.joinTable({
+      tableId: 'main',
+      socketId: 'socket-alice',
+      user: alice,
+    });
+    service.joinTable({
+      tableId: 'main',
+      socketId: 'socket-bob',
+      user: bob,
+    });
+
     expectBaccaratErrorCode(
       () =>
         service.completeActiveReveal({
@@ -208,6 +258,7 @@ describe('BaccaratTableService', () => {
     expect(state.reveal).toEqual(
       expect.objectContaining({
         revealId: 'reveal-player-1',
+        squeezerUserId: bob.userId,
         status: 'ACTIVE',
         progress: 0,
       }),
@@ -245,9 +296,10 @@ describe('BaccaratTableService', () => {
       expect.objectContaining({
         revealId: 'reveal-banker-1',
         slot: 'BANKER_CARD_1',
-        squeezerUserId: bob.userId,
+        squeezerUserId: null,
         status: 'ACTIVE',
         progress: 40,
+        isAutoReveal: true,
       }),
     );
     expect(publicState.squeeze).toEqual(
@@ -255,6 +307,7 @@ describe('BaccaratTableService', () => {
         revealId: 'reveal-banker-1',
         status: 'ACTIVE',
         progress: 40,
+        isAutoReveal: true,
       }),
     );
     expect(publicState.betting.myBet).toBeNull();
@@ -277,7 +330,13 @@ describe('BaccaratTableService', () => {
   it('auto-reveals when the active squeezer fully disconnects', () => {
     const service = new BaccaratTableService();
 
-    service.configureTable(createConfiguredTable({ bets: [bobBet()] }));
+    service.configureTable(
+      createConfiguredTable({
+        round: createRound({ status: 'SQUEEZE' }),
+        reveals: createLegacySqueezerReveals(),
+        bets: [bobBet()],
+      }),
+    );
     service.joinTable({
       tableId: 'main',
       socketId: 'socket-bob-primary',
@@ -287,10 +346,6 @@ describe('BaccaratTableService', () => {
       tableId: 'main',
       socketId: 'socket-bob-backup',
       user: bob,
-    });
-    service.startNextReveal({
-      tableId: 'main',
-      now: new Date('2026-07-06T00:00:00.000Z'),
     });
 
     service.disconnectSocket('socket-bob-primary');
@@ -459,10 +514,27 @@ function createReconnectReveals(): BaccaratRuntimeRevealSnapshot[] {
       return {
         ...reveal,
         status: 'ACTIVE',
-        squeezerUserId: bob.userId,
+        squeezerUserId: null,
         progress: 40,
         startedAt: '2026-07-06T00:00:03.000Z',
-        endsAt: '2026-07-06T00:00:11.000Z',
+        endsAt: '2026-07-06T00:00:04.500Z',
+      };
+    }
+
+    return reveal;
+  });
+}
+
+function createLegacySqueezerReveals(): BaccaratRuntimeRevealSnapshot[] {
+  return createReveals().map((reveal) => {
+    if (reveal.revealId === 'reveal-player-1') {
+      return {
+        ...reveal,
+        status: 'ACTIVE',
+        squeezerUserId: bob.userId,
+        progress: 0,
+        startedAt: '2026-07-06T00:00:00.000Z',
+        endsAt: '2026-07-06T00:00:08.000Z',
       };
     }
 

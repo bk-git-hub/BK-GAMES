@@ -387,6 +387,16 @@ Correction:
 - The banner visually separates the user's personal bet result from the overall round winner and uses only `myBet` plus `round:settled` result payload fields already emitted by the server.
 - No winner, payout, settlement, card identity, reveal, roadmap, socket contract, or backend logic was changed.
 
+### Baccarat Automatic Reveal Cadence
+
+Correction:
+
+- Changed Baccarat backend reveal progression so normal card reveal no longer depends on player `squeeze:progress` or `squeeze:complete` input.
+- New reveal slots are server-authoritative automatic reveals with `squeezerUserId: null`, `isAutoReveal: true`, and a 1.5 second per-card cadence.
+- Existing socket phase/event names are preserved for compatibility; stale client squeeze progress/complete attempts during automatic reveals are ignored and receive a fresh personal table state instead of revealing cards early.
+- Hidden-card safety is preserved: rank, suit, value, hand totals, and final outcome become client-visible only after the server completes the relevant reveal path.
+- Legacy/reconnect snapshots that already contain a human `squeezerUserId` still retain selected-squeezer validation and disconnect auto reveal safety.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

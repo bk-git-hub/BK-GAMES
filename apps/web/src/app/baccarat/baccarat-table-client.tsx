@@ -214,46 +214,52 @@ export function BaccaratTableClient({
                   state={state}
                 />
 
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.46fr)_minmax(0,1fr)] lg:items-start">
-                  <HandPanel
-                    activeReveal={activeReveal}
-                    hand={state?.player ?? null}
-                    label="Player"
-                    tone="player"
-                  />
-                  <SqueezePanel
-                    activeReveal={activeReveal}
-                    isSqueezer={isSqueezer}
-                    onComplete={(revealId) => {
-                      if (!currentRoundId) {
-                        return;
-                      }
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.46fr)_minmax(0,1fr)] lg:items-start">
+                  <div className="min-w-0">
+                    <HandPanel
+                      activeReveal={activeReveal}
+                      hand={state?.player ?? null}
+                      label="Player"
+                      tone="player"
+                    />
+                  </div>
+                  <div className="order-3 col-span-2 min-w-0 lg:order-none lg:col-span-1">
+                    <SqueezePanel
+                      activeReveal={activeReveal}
+                      isSqueezer={isSqueezer}
+                      onComplete={(revealId) => {
+                        if (!currentRoundId) {
+                          return;
+                        }
 
-                      table.completeSqueeze({
-                        revealId,
-                        roundId: currentRoundId,
-                      });
-                    }}
-                    onProgress={(revealId, progress) => {
-                      if (!currentRoundId) {
-                        return;
-                      }
+                        table.completeSqueeze({
+                          revealId,
+                          roundId: currentRoundId,
+                        });
+                      }}
+                      onProgress={(revealId, progress) => {
+                        if (!currentRoundId) {
+                          return;
+                        }
 
-                      table.sendSqueezeProgress({
-                        progress,
-                        revealId,
-                        roundId: currentRoundId,
-                      });
-                    }}
-                    playerName={table.player?.nickname ?? userName}
-                    state={state}
-                  />
-                  <HandPanel
-                    activeReveal={activeReveal}
-                    hand={state?.banker ?? null}
-                    label="Banker"
-                    tone="banker"
-                  />
+                        table.sendSqueezeProgress({
+                          progress,
+                          revealId,
+                          roundId: currentRoundId,
+                        });
+                      }}
+                      playerName={table.player?.nickname ?? userName}
+                      state={state}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <HandPanel
+                      activeReveal={activeReveal}
+                      hand={state?.banker ?? null}
+                      label="Banker"
+                      tone="banker"
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-auto grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -461,34 +467,34 @@ function HandPanel({
   return (
     <section
       className={cn(
-        "rounded-[1rem] border p-3 shadow-xl shadow-black/25",
+        "h-full min-w-0 rounded-[1rem] border p-2.5 shadow-xl shadow-black/25 sm:p-3",
         tone === "player"
           ? "border-sky-200/45 bg-[#11243a]/90"
           : "border-rose-200/45 bg-[#321924]/90",
       )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold">{label}</h2>
-          <p className="text-sm text-white/65">
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold sm:text-2xl">{label}</h2>
+          <p className="text-xs text-white/65 sm:text-sm">
             Total {hand?.total === null || !hand ? "Hidden" : hand.total}
             {hand?.isNatural ? " · Natural" : ""}
           </p>
         </div>
         <div
           className={cn(
-            "rounded-lg border px-3 py-2 text-center",
+            "shrink-0 rounded-lg border px-2 py-1.5 text-center sm:px-3 sm:py-2",
             tone === "player"
               ? "border-sky-100/35 bg-[#17385b] text-sky-50"
               : "border-rose-100/35 bg-[#4b2030] text-rose-50",
           )}
         >
           <p className="text-xs text-white/65">Cards</p>
-          <p className="text-lg font-semibold">{cards.length}</p>
+          <p className="text-base font-semibold sm:text-lg">{cards.length}</p>
         </div>
       </div>
 
-      <div className="mt-5 flex min-h-[164px] flex-wrap items-center justify-center gap-3">
+      <div className="mt-3 flex min-h-[120px] flex-wrap items-center justify-center gap-2 sm:mt-5 sm:min-h-[148px] sm:gap-3 md:min-h-[164px]">
         {cards.length ? (
           cards.map((card, index) => (
             <BaccaratCard
@@ -533,7 +539,7 @@ function BaccaratCard({
     <Image
       alt={`${card.rank} of ${card.suit}`}
       className={cn(
-        "h-auto w-[74px] shrink-0 rounded-lg shadow-xl shadow-black/35 sm:w-[88px]",
+        "h-auto w-[56px] shrink-0 rounded-lg shadow-xl shadow-black/35 sm:w-[74px] md:w-[88px]",
         index % 2 === 0 ? "rotate-[-2deg]" : "rotate-[2deg]",
       )}
       height={588}
@@ -576,7 +582,9 @@ function SqueezeCardBack({
       }`}
       className={cn(
         "relative isolate aspect-[5/7] shrink-0 overflow-hidden rounded-lg border border-amber-100/25 shadow-xl shadow-black/35 transition",
-        size === "featured" ? "w-[108px] sm:w-[128px]" : "w-[74px] sm:w-[88px]",
+        size === "featured"
+          ? "w-[108px] sm:w-[128px]"
+          : "w-[56px] sm:w-[74px] md:w-[88px]",
         rotationClass,
         isActive ? "ring-2 ring-amber-200/70 ring-offset-2 ring-offset-black/30" : "",
       )}
@@ -633,10 +641,10 @@ function SqueezeCardBack({
 
 function EmptyCardRow() {
   return (
-    <div className="flex gap-3 opacity-70">
+    <div className="flex gap-2 opacity-70 sm:gap-3">
       {[0, 1].map((slot) => (
         <div
-          className="aspect-[5/7] w-[74px] rounded-lg border border-dashed border-white/20 bg-[#202337]/65 sm:w-[88px]"
+          className="aspect-[5/7] w-[56px] rounded-lg border border-dashed border-white/20 bg-[#202337]/65 sm:w-[74px] md:w-[88px]"
           key={slot}
         />
       ))}

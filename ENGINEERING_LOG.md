@@ -341,6 +341,14 @@ Correction:
 - Added an explicit confirmation button that submits the selected bet through the existing socket flow, with pending feedback to avoid duplicate submissions.
 - This is frontend interaction polish only; server betting validation, socket payloads, bet rules, payouts, settlement, and roadmap logic were not changed.
 
+### Baccarat Mobile Hand Layout Polish
+
+Correction:
+
+- Adjusted the `/baccarat` hand area so Player and Banker panels sit side by side on mobile viewports where practical.
+- The Squeeze panel now spans the next mobile row while desktop keeps the Player / Squeeze / Banker table layout.
+- Tightened small-screen card, label, and count sizing to avoid overlap without changing socket, betting, reveal, settlement, card identity, payout, result, or roadmap behavior.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

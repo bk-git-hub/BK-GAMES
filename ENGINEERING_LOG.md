@@ -356,6 +356,14 @@ Correction:
 - Removed the visible table id, state version, and updated-at timestamp chrome from the `/baccarat` status strip.
 - Kept player-facing status, phase, timer, viewer count, connection, wallet, bet, reveal, and result UI intact without changing socket state or sync behavior.
 
+### Baccarat Hand Score Display Polish
+
+Correction:
+
+- Replaced visible Player/Banker hand card-count badges with server-provided score badges.
+- Hidden hands still show `Hidden` until the server-provided hand total is safe to display; the frontend does not calculate or infer hidden card values.
+- Removed recent-round card-count copy while keeping outcome and settled score information visible.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

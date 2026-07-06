@@ -461,6 +461,7 @@ function HandPanel({
   tone: "player" | "banker";
 }) {
   const cards = hand?.cards ?? [];
+  const score = formatHandScore(hand);
 
   return (
     <section
@@ -474,10 +475,9 @@ function HandPanel({
       <div className="flex items-start justify-between gap-2 sm:gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold sm:text-2xl">{label}</h2>
-          <p className="text-xs text-white/65 sm:text-sm">
-            Total {hand?.total === null || !hand ? "Hidden" : hand.total}
-            {hand?.isNatural ? " · Natural" : ""}
-          </p>
+          {hand?.isNatural ? (
+            <p className="text-xs text-white/65 sm:text-sm">Natural</p>
+          ) : null}
         </div>
         <div
           className={cn(
@@ -487,8 +487,8 @@ function HandPanel({
               : "border-rose-100/35 bg-[#4b2030] text-rose-50",
           )}
         >
-          <p className="text-xs text-white/65">Cards</p>
-          <p className="text-base font-semibold sm:text-lg">{cards.length}</p>
+          <p className="text-xs text-white/65">Score</p>
+          <p className="text-base font-semibold sm:text-lg">{score}</p>
         </div>
       </div>
 
@@ -1141,7 +1141,7 @@ function RecentRoundsPanel({ rounds }: { rounds: BaccaratRoundResultView[] }) {
                   Round {round.roundNo} · {formatOutcome(round.outcome)}
                 </p>
                 <p className="text-xs text-white/65">
-                  {round.isNatural ? "Natural" : `${round.totalCards} cards`}
+                  {round.isNatural ? "Natural" : "Settled"}
                 </p>
               </div>
               <p className="font-semibold">
@@ -1334,6 +1334,14 @@ function formatSignedPoints(value: string) {
   return `${trimmedValue.startsWith("-") ? "" : "+"}${formatPoints(
     trimmedValue,
   )} pts`;
+}
+
+function formatHandScore(hand: BaccaratHandSnapshot | null) {
+  if (!hand || hand.total === null) {
+    return "Hidden";
+  }
+
+  return String(hand.total);
 }
 
 function formatOutcome(value: BaccaratBetType | BaccaratRoundOutcome) {

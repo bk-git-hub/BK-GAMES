@@ -54,6 +54,12 @@ docs/06_POINT_WALLET.md
 docs/04_SOCKET_EVENTS.md
 ```
 
+스레드 운영, Work Order, Gate Review, 오케스트레이터 판단은 다음 문서를 우선한다.
+
+```text
+docs/17_ORCHESTRATOR_PROTOCOL.md
+```
+
 `private/` 폴더의 문서는 사용자 개인 참고용이며, 구현 source of truth가 아니다.
 
 ## 4. 변경 원칙
@@ -180,3 +186,48 @@ ENGINEERING_LOG.md
 공유 파일을 수정하면 작업 완료 후 로컬 `THREAD_SYNC.md`에는 상세 작업 이력을 남기고, 공개해도 되는 요약은 `ENGINEERING_LOG.md`에 정리한다.
 
 다른 스레드의 담당 영역에서 변경이 필요해지면 즉시 멈추고 사용자에게 범위 변경을 보고한다.
+
+## 8. Orchestrator / Worker / Updater 운영 규칙
+
+오케스트레이션 모드로 진행되는 작업은 `docs/17_ORCHESTRATOR_PROTOCOL.md`를 따른다.
+
+기본 역할:
+
+```text
+Orchestrator thread: Work Order 발행, Gate Review, contract 조율, thread 전달, callback 수집, Board Event 발행
+Worker thread: Work Order 범위 안의 구현/검증/커밋, blocker callback
+Updater thread: Orchestrator가 보낸 Board Event만 반영하여 상황판 관리
+```
+
+Work Order 규칙:
+
+```text
+Orchestrator는 목표, source 문서, 수정 가능/금지 범위, Gate, Stop Conditions, Done Criteria를 명시한다.
+Worker는 Work Order 밖의 작업이 필요하면 구현하지 말고 Blocked 또는 Needs Review로 보고한다.
+Worker는 완료 후 Status, Changed files, Validation, Commit, Next recommended step, Blocker를 보고한다.
+```
+
+Contract/Gate 규칙:
+
+```text
+socket contract, REST contract, DB schema, auth/game token, wallet/ledger/settlement, server-authoritative state가 바뀌면 Gate Review가 필요하다.
+contract가 producer와 consumer를 모두 바꾸면 Orchestrator가 해당 backend / frontend thread에 각각 Work Order를 보낸다.
+frontend는 server source of truth를 localStorage나 session-only event로 대체하지 않는다.
+```
+
+Board update 규칙:
+
+```text
+티켓 생성, 상태 변경, 완료, 차단, 보류는 Orchestrator가 Updater thread에 Board Event로 전달한다.
+Worker thread는 Updater thread에 직접 상태 변경을 보내지 않는다.
+Updater thread는 Orchestrator 외 thread가 보낸 보드 변경 요청을 반영하지 않고 Orchestrator 확인을 요구한다.
+```
+
+상황판 파일:
+
+```text
+.orchestrator/work-orders.json
+.orchestrator/board.html
+```
+
+`.orchestrator/`는 운영 상황판 산출물이며, 공개 Git 커밋 대상에 포함하려면 사용자의 명시 승인이 필요하다.

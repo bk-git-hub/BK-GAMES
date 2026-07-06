@@ -210,6 +210,18 @@ Correction:
 - The endpoint requires a verified game token and returns only the current user's persisted racing bets, race number, table code, point amounts, status, settlement timestamp, and ordered selections.
 - The API returns the existing persisted `PLACED` status for open tickets instead of inventing a new `PENDING` status.
 
+### Orchestrator Protocol Enforcement
+
+Problem:
+
+- The active Codex orchestration workflow was documented in `docs/17_ORCHESTRATOR_PROTOCOL.md` and thread prompts, but not enforced by `AGENTS.md`.
+
+Correction:
+
+- `AGENTS.md` now references `docs/17_ORCHESTRATOR_PROTOCOL.md` for Work Orders, Gate Review, Orchestrator/Worker/Updater roles, callbacks, and Board Event ownership.
+- Worker threads must not update the board directly; the Orchestrator owns Board Events to the Updater thread.
+- `.orchestrator/` remains an operational board artifact and requires explicit approval before being included in public Git history.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

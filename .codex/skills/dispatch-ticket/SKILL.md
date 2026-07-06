@@ -1,15 +1,22 @@
 ---
 name: dispatch-ticket
-description: Dispatch an existing orchestration ticket to exactly one idle matching worker thread, update the Board Updater that the ticket is in progress, and require the worker to callback the Orchestrator on completion, blocker, or anomaly. Use when the user asks Codex to assign, dispatch, hand off, start, send, or give an already-issued ticket/work order to a suitable idle thread. Ask the user instead of dispatching if the ticket is missing, owner/thread fit is unclear, the target thread is not idle, or the ticket involves ambiguous frontend/backend contract or Gate decisions.
+description: Dispatch orchestration tickets to idle matching worker threads, update the Board Updater that each ticket is in progress, and require every worker to callback the Orchestrator on completion, blocker, or anomaly. Use when the user asks Codex to assign, dispatch, hand off, start, send, or give an already-issued ticket/work order to suitable idle threads. If the user provides a specific ticket id, dispatch only that ticket. If no ticket id is provided, dispatch every currently dispatchable ticket one by one, never more than one worker message per ticket. Ask the user instead of dispatching unclear, busy, missing, or frontend/backend contract-ambiguous tickets.
 ---
 
 # Dispatch Ticket
 
 ## Core Rule
 
-Dispatch one existing ticket to one idle matching worker thread.
+Dispatch existing tickets to idle matching worker threads.
 
-Allowed messages per dispatch:
+Mode selection:
+
+```text
+Specific ticket id provided: dispatch only that ticket.
+No ticket id provided: dispatch every currently dispatchable ticket, one ticket at a time.
+```
+
+Allowed messages per ticket:
 
 ```text
 1 Board Updater message: mark the ticket assigned / In Progress
@@ -19,7 +26,7 @@ Allowed messages per dispatch:
 Forbidden:
 
 ```text
-Sending to more than one worker thread
+Sending one ticket to more than one worker thread
 Sending multiple Work Orders for the same ticket in one invocation
 Sending to Runtime Helper
 Sending to a busy / in-progress worker
@@ -27,9 +34,11 @@ Dispatching before owner fit is clear
 Dispatching contract-ambiguous work without asking the user
 ```
 
+When dispatching multiple tickets, finish the Board Event + Worker message pair for one ticket before starting the next ticket.
+
 ## Preconditions
 
-Before dispatching, confirm:
+Before dispatching any ticket, confirm:
 
 ```text
 Ticket exists and has a ticketId
@@ -42,6 +51,20 @@ Orchestrator thread id is known or available from context
 ```
 
 If any item is missing, ask the user one concise question instead of dispatching.
+
+For no-id dispatch, inspect the board and build a candidate list first.
+
+Dispatchable candidates:
+
+```text
+status is Ready
+objective and success criteria are clear
+owner type can be inferred without design judgment
+matching worker thread is idle
+no Gate Review or contract split is pending
+```
+
+Skip and report, but do not ask immediately, for tickets that are not dispatchable because they are Blocked, Done, Archived, already In Progress, or have no idle matching worker. Ask the user only if all candidates are ambiguous or a decision is required before any dispatch can proceed.
 
 ## Thread Fit
 
@@ -76,6 +99,8 @@ contract mismatch checks
 
 If a task touches both producer and consumer contracts, do not dispatch with this skill. Ask whether to split into producer/consumer tickets or run Gate Review first.
 
+For no-id dispatch, never force a ticket into a weaker thread fit just to clear the queue. If no matching idle worker exists, leave that ticket unassigned and mention it in the final skipped list.
+
 ## Idle Check
 
 Use thread inspection before dispatch.
@@ -89,11 +114,13 @@ unclear ownership
 recent work on an unrelated conflicting area
 ```
 
-If the best matching thread is busy, report that it is not idle and ask whether to wait, choose another matching idle thread, or split/reprioritize.
+If a specific requested ticket's best matching thread is busy, report that it is not idle and ask whether to wait, choose another matching idle thread, or split/reprioritize.
+
+If no ticket id was provided, skip tickets whose matching thread is busy and continue with other dispatchable tickets.
 
 ## Board Update
 
-Before the worker handoff, send the Board Updater a Board Event.
+Before each worker handoff, send the Board Updater a Board Event.
 
 ```text
 [Board Event]
@@ -107,11 +134,11 @@ summary:
 note: Dispatching exactly one Work Order to the selected idle worker.
 ```
 
-If the Board Event fails, do not dispatch the worker message. Report the board update failure.
+If the Board Event fails for a ticket, do not dispatch that ticket's worker message. For specific-id mode, stop and report the board update failure. For no-id mode, skip that ticket and continue only if the failure is isolated and the next ticket can still be safely updated.
 
 ## Worker Message
 
-Send exactly one Work Order to the selected worker.
+Send exactly one Work Order to the selected worker for each dispatched ticket.
 
 ```text
 [Role]
@@ -171,7 +198,9 @@ Next recommended step:
 
 ## User Response
 
-After dispatch, report briefly:
+After dispatch, report briefly.
+
+Specific ticket mode:
 
 ```text
 티켓 전달 완료:
@@ -179,6 +208,18 @@ After dispatch, report briefly:
 - assignee:
 - board status: In Progress
 - worker message: sent
+```
+
+No-id mode:
+
+```text
+티켓 일괄 전달 완료:
+- dispatched:
+  - ticketId:
+    assignee:
+- skipped:
+  - ticketId:
+    reason:
 ```
 
 Do not include implementation details unless the user asks.

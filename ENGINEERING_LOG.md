@@ -317,6 +317,14 @@ Correction:
 - Verification passed: `corepack pnpm --filter web typecheck`; `corepack pnpm --filter web lint`.
 - Manual browser verification was skipped because the web dev server was not already available at `http://localhost:3000/baccarat`; no dev server was started or restarted by the worker.
 
+### Baccarat Squeeze UI Polish
+
+Correction:
+
+- Added a progress-driven squeeze card-back visual for hidden Baccarat cards and the active squeeze panel.
+- The visual only animates a safe cover/shine/edge mask while the card remains hidden; actual rank/suit card faces still render only from server-visible card payloads.
+- No socket contract, game-server, DB, auth, payout, settlement, result, or roadmap logic was changed.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

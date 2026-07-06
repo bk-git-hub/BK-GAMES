@@ -1,6 +1,12 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -159,6 +165,7 @@ export function BaccaratTableClient({
 
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.46fr)_minmax(0,1fr)] lg:items-start">
                   <HandPanel
+                    activeReveal={activeReveal}
                     hand={state?.player ?? null}
                     label="Player"
                     tone="player"
@@ -191,6 +198,7 @@ export function BaccaratTableClient({
                     state={state}
                   />
                   <HandPanel
+                    activeReveal={activeReveal}
                     hand={state?.banker ?? null}
                     label="Banker"
                     tone="banker"
@@ -382,10 +390,12 @@ function TableStatusStrip({
 }
 
 function HandPanel({
+  activeReveal,
   hand,
   label,
   tone,
 }: {
+  activeReveal: ReturnType<typeof getActiveReveal>;
   hand: BaccaratHandSnapshot | null;
   label: string;
   tone: "player" | "banker";
@@ -425,7 +435,12 @@ function HandPanel({
       <div className="mt-5 flex min-h-[164px] flex-wrap items-center justify-center gap-3">
         {cards.length ? (
           cards.map((card, index) => (
-            <BaccaratCard card={card} index={index} key={`${card.slot}:${index}`} />
+            <BaccaratCard
+              activeReveal={activeReveal}
+              card={card}
+              index={index}
+              key={`${card.slot}:${index}`}
+            />
           ))
         ) : (
           <EmptyCardRow />
@@ -436,25 +451,25 @@ function HandPanel({
 }
 
 function BaccaratCard({
+  activeReveal,
   card,
   index,
 }: {
+  activeReveal: ReturnType<typeof getActiveReveal>;
   card: BaccaratCardView;
   index: number;
 }) {
   if (card.hidden === true) {
+    const isActiveSqueezeCard =
+      activeReveal?.slot === card.slot && activeReveal.status === "ACTIVE";
+
     return (
-      <div
-        className={cn(
-          "grid aspect-[5/7] w-[74px] shrink-0 place-items-center rounded-lg border border-amber-100/20 bg-[linear-gradient(135deg,#111827,#16251e_55%,#0f5135)] shadow-xl shadow-black/30 sm:w-[88px]",
-          index % 2 === 0 ? "rotate-[-2deg]" : "rotate-[2deg]",
-        )}
-        aria-label={`${slotLabel(card.slot)} hidden`}
-      >
-        <div className="grid size-12 place-items-center rounded-full border border-amber-100/30 bg-black/25 text-sm font-semibold text-amber-50/80">
-          BK
-        </div>
-      </div>
+      <SqueezeCardBack
+        isActive={isActiveSqueezeCard}
+        progress={isActiveSqueezeCard ? activeReveal.progress : 0}
+        rotationClass={index % 2 === 0 ? "rotate-[-2deg]" : "rotate-[2deg]"}
+        slot={card.slot}
+      />
     );
   }
 
@@ -469,6 +484,94 @@ function BaccaratCard({
       src={`/cards/royal-noir/${card.rank}${suitCode(card.suit)}.svg`}
       width={420}
     />
+  );
+}
+
+function SqueezeCardBack({
+  isActive,
+  progress,
+  rotationClass,
+  size = "table",
+  slot,
+}: {
+  isActive: boolean;
+  progress: number;
+  rotationClass?: string;
+  size?: "featured" | "table";
+  slot: BaccaratRevealSlot;
+}) {
+  const safeProgress = isActive ? clampPercent(progress) : 0;
+  const coverStyle: CSSProperties = {
+    width: `${100 - safeProgress}%`,
+  };
+  const edgeStyle: CSSProperties = {
+    left: `calc(${Math.max(6, Math.min(94, safeProgress))}% - ${
+      size === "featured" ? "0.6rem" : "0.45rem"
+    })`,
+  };
+  const shineStyle: CSSProperties = {
+    left: `${Math.max(10, Math.min(90, safeProgress))}%`,
+  };
+
+  return (
+    <div
+      aria-label={`${slotLabel(slot)} hidden${
+        isActive ? ` squeeze ${safeProgress}%` : ""
+      }`}
+      className={cn(
+        "relative isolate aspect-[5/7] shrink-0 overflow-hidden rounded-lg border border-amber-100/20 shadow-xl shadow-black/30 transition",
+        size === "featured" ? "w-[108px] sm:w-[128px]" : "w-[74px] sm:w-[88px]",
+        rotationClass,
+        isActive ? "ring-2 ring-amber-200/70 ring-offset-2 ring-offset-black/30" : "",
+      )}
+    >
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-[linear-gradient(135deg,#f8fafc,#d6f5e7_48%,#f8e7b8)]"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-[9%] rounded-md border border-amber-950/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.44),rgba(255,255,255,0.08))]"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute bottom-[10%] left-[16%] right-[16%] h-1 rounded-full bg-amber-950/10"
+      />
+
+      {isActive ? (
+        <>
+          <div
+            aria-hidden="true"
+            className="absolute inset-y-0 w-10 -translate-x-1/2 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.54),transparent)] opacity-75 blur-[1px] transition-[left]"
+            style={shineStyle}
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-y-[4%] z-20 w-4 -translate-x-1/2 rounded-full bg-[linear-gradient(90deg,rgba(255,247,214,0),rgba(255,247,214,0.9),rgba(251,191,36,0))] opacity-90 shadow-[0_0_24px_rgba(251,191,36,0.45)] transition-[left]"
+            style={edgeStyle}
+          />
+        </>
+      ) : null}
+
+      <div
+        aria-hidden="true"
+        className="absolute inset-y-0 right-0 z-10 overflow-hidden rounded-r-lg border-l border-amber-100/20 bg-[linear-gradient(135deg,#111827,#16251e_55%,#0f5135)] shadow-[-10px_0_18px_rgba(0,0,0,0.2)] transition-[width]"
+        style={coverStyle}
+      >
+        <div className="absolute inset-2 rounded-md border border-amber-100/20 bg-[radial-gradient(circle_at_50%_50%,rgba(251,191,36,0.2),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.09)_0_1px,transparent_1px_7px)] opacity-70" />
+        <div className="absolute inset-0 grid place-items-center">
+          <div
+            className={cn(
+              "grid place-items-center rounded-full border border-amber-100/30 bg-black/25 font-semibold text-amber-50/80",
+              size === "featured" ? "size-14 text-base" : "size-12 text-sm",
+            )}
+          >
+            BK
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -500,7 +603,7 @@ function SqueezePanel({
   playerName: string;
   state: BaccaratTableState | null;
 }) {
-  const progress = activeReveal?.progress ?? 0;
+  const progress = clampPercent(activeReveal?.progress ?? 0);
   const countdown = useCountdown(activeReveal?.endsAt);
 
   if (!state || !activeReveal) {
@@ -533,6 +636,15 @@ function SqueezePanel({
             : "Squeeze in progress"}
       </p>
 
+      <div className="mt-4 flex justify-center">
+        <SqueezeCardBack
+          isActive={activeReveal.status === "ACTIVE"}
+          progress={progress}
+          size="featured"
+          slot={activeReveal.slot}
+        />
+      </div>
+
       <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.08] p-3">
         <div className="flex items-center justify-between text-xs text-white/55">
           <span>{activeReveal.status}</span>
@@ -541,7 +653,7 @@ function SqueezePanel({
         <div className="mt-3 h-3 overflow-hidden rounded-full bg-black/35">
           <div
             className="h-full rounded-full bg-[linear-gradient(90deg,#38bdf8,#facc15,#fb7185)] transition-[width]"
-            style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+            style={{ width: `${progress}%` }}
           />
         </div>
         <p className="mt-2 text-sm font-semibold">{progress}%</p>
@@ -1177,6 +1289,14 @@ function suitCode(suit: "clubs" | "diamonds" | "hearts" | "spades") {
   }
 
   return "S";
+}
+
+function clampPercent(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(value)));
 }
 
 function formatTime(value: string) {

@@ -284,6 +284,16 @@ Correction:
 - Added table state, betting, reveal, squeeze, wallet update, settlement, error, recent-result, and Bead Plate/basic Big Road contract types.
 - This is contract-only: no game-server runtime, DB behavior, frontend UI, or wallet/settlement behavior was introduced.
 
+### Baccarat Game Server Runtime
+
+Correction:
+
+- Added a NestJS Baccarat module/gateway/table runtime for `/baccarat` using the shared socket contract.
+- Added server-authoritative main-table lifecycle support for betting, dealing, squeeze reveal, settlement handoff, result display, and round reset timers.
+- Baccarat bet placement now calls the DB idempotency helper through `WalletService`; settlement calls the DB settlement helper and emits wallet updates only through private user rooms.
+- Public table snapshots hide unrevealed cards and omit per-user `myBet`; viewer-specific state is emitted directly to that user's socket.
+- Added focused game-server tests for hidden-card state, reveal safety, squeezer selection, and private `myBet` visibility.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

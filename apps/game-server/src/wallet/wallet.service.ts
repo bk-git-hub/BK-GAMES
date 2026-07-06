@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { RacingBetType } from '@bk-games/shared';
+import type { BaccaratBetType, RacingBetType } from '@bk-games/shared';
 import type { BlackjackSettlementRequest } from '../blackjack/blackjack-table.service';
 
 @Injectable()
@@ -56,6 +56,31 @@ export class WalletService {
       selections: input.raceEntryIds,
     });
   }
+
+  async placeBaccaratBet(input: PlaceBaccaratBetInput) {
+    const db = (await import(dbPackageName)) as GameDbModule;
+
+    return db.placeBaccaratBet({
+      tableCode: input.tableId,
+      roundId: input.roundId,
+      userId: input.userId,
+      amount: input.amount,
+      commandId: input.commandId,
+      betType: input.betType,
+    });
+  }
+
+  async settleBaccaratRound(input: SettleBaccaratRoundInput) {
+    const db = (await import(dbPackageName)) as GameDbModule;
+
+    return db.settleBaccaratRound(input);
+  }
+
+  async cancelBaccaratRound(input: CancelBaccaratRoundInput) {
+    const db = (await import(dbPackageName)) as GameDbModule;
+
+    return db.cancelBaccaratRound(input);
+  }
 }
 
 export type PlaceBlackjackInitialBetInput = {
@@ -100,6 +125,51 @@ export type PlaceRacingBetInput = {
   raceEntryIds: string[];
 };
 
+export type PlaceBaccaratBetInput = {
+  tableId: string;
+  roundId: string;
+  userId: string;
+  amount: bigint;
+  commandId: string;
+  betType: BaccaratBetType;
+};
+
+export type SettleBaccaratRoundInput = {
+  roundId: string;
+  outcome: 'PLAYER' | 'BANKER' | 'TIE';
+  playerTotal: number;
+  bankerTotal: number;
+  isNatural: boolean;
+  totalCards: number;
+  playerCards: BaccaratSettlementCard[];
+  bankerCards: BaccaratSettlementCard[];
+  resultFlags?: Record<string, unknown>;
+  roadmapSnapshot?: Record<string, unknown> | null;
+};
+
+export type CancelBaccaratRoundInput = {
+  roundId: string;
+  reason: string;
+};
+
+export type BaccaratSettlementCard = {
+  rank:
+    | 'A'
+    | '2'
+    | '3'
+    | '4'
+    | '5'
+    | '6'
+    | '7'
+    | '8'
+    | '9'
+    | '10'
+    | 'J'
+    | 'Q'
+    | 'K';
+  suit: 'clubs' | 'diamonds' | 'hearts' | 'spades';
+};
+
 type GameDbModule = {
   placeBlackjackInitialBet(
     input: DbPlaceBlackjackInitialBetInput,
@@ -117,6 +187,15 @@ type GameDbModule = {
     input: DbSettleBlackjackRoundInput,
   ): Promise<BlackjackSettlementResult>;
   placeRacingBet(input: DbPlaceRacingBetInput): Promise<RacingBetResult>;
+  placeBaccaratBet(
+    input: DbPlaceBaccaratBetInput,
+  ): Promise<BaccaratBetResult>;
+  settleBaccaratRound(
+    input: SettleBaccaratRoundInput,
+  ): Promise<BaccaratSettlementResult>;
+  cancelBaccaratRound(
+    input: CancelBaccaratRoundInput,
+  ): Promise<BaccaratCancellationResult>;
 };
 
 type DbPlaceBlackjackInitialBetInput = {
@@ -131,6 +210,10 @@ type DbSettleBlackjackRoundInput = Omit<BlackjackSettlementRequest, 'tableId'>;
 
 type DbPlaceRacingBetInput = Omit<PlaceRacingBetInput, 'raceEntryIds'> & {
   selections: string[];
+};
+
+type DbPlaceBaccaratBetInput = Omit<PlaceBaccaratBetInput, 'tableId'> & {
+  tableCode: string;
 };
 
 export type BlackjackInitialBetResult = {
@@ -264,6 +347,73 @@ export type RacingBetSelectionResult = {
   horseId: string;
   selectionOrder: number;
   expectedRank: number;
+};
+
+export type BaccaratBetResult = {
+  table: { id: string; code: string };
+  round: { id: string; roundNo: number };
+  bet: {
+    id: string;
+    betType: BaccaratBetType;
+    amount: bigint | string;
+    status: 'PLACED' | 'SETTLED' | 'CANCELLED';
+    payoutAmount: bigint | string;
+    netAmount: bigint | string;
+    commandId: string;
+    createdAt: Date | string;
+  };
+  walletMutation: {
+    wallet: { balance: bigint | string };
+    ledger: {
+      id: string;
+      delta: bigint | string;
+    };
+  };
+};
+
+export type BaccaratSettlementResult = {
+  roundId: string;
+  outcome: 'PLAYER' | 'BANKER' | 'TIE';
+  bets: BaccaratSettlementBetResult[];
+};
+
+export type BaccaratSettlementBetResult = {
+  betId: string;
+  userId: string;
+  betType: BaccaratBetType;
+  outcome: 'WIN' | 'LOSE' | 'PUSH';
+  payoutAmount: bigint | string;
+  netAmount: bigint | string;
+  ledgerType: 'PAYOUT' | 'PUSH_REFUND' | null;
+  walletMutation: {
+    wallet: { balance: bigint | string };
+    ledger: {
+      id: string;
+      type: 'PAYOUT' | 'PUSH_REFUND';
+      delta: bigint | string;
+    };
+  } | null;
+};
+
+export type BaccaratCancellationResult = {
+  roundId: string;
+  bets: BaccaratCancellationBetResult[];
+};
+
+export type BaccaratCancellationBetResult = {
+  betId: string;
+  userId: string;
+  betType: BaccaratBetType;
+  refundAmount: bigint | string;
+  ledgerType: 'CANCEL_REFUND';
+  walletMutation: {
+    wallet: { balance: bigint | string };
+    ledger: {
+      id: string;
+      type: 'CANCEL_REFUND';
+      delta: bigint | string;
+    };
+  };
 };
 
 const dbPackageName: string = '@bk-games/db';

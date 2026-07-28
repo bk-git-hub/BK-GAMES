@@ -424,6 +424,14 @@ Correction:
 - Archived the previous orchestration rule snapshot, protocol document, board/runtime artifacts, local ticket skills, and local runtime-helper skill into `private/orchestration-archive/`, which remains local-only and ignored by Git.
 - Removed the active project-local orchestration skills and public orchestration protocol document from the repository tree after archiving them.
 
+### BK Derby Demo Cadence
+
+Correction:
+
+- Shortened the main BK Derby table seed timing from a 4-minute cycle to a 2-minute demo-friendly cycle.
+- New main timing: 30 seconds betting, 30 seconds pre-start betting lock/countdown, and 60 seconds race/result display.
+- Kept race distance, 100ms tick cadence, bet types, odds, wallet, settlement, socket contract, and race simulation behavior unchanged.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

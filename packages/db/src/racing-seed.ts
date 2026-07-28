@@ -38,8 +38,8 @@ export type MainRacingSeedResult = {
 };
 
 const standardMainRacingTiming = {
-  bettingTimeoutSeconds: 150,
-  raceIntervalSeconds: 240,
+  bettingTimeoutSeconds: 30,
+  raceIntervalSeconds: 120,
   raceAndResultSeconds: 60,
   bettingCloseBeforeStartSeconds: 30,
   roundEndDelaySeconds: 10,

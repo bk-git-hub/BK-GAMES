@@ -1,16 +1,18 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Home } from "lucide-react";
+import { Home, LogIn } from "lucide-react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 
 type LobbyShellProps = {
   children: ReactNode;
-  userEmail: string;
-  userName: string;
+  userEmail?: string;
+  userName?: string;
 };
 
 export function LobbyShell({ children, userEmail, userName }: LobbyShellProps) {
+  const isSignedIn = Boolean(userEmail || userName);
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f7efe2] text-[#111827]">
       <RetroTexture />
@@ -30,10 +32,12 @@ export function LobbyShell({ children, userEmail, userName }: LobbyShellProps) {
                 </span>
               </Link>
               <h1 className="mt-4 text-4xl leading-none font-black tracking-normal sm:text-5xl">
-                Lobby
+                Games
               </h1>
               <p className="mt-3 text-sm leading-6 font-bold break-words text-[#4b5874]">
-                {userName} · {userEmail}
+                {isSignedIn
+                  ? `${userName || "Player"} · ${userEmail || "Signed in"}`
+                  : "Browse games first. Login only when you are ready to claim points or bet."}
               </p>
             </div>
 
@@ -45,9 +49,19 @@ export function LobbyShell({ children, userEmail, userName }: LobbyShellProps) {
                 <Home className="size-4" />
                 Home
               </Link>
-              <div className="[&_button]:h-11 [&_button]:rounded-md [&_button]:border-[#071c3f] [&_button]:bg-[#0b3b73] [&_button]:px-5 [&_button]:text-sm [&_button]:font-black [&_button]:tracking-normal [&_button]:text-white [&_button]:uppercase [&_button]:shadow-[0_5px_0_#071c3f] [&_button]:transition [&_button:hover]:-translate-y-0.5 [&_button:hover]:bg-[#c8272e] [&_button:hover]:shadow-[0_6px_0_#7d161b]">
-                <SignOutButton />
-              </div>
+              {isSignedIn ? (
+                <div className="[&_button]:h-11 [&_button]:rounded-md [&_button]:border-[#071c3f] [&_button]:bg-[#0b3b73] [&_button]:px-5 [&_button]:text-sm [&_button]:font-black [&_button]:tracking-normal [&_button]:text-white [&_button]:uppercase [&_button]:shadow-[0_5px_0_#071c3f] [&_button]:transition [&_button:hover]:-translate-y-0.5 [&_button:hover]:bg-[#c8272e] [&_button:hover]:shadow-[0_6px_0_#7d161b]">
+                  <SignOutButton />
+                </div>
+              ) : (
+                <Link
+                  href="/auth"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-[#071c3f] bg-[#0b3b73] px-5 text-sm font-black tracking-normal text-white uppercase shadow-[0_5px_0_#071c3f] transition hover:-translate-y-0.5 hover:bg-[#c8272e] hover:shadow-[0_6px_0_#7d161b]"
+                >
+                  <LogIn className="size-4" />
+                  Login
+                </Link>
+              )}
             </div>
           </div>
         </header>

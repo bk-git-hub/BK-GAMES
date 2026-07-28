@@ -1,15 +1,17 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import {
   DEFAULT_DAILY_REWARD_AMOUNT,
+  db,
   ensureUserGameAccount,
   getDailyRewardClaimDate,
 } from "@bk-games/db";
 
-import { DailyRewardCard, type DailyRewardFeedback } from "./daily-reward-card";
+import {
+  AccountRewardPanel,
+  type DailyRewardFeedback,
+} from "./account-reward-panel";
 import { GameList } from "./game-list";
 import { LobbyShell } from "./lobby-shell";
-import { WalletSummary } from "./wallet-summary";
 import { auth } from "@/lib/auth";
 
 type LobbyPageProps = {
@@ -22,38 +24,89 @@ type LobbyPageProps = {
 
 export default async function LobbyPage({ searchParams }: LobbyPageProps) {
   const params = await searchParams;
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    redirect("/auth");
-  }
-
-  const gameAccount = await ensureUserGameAccount({
-    userId: session.user.id,
-    displayName: session.user.name,
-  });
+  const session = await getOptionalSession();
+  const today = getDailyRewardClaimDate();
   const feedback = getDailyRewardFeedback(params);
+  const account = session
+    ? await getLobbyAccountState({
+        displayName: session.user.name,
+        today,
+        userId: session.user.id,
+      })
+    : null;
+  const accountStatus = !session
+    ? "guest"
+    : account?.status === "ready"
+      ? "ready"
+      : "unavailable";
 
   return (
-    <LobbyShell userEmail={session.user.email} userName={session.user.name}>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="flex flex-col gap-6">
-          <WalletSummary
-            balance={gameAccount.wallet.balance}
-            status={gameAccount.wallet.status}
-          />
-          <GameList />
-        </div>
-        <DailyRewardCard
-          amount={DEFAULT_DAILY_REWARD_AMOUNT}
+    <LobbyShell userEmail={session?.user.email} userName={session?.user.name}>
+      <div className="flex flex-col gap-6">
+        <AccountRewardPanel
+          accountStatus={accountStatus}
+          balance={account?.status === "ready" ? account.balance : undefined}
           feedback={feedback}
-          today={getDailyRewardClaimDate()}
+          hasClaimedToday={
+            account?.status === "ready" ? account.hasClaimedToday : false
+          }
+          rewardAmount={DEFAULT_DAILY_REWARD_AMOUNT}
+          today={today}
+          walletStatus={
+            account?.status === "ready" ? account.walletStatus : undefined
+          }
         />
+        <GameList />
       </div>
     </LobbyShell>
   );
+}
+
+async function getOptionalSession() {
+  try {
+    return await auth.api.getSession({
+      headers: await headers(),
+    });
+  } catch (error) {
+    console.error("Failed to load lobby session.", error);
+    return null;
+  }
+}
+
+async function getLobbyAccountState({
+  displayName,
+  today,
+  userId,
+}: {
+  displayName: string;
+  today: string;
+  userId: string;
+}) {
+  try {
+    const gameAccount = await ensureUserGameAccount({
+      userId,
+      displayName,
+    });
+    const rewardClaim = await db.query.dailyRewardClaims.findFirst({
+      columns: {
+        id: true,
+      },
+      where: (claim, { and, eq }) =>
+        and(eq(claim.userId, userId), eq(claim.claimDate, today)),
+    });
+
+    return {
+      balance: gameAccount.wallet.balance,
+      hasClaimedToday: Boolean(rewardClaim),
+      status: "ready" as const,
+      walletStatus: gameAccount.wallet.status,
+    };
+  } catch (error) {
+    console.error("Failed to load lobby account data.", error);
+    return {
+      status: "unavailable" as const,
+    };
+  }
 }
 
 function getDailyRewardFeedback(

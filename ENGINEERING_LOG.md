@@ -406,6 +406,15 @@ Correction:
 - Added a per-card flip animation when server table state transitions a card from hidden to visible.
 - Hidden cards still render only the safe card back/cover using server reveal timing; rank, suit, and value are rendered only after the server sends visible card data.
 
+### Orchestration Default Mode Toggle
+
+Correction:
+
+- Updated `AGENTS.md` so orchestration is no longer forced by default.
+- The default mode is now `Direct Agent Mode` with `ORCHESTRATION_MODE: off`.
+- Work Order dispatch, Board Events, and worker/updater thread messages now require an explicit user request or one-off `$issue-ticket` / `$dispatch-ticket` invocation.
+- The user can later re-enable or disable orchestration with explicit mode commands.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

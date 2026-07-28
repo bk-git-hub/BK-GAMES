@@ -54,7 +54,7 @@ docs/06_POINT_WALLET.md
 docs/04_SOCKET_EVENTS.md
 ```
 
-스레드 운영, Work Order, Gate Review, 오케스트레이터 판단은 다음 문서를 우선한다.
+스레드 운영, Work Order, Gate Review, 오케스트레이터 판단은 오케스트레이션 모드가 켜져 있을 때만 다음 문서를 우선한다.
 
 ```text
 docs/17_ORCHESTRATOR_PROTOCOL.md
@@ -188,6 +188,49 @@ ENGINEERING_LOG.md
 다른 스레드의 담당 영역에서 변경이 필요해지면 즉시 멈추고 사용자에게 범위 변경을 보고한다.
 
 ## 8. Orchestrator / Worker / Updater 운영 규칙
+
+현재 기본 운영 모드는 `Direct Agent Mode`다.
+
+```text
+ORCHESTRATION_MODE: off
+```
+
+`ORCHESTRATION_MODE: off`일 때는 오케스트레이터 운영을 강제하지 않는다.
+
+기본 동작:
+
+```text
+현재 thread가 직접 작업을 수행한다.
+자동으로 Work Order를 발행하지 않는다.
+자동으로 Board Event를 보내지 않는다.
+자동으로 worker/updater thread에 메시지를 보내지 않는다.
+이미 남아 있는 Ready/Blocked/In Progress 티켓을 자동 배정하지 않는다.
+```
+
+오케스트레이션을 다시 켜려면 사용자가 명시적으로 지시해야 한다.
+
+켜는 지시 예시:
+
+```text
+오케스트레이터 모드 켜
+오케스트레이션 다시 시작
+티켓 큐 다시 배정해
+$issue-ticket
+$dispatch-ticket
+```
+
+끄는 지시 예시:
+
+```text
+오케스트레이터 모드 꺼
+오케스트레이션 중단
+티켓 배정 멈춰
+직접 작업 모드로 해
+```
+
+명시적인 `$issue-ticket` 또는 `$dispatch-ticket` 호출은 해당 skill의 1회성 실행으로 처리한다. 이 호출만으로 지속적인 오케스트레이터 모드가 켜진 것으로 간주하지 않는다.
+
+오케스트레이션 모드를 켜면 아래 규칙을 따른다.
 
 오케스트레이션 모드로 진행되는 작업은 `docs/17_ORCHESTRATOR_PROTOCOL.md`를 따른다.
 

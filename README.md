@@ -1,23 +1,51 @@
 # BK Games
 
-BK Games is a portfolio project for a realtime free-point game platform.
+BK Games is a free-points multiplayer game platform built around real-time games, a shared wallet, and server-authoritative settlement.
 
-The project focuses on multiplayer game infrastructure rather than cash gambling:
+The project started with Blackjack, but it is not a Blackjack-only app. The platform is structured so new games can reuse the same account, wallet, lobby, point ledger, and real-time infrastructure.
 
-- No cash deposits
-- No point exchange
-- No point transfer
-- No marketplace
-- Server-authoritative game state
-- Ledger-backed point wallet
+> Draft status: this README is a working project overview. Screenshots are local development snapshots and can be replaced before publishing.
 
-## Highlights
+<p align="center">
+  <img src="./docs/screenshots/readme/landing.png" alt="BK Games landing page" width="900" />
+</p>
 
-- Realtime Blackjack table with seats, betting windows, split, double, surrender, insurance, even money, dealer peek, private wallet updates, and settlement/reset flow.
-- Server-authoritative horse racing with fixed race slots, Socket.IO tick broadcasts, deterministic race simulation, multiple bet types, wallet-backed payouts, and today-based result/stat APIs.
-- Point wallet ledger with idempotency keys, row-level locking, balance safety checks, and transaction-safe settlement.
-- Better Auth session flow bridged into the NestJS game server through short-lived game tokens.
-- AI-assisted development workflow documented through agent rules, scoped commits, cross-thread handoff, troubleshooting notes, and public engineering logs.
+## What This Project Is
+
+BK Games is a portfolio-scale full-stack game platform focused on real-time systems and point-wallet correctness.
+
+- Free points only
+- No cash deposits or withdrawals
+- No point exchange, point transfer, or marketplace
+- Authenticated accounts with Better Auth
+- Shared wallet and ledger-backed point movement
+- Server-authoritative game state and settlement
+- Socket.IO table updates for real-time game screens
+
+The core loop is simple: sign in, claim free points, enter the lobby, pick a game, play with the shared wallet, and receive private wallet updates after accepted actions or settlement.
+
+## Screenshots
+
+| Landing | Account Access |
+|---|---|
+| <img src="./docs/screenshots/readme/landing.png" alt="Landing page" width="420" /> | <img src="./docs/screenshots/readme/auth.png" alt="Sign in and sign up page" width="420" /> |
+
+| BK Derby |
+|---|
+| <img src="./docs/screenshots/readme/bk-derby.png" alt="BK Derby racing screen" width="640" /> |
+
+Authenticated lobby, Blackjack, and Baccarat table screenshots should be added after signing in locally, because those routes depend on a browser session and the game server.
+
+## Product Surfaces
+
+| Route | Purpose | Auth |
+|---|---|---|
+| `/` | Public landing page and current game lineup | Public |
+| `/auth` | Sign in and sign up | Public |
+| `/lobby` | Wallet summary, daily reward, and game selection | Required |
+| `/blackjack` | Real-time Blackjack table | Required |
+| `/baccarat` | Real-time Baccarat table | Required |
+| `/racing/bk-derby` | BK Derby racing game screen | Public preview / backend-linked |
 
 ## Tech Stack
 
@@ -29,107 +57,158 @@ The project focuses on multiplayer game infrastructure rather than cash gambling
 | Auth | Better Auth, server-issued game tokens |
 | Monorepo | pnpm workspaces, Turbo |
 | Local infra | Docker Compose PostgreSQL |
-| Quality gates | TypeScript typecheck, Jest, smoke scripts |
+| Quality gates | TypeScript typecheck, ESLint, Jest, smoke scripts |
+
+## Current Game Lineup
+
+| Game | Status | Notes |
+|---|---|---|
+| Blackjack | Playable real-time table | Seat taking, betting, actions, table state, event stream, settlement, and private wallet updates |
+| Baccarat | Playable real-time table | Player, Banker, and Tie betting with server-revealed cards, settlement, roadmaps, and private wallet updates |
+| BK Derby | Backend-linked racing screen | Fixed race cycle, tickets, race history, horse records, and wallet-backed betting flow |
+
+## Planned And Specified Work
+
+- Add authenticated lobby and Blackjack table screenshots to this README after local sign-in.
+- Continue Blackjack table UX polish around result review, card reveal pacing, split hands, and mobile layout.
+- Continue Baccarat table UX polish around betting clarity, reveal pacing, and mobile layout.
+- Revisit Boxing later from the existing backend-facing specification if it returns to the active game lineup.
+- Continue production hardening for deployment, observability, and operational recovery.
 
 ## Architecture
 
 ```text
 apps/web
-  Next.js UI, auth-facing routes, lobby, game pages
+  Next.js app for landing, auth, lobby, game screens, and web-facing API routes.
 
 apps/game-server
-  NestJS HTTP + Socket.IO namespaces for realtime games
-
-packages/db
-  Drizzle schema, wallet ledger helpers, game settlement helpers, seed/smoke scripts
+  NestJS + Socket.IO runtime for real-time tables, game phases, player commands, and settlement.
 
 packages/shared
-  Shared socket contracts and API response types
+  Shared API, socket event names, payload schemas, and TypeScript contracts.
+
+packages/db
+  Drizzle schema, repositories, wallet ledger helpers, seed scripts, and smoke scripts.
 
 packages/game-engine
-  Pure game-domain helpers
+  Pure game-domain logic used by server-side game services.
 ```
 
-The web app owns browser sessions. The game server does not trust browser-supplied user ids; it verifies short-lived game tokens issued by the web app from the authenticated session.
+```mermaid
+flowchart LR
+  Browser["Browser"]
+  Web["apps/web"]
+  GameServer["apps/game-server"]
+  Shared["packages/shared"]
+  DB["PostgreSQL + Drizzle"]
+  Engine["packages/game-engine"]
 
-## Implemented Game Systems
+  Browser --> Web
+  Browser --> GameServer
+  Web --> DB
+  Web --> Shared
+  GameServer --> Shared
+  GameServer --> Engine
+  GameServer --> DB
+```
 
-### Blackjack
+The web app owns the Better Auth browser session. For real-time games, the web app issues a short-lived game token from an authenticated session, and the game server validates that token before allowing Socket.IO gameplay.
 
-- Realtime table state over Socket.IO
-- Seat occupancy and leave/disconnect handling
-- Betting timer and round start flow
-- Server-driven card reveal events
-- Split, double, surrender, insurance, even money
-- US-style dealer peek
-- Wallet-backed bets, refunds, side bets, and payouts
-- Private `wallet:updated` events scoped to user rooms
+## Real-Time Model
 
-### Horse Racing
+The game server is the source of truth for table state, cards, race ticks, accepted bets, and settlement. Clients render state and send commands, but they do not decide outcomes.
 
-- Fixed 4-minute race cycle
-- Betting, lock, running, settlement, result display phases
-- Server-authoritative `RACE_TICK` broadcast at table tick interval
-- 25-second race movement window inside a 60-second race/result phase
-- Win, place, quinella, exacta, quinella place, trio, trifecta bet types
-- Deterministic race simulation with visible overtakes
-- Today-based race history and horse stats APIs
+Blackjack currently uses:
 
-### Planned / Specified
+- `POST /api/game-token` from the web app
+- Socket.IO namespace `/blackjack`
+- Server table state events such as `TABLE_STATE`
+- Server event stream entries such as `TABLE_EVENT`
+- Private wallet events such as `wallet:updated`
+- Client commands with `commandId` for point-changing actions
 
-- Baccarat realtime table
-- Boxing broadcast game
-- Admin UI polish
-- Production deployment hardening
+The same principles are used for other games: point-changing commands are idempotent, wallet changes are ledger-backed, and private wallet balances are not broadcast to public table rooms.
 
-## AI-Assisted Engineering Workflow
+## Wallet And Points
 
-This repository intentionally includes the AI collaboration rules used during development.
+The wallet system is intentionally conservative:
 
-- [AGENTS.md](./AGENTS.md) defines agent working rules: scope reporting, small task boundaries, explicit path staging, commit discipline, backend/frontend ownership, and local handoff rules.
-- [ENGINEERING_LOG.md](./ENGINEERING_LOG.md) is the public, sanitized engineering log that summarizes milestones, decisions, and troubleshooting outcomes.
+- Daily rewards create free points for play.
+- Wallet balance is backed by immutable point ledger rows.
+- Betting and settlement happen inside backend-controlled transactions.
+- Accepted point-changing commands use idempotency keys.
+- Private wallet updates are sent only to the affected user.
+- Broadcast table state does not expose private wallet balances.
 
-The goal was not to hide AI usage. The goal was to treat AI agents like disciplined collaborators with clear boundaries, reviewable commits, and documented architectural decisions.
-
-## Documentation
-
-| Document | Purpose |
-|---|---|
-| [AUTH_STRUCTURE.md](./AUTH_STRUCTURE.md) | Auth/session/game-token architecture |
-| [WALLET_TRANSACTIONS.md](./WALLET_TRANSACTIONS.md) | Wallet ledger, idempotency, and lock strategy |
-| [docs/00_README.md](./docs/00_README.md) | Original implementation document index |
-| [docs/12_BACCARAT_SCOPE.md](./docs/12_BACCARAT_SCOPE.md) | Baccarat scope |
-| [docs/13_BACCARAT_REALTIME_TABLE_SPEC.md](./docs/13_BACCARAT_REALTIME_TABLE_SPEC.md) | Baccarat realtime table spec |
-| [docs/14_BACCARAT_IMPLEMENTATION_PLAN.md](./docs/14_BACCARAT_IMPLEMENTATION_PLAN.md) | Baccarat implementation plan |
-| [docs/15_HORSE_RACING_BACKEND_SPEC.md](./docs/15_HORSE_RACING_BACKEND_SPEC.md) | Horse racing backend spec |
-| [docs/16_BOXING_BACKEND_SPEC.md](./docs/16_BOXING_BACKEND_SPEC.md) | Boxing backend spec |
+This keeps game animation and UX separate from financial correctness. UI can be polished freely while the backend remains authoritative.
 
 ## Local Development
 
+Install dependencies:
+
 ```bash
 pnpm install
+```
+
+Start local PostgreSQL and prepare data:
+
+```bash
 docker compose up -d postgres
 pnpm db:migrate
 pnpm --filter @bk-games/db seed:blackjack-main
 pnpm --filter @bk-games/db seed:racing-main
-pnpm dev
 ```
+
+Run the apps:
+
+```bash
+pnpm --filter web dev
+pnpm --filter game-server dev
+```
+
+Default local URLs:
+
+| Service | URL |
+|---|---|
+| Web | `http://localhost:3000` |
+| Game server | `http://localhost:4000` |
 
 Useful checks:
 
 ```bash
 pnpm typecheck
+pnpm lint
 pnpm --filter game-server test
 pnpm --filter @bk-games/db smoke:racing-runner
 pnpm --filter @bk-games/db smoke:racing-wallet
 ```
 
+## Documentation Map
+
+| Document | Purpose |
+|---|---|
+| [AGENTS.md](./AGENTS.md) | AI agent working rules, scope reporting, and commit discipline |
+| [ENGINEERING_LOG.md](./ENGINEERING_LOG.md) | Public engineering progress log |
+| [AUTH_STRUCTURE.md](./AUTH_STRUCTURE.md) | Auth, session, and game-token architecture |
+| [WALLET_TRANSACTIONS.md](./WALLET_TRANSACTIONS.md) | Wallet ledger and transaction strategy |
+| [docs/01_FINAL_SCOPE.md](./docs/01_FINAL_SCOPE.md) | MVP product scope |
+| [docs/02_ARCHITECTURE.md](./docs/02_ARCHITECTURE.md) | System architecture |
+| [docs/03_REALTIME_BLACKJACK_TABLE_SPEC.md](./docs/03_REALTIME_BLACKJACK_TABLE_SPEC.md) | Blackjack table behavior |
+| [docs/04_SOCKET_EVENTS.md](./docs/04_SOCKET_EVENTS.md) | Socket event contract |
+| [docs/06_POINT_WALLET.md](./docs/06_POINT_WALLET.md) | Point wallet rules |
+| [docs/11_AI_AGENT_IMPLEMENTATION_DECISIONS.md](./docs/11_AI_AGENT_IMPLEMENTATION_DECISIONS.md) | Implementation decisions for AI-assisted work |
+| [docs/12_BACCARAT_SCOPE.md](./docs/12_BACCARAT_SCOPE.md) | Baccarat scope |
+| [docs/13_BACCARAT_REALTIME_TABLE_SPEC.md](./docs/13_BACCARAT_REALTIME_TABLE_SPEC.md) | Baccarat real-time table spec |
+| [docs/14_BACCARAT_IMPLEMENTATION_PLAN.md](./docs/14_BACCARAT_IMPLEMENTATION_PLAN.md) | Baccarat implementation plan |
+| [docs/15_HORSE_RACING_BACKEND_SPEC.md](./docs/15_HORSE_RACING_BACKEND_SPEC.md) | BK Derby backend-facing design |
+| [docs/16_BOXING_BACKEND_SPEC.md](./docs/16_BOXING_BACKEND_SPEC.md) | Boxing backend-facing design |
+
 ## Portfolio Framing
 
-BK Games is meant to demonstrate:
+BK Games demonstrates:
 
-- Full-stack architecture across web, realtime server, shared contracts, and database packages.
-- Backend reasoning around transactions, idempotency, ledgers, and authorization boundaries.
-- Realtime game design with server-authoritative state instead of client-trusted outcomes.
-- Practical AI-agent orchestration through documented scope control, commit hygiene, and troubleshooting.
-
+- Full-stack monorepo design across frontend, real-time server, shared contracts, database, and game engine packages.
+- Real-time gameplay with server-authoritative state instead of client-trusted outcomes.
+- Wallet and ledger reasoning around idempotency, row locks, private balance updates, and settlement.
+- Product growth from one game into a reusable game platform.
+- AI-assisted development with explicit scope control, cross-thread coordination, and reviewable work units.

@@ -9,7 +9,9 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowLeft, Home } from "lucide-react";
 import {
   RACING_CLIENT_EVENTS,
   RACING_NAMESPACE,
@@ -366,7 +368,6 @@ export function BkDerbyClient() {
   const racing = useRacingTable();
   const raceHistory = useRacingRaceHistory();
   const betHistory = useRacingBetHistory(racing.gameToken);
-  const usesBackendState = Boolean(racing.tableState?.race);
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [persistedResultBoard, setPersistedResultBoard] =
     useState<RaceResultBoard | null>(null);
@@ -570,12 +571,6 @@ export function BkDerbyClient() {
   useEffect(() => {
     latestTickRef.current = racing.latestTick;
   }, [racing.latestTick]);
-
-  useEffect(() => {
-    if (racing.isAuthRequired) {
-      router.replace("/auth");
-    }
-  }, [racing.isAuthRequired, router]);
 
   useEffect(() => {
     finishMarksRef.current = clientFinishMarks;
@@ -904,11 +899,24 @@ export function BkDerbyClient() {
             <span className={styles.brandMark}>BK</span>
             <div>
               <h1 id="derby-title">BK Derby</h1>
-              <p>
-                {usesBackendState ? "Backend linked" : "Connecting to live race"}
-              </p>
+              <p>실시간 레이스 관전과 마권 발권</p>
             </div>
           </div>
+          <nav className={styles.headerActions} aria-label="BK Derby navigation">
+            <button
+              aria-label="Go back"
+              className={styles.navButton}
+              onClick={() => router.back()}
+              type="button"
+            >
+              <ArrowLeft aria-hidden="true" size={16} />
+              Back
+            </button>
+            <Link className={styles.navButton} href="/" aria-label="Go home">
+              <Home aria-hidden="true" size={16} />
+              Home
+            </Link>
+          </nav>
         </header>
 
         <div className={styles.raceFrame}>
@@ -1078,6 +1086,7 @@ export function BkDerbyClient() {
                 onSetStake={handleSetStake}
                 onSubmit={handleSubmitBet}
                 onToggleEntry={handleToggleBetEntry}
+                onRequireLogin={() => router.push("/auth")}
                 playerNickname={racing.player?.nickname ?? null}
                 selectedBetType={effectiveBetType}
                 selectedEntryIds={activeSelectedBetEntryIds}
@@ -1162,6 +1171,7 @@ function RacingBettingPanel({
   onSetStake,
   onSubmit,
   onToggleEntry,
+  onRequireLogin,
   playerNickname,
   selectedBetType,
   selectedEntryIds,
@@ -1181,6 +1191,7 @@ function RacingBettingPanel({
   onSetStake: (amount: number) => void;
   onSubmit: () => void;
   onToggleEntry: (raceEntryId: string) => void;
+  onRequireLogin: () => void;
   playerNickname: string | null;
   selectedBetType: RacingBetType;
   selectedEntryIds: string[];
@@ -1212,7 +1223,7 @@ function RacingBettingPanel({
       aria-label="Racing betting terminal"
       className={`${styles.bettingPanel} ${
         isBettingOpen ? "" : styles.bettingPanelLocked
-      }`}
+      } ${isLoggedIn ? "" : styles.bettingPanelGuest}`}
     >
       <div className={styles.betPanelHeader}>
         <div>
@@ -1252,6 +1263,7 @@ function RacingBettingPanel({
             className={`${styles.betTypeButton} ${
               config.type === selectedBetType ? styles.betTypeButtonActive : ""
             }`}
+            disabled={!isLoggedIn}
             key={config.type}
             onClick={() => onSelectBetType(config.type)}
             type="button"
@@ -1277,6 +1289,7 @@ function RacingBettingPanel({
                 className={`${styles.betSlot} ${
                   entry ? styles.betSlotFilled : ""
                 }`}
+                disabled={!isLoggedIn}
                 key={`${selectedBetType}-${index}`}
                 onClick={() => {
                   if (entry) {
@@ -1371,7 +1384,7 @@ function RacingBettingPanel({
         </div>
         <div className={styles.betActions}>
           <button
-            disabled={selectedEntryIds.length === 0 || isPending}
+            disabled={!isLoggedIn || selectedEntryIds.length === 0 || isPending}
             onClick={onClearSelections}
             type="button"
           >
@@ -1401,6 +1414,17 @@ function RacingBettingPanel({
         <strong>{feedback?.title ?? "Ticket status"}</strong>
         <span>{feedback?.detail ?? validationReason ?? "Ready"}</span>
       </div>
+
+      {!isLoggedIn ? (
+        <button
+          className={styles.betLoginGate}
+          onClick={onRequireLogin}
+          type="button"
+        >
+          <strong>로그인 후 베팅</strong>
+          <span>관전은 계속 가능합니다</span>
+        </button>
+      ) : null}
     </aside>
   );
 }
@@ -1807,7 +1831,6 @@ function useRacingTable() {
     useState<RacingWalletUpdatedPayload | null>(null);
   const [latestBetError, setLatestBetError] =
     useState<RacingSocketErrorPayload | null>(null);
-  const [isAuthRequired, setIsAuthRequired] = useState(false);
   const [socketError, setSocketError] =
     useState<RacingSocketErrorPayload | null>(null);
   const [tableState, setTableState] = useState<RacingTableViewState | null>(
@@ -1901,9 +1924,11 @@ function useRacingTable() {
           error instanceof Error ? error.message : "Game token request failed.";
 
         if (message === "Authentication required.") {
-          setIsAuthRequired(true);
-          setConnectionStatus("error");
+          setConnectionStatus("polling");
           setGameToken(null);
+          setPlayer(null);
+          setSocketError(null);
+          setWalletBalance(null);
           return false;
         }
 
@@ -2036,9 +2061,9 @@ function useRacingTable() {
     }
 
     void (async () => {
-      const isAuthenticated = await connectSocket();
+      await connectSocket();
 
-      if (cancelled || !isAuthenticated) {
+      if (cancelled) {
         return;
       }
 
@@ -2068,7 +2093,6 @@ function useRacingTable() {
     latestTick,
     latestWalletEvent,
     latestBetError,
-    isAuthRequired,
     placeBet,
     player,
     socketError,

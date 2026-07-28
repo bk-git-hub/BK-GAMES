@@ -415,6 +415,15 @@ Correction:
 - Work Order dispatch, Board Events, and worker/updater thread messages now require an explicit user request or one-off `$issue-ticket` / `$dispatch-ticket` invocation.
 - The user can later re-enable or disable orchestration with explicit mode commands.
 
+### Orchestration Rules Archived Locally
+
+Correction:
+
+- Removed the orchestration-specific operating sections from `AGENTS.md` so deployment-adjacent agent work follows direct repository rules only.
+- Kept normal safeguards for scope reporting, shared file edits, explicit pathspec staging, commits, and manual dev server control.
+- Archived the previous orchestration rule snapshot, protocol document, board/runtime artifacts, local ticket skills, and local runtime-helper skill into `private/orchestration-archive/`, which remains local-only and ignored by Git.
+- Removed the active project-local orchestration skills and public orchestration protocol document from the repository tree after archiving them.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

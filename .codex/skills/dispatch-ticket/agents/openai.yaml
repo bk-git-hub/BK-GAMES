@@ -1,4 +1,0 @@
-interface:
-  display_name: "Dispatch Ticket"
-  short_description: "Assign ready tickets to idle workers"
-  default_prompt: "Use $dispatch-ticket to assign ready tickets to idle matching worker threads and update the board."

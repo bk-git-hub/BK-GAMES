@@ -439,6 +439,7 @@ Correction:
 - Updated the game-server bootstrap to support PaaS-provided `PORT` values while keeping `GAME_SERVER_PORT` as an explicit override.
 - Production game-server host now defaults to `0.0.0.0`; local development still defaults to `localhost`.
 - Fixed the production start script to point at the actual Nest build output, `dist/src/main.js`.
+- Added `railway.json` so Railway deploys the monorepo backend with the intended game-server build/start commands and `/health` health check.
 - Cleaned the example game-server URL to use the base backend URL without a Socket.IO namespace suffix.
 - Added a backend deployment checklist covering required secrets, production environment variables, DB migration/seed order, build/start commands, health checks, and MVP scaling limits.
 

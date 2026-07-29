@@ -108,6 +108,8 @@ backend service start command:
 corepack pnpm --filter game-server start:prod
 ```
 
+Railway 배포에서는 repository root의 `railway.json`이 위 build/start command와 `/health` health check를 고정한다.
+
 health check:
 
 ```text

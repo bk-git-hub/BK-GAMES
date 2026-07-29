@@ -34,6 +34,7 @@
 | `15_HORSE_RACING_BACKEND_SPEC.md` | 실시간 경마 백엔드 구현 사양 |
 | `16_BOXING_BACKEND_SPEC.md` | 실시간 복싱 백엔드 구현 사양 |
 | `17_BACKEND_TECHNICAL_OVERVIEW.md` | 현재 백엔드 구조/기술 선택/포트폴리오 설명 기준 |
+| `18_BACKEND_DEPLOYMENT_CHECKLIST.md` | 백엔드 배포 전 환경변수/DB 초기화/검증 체크리스트 |
 
 `private/` 폴더의 문서는 개인 참고용이다.
 구현 에이전트는 `docs/` 문서와 `11_AI_AGENT_IMPLEMENTATION_DECISIONS.md`를 기준으로 작업한다.

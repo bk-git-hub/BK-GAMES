@@ -19,18 +19,18 @@ type Game = {
 
 const games: Game[] = [
   {
+    description: "Track-side racing tickets, camera chase, and result boards.",
+    href: "/racing/bk-derby",
+    image: "derby",
+    name: "BK Derby",
+    status: "Open",
+  },
+  {
     description:
       "Real-time table rounds with multiplayer seats and live wallet updates.",
     href: "/blackjack",
     image: "blackjack",
     name: "Blackjack",
-    status: "Open",
-  },
-  {
-    description: "Track-side racing tickets, camera chase, and result boards.",
-    href: "/racing/bk-derby",
-    image: "derby",
-    name: "BK Derby",
     status: "Open",
   },
   {

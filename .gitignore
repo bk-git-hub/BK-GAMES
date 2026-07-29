@@ -25,3 +25,6 @@ THREAD_SYNC.md
 private/
 **/README.md
 !/README.md
+
+.vercel
+.env*

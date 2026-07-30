@@ -60,6 +60,12 @@ export type RacingRecordRaceTickInput = {
   tick: RacingRaceTickSnapshot;
 };
 
+export type RacingStartScheduledRaceInput = {
+  tableId: string;
+  raceId: string;
+  scheduledStartAtMs: number;
+};
+
 export type RacingTableMutationResult = {
   state: RacingTableState;
   event: RacingTableEventPayload;
@@ -191,6 +197,54 @@ export class RacingTableService {
       event: this.toEvent(table, 'RACE_TICK', 'SYSTEM', {
         raceId: input.tick.raceId,
         tick: input.tick,
+      }),
+    };
+  }
+
+  startScheduledRace(
+    input: RacingStartScheduledRaceInput,
+  ): RacingTableMutationResult | null {
+    const table = this.getTable(input.tableId);
+    const raceId = input.raceId.trim();
+
+    if (!raceId) {
+      throw new RacingTableError('RACE_NOT_FOUND', 'raceId is required.');
+    }
+
+    if (!table.race || table.race.raceId !== raceId) {
+      return null;
+    }
+
+    const scheduledStartAtMs = Date.parse(table.race.scheduledStartAt ?? '');
+
+    if (
+      !Number.isFinite(scheduledStartAtMs) ||
+      scheduledStartAtMs !== input.scheduledStartAtMs
+    ) {
+      return null;
+    }
+
+    if (table.phase === 'RUNNING' && table.race.phase === 'RUNNING') {
+      return null;
+    }
+
+    if (table.phase !== 'BETTING' && table.phase !== 'LOCKING_BETS') {
+      return null;
+    }
+
+    table.phase = 'RUNNING';
+    table.race = {
+      ...table.race,
+      status: 'RUNNING',
+      phase: 'RUNNING',
+      startedAt: table.race.scheduledStartAt,
+    };
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(table, 'RACE_STARTED', 'SYSTEM', {
+        raceId: table.race.raceId,
       }),
     };
   }

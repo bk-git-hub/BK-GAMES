@@ -321,7 +321,11 @@ export class RacingGateway implements OnModuleDestroy {
     );
 
     if (delayMs === 0 && scheduledStartAtMs <= Date.now()) {
-      void this.startRaceFromPrestartTimer(state.tableId);
+      this.startRaceFromPrestartTimer(
+        state.tableId,
+        race.raceId,
+        scheduledStartAtMs,
+      );
       return;
     }
 
@@ -395,7 +399,7 @@ export class RacingGateway implements OnModuleDestroy {
 
     if (remainingMs <= 0) {
       this.stopPrestartTimer(tableId);
-      await this.startRaceFromPrestartTimer(tableId);
+      this.startRaceFromPrestartTimer(tableId, raceId, scheduledStartAtMs);
       return;
     }
 
@@ -439,10 +443,50 @@ export class RacingGateway implements OnModuleDestroy {
     this.server.to(room).emit(RACING_SERVER_EVENTS.TABLE_EVENT, event);
   }
 
-  private async startRaceFromPrestartTimer(tableId: string) {
+  private startRaceFromPrestartTimer(
+    tableId: string,
+    raceId?: string,
+    scheduledStartAtMs?: number,
+  ) {
     try {
-      const lifecycle =
-        await this.tableConfigService.advanceRaceLifecycle(tableId);
+      if (raceId && scheduledStartAtMs !== undefined) {
+        const update = this.tableService.startScheduledRace({
+          tableId,
+          raceId,
+          scheduledStartAtMs,
+        });
+
+        if (update) {
+          this.emitTableUpdate(update);
+          void this.persistRaceStartFromPrestartTimer(
+            tableId,
+            scheduledStartAtMs,
+          );
+          return;
+        }
+      }
+
+      void this.persistRaceStartFromPrestartTimer(tableId, scheduledStartAtMs);
+    } catch (error) {
+      this.emitTableError(
+        tableId,
+        error,
+        'Unexpected racing prestart timer error.',
+      );
+    }
+  }
+
+  private async persistRaceStartFromPrestartTimer(
+    tableId: string,
+    scheduledStartAtMs?: number,
+  ) {
+    try {
+      const lifecycle = await this.tableConfigService.advanceRaceLifecycle(
+        tableId,
+        scheduledStartAtMs === undefined
+          ? undefined
+          : new Date(scheduledStartAtMs),
+      );
       this.emitSettlementWalletUpdates(lifecycle.settled);
       this.emitCancellationWalletUpdates(lifecycle.cancelled);
 
@@ -458,7 +502,7 @@ export class RacingGateway implements OnModuleDestroy {
       this.emitTableError(
         tableId,
         error,
-        'Unexpected racing prestart timer error.',
+        'Unexpected racing prestart persistence error.',
       );
     }
   }

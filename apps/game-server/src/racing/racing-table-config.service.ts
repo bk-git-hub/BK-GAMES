@@ -76,10 +76,10 @@ export class RacingTableConfigService {
     };
   }
 
-  async advanceRaceLifecycle(tableId: string) {
+  async advanceRaceLifecycle(tableId: string, now?: Date) {
     const db = (await import(dbPackageName)) as RacingDbModule;
 
-    return db.advanceRacingRaceLifecycle({ tableCode: tableId });
+    return db.advanceRacingRaceLifecycle({ tableCode: tableId, now });
   }
 }
 
@@ -93,7 +93,7 @@ type RacingDbModule = {
     input: RacingEnsureScheduledRaceInput,
   ): Promise<RacingScheduledRaceResult | null>;
   advanceRacingRaceLifecycle(
-    input: RacingEnsureScheduledRaceInput,
+    input: RacingLifecycleAdvanceInput,
   ): Promise<RacingLifecycleAdvanceResult>;
 };
 
@@ -120,6 +120,10 @@ type RacingDbHorse = {
 
 type RacingEnsureScheduledRaceInput = {
   tableCode: string;
+};
+
+type RacingLifecycleAdvanceInput = RacingEnsureScheduledRaceInput & {
+  now?: Date;
 };
 
 type RacingScheduledRaceResult = {

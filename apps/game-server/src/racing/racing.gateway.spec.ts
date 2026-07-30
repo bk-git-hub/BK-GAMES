@@ -157,7 +157,16 @@ describe('RacingGateway race tick loop', () => {
 
     await jest.advanceTimersByTimeAsync(100);
 
+    expect(tableService.startScheduledRace).toHaveBeenCalledWith({
+      tableId: prestartState.tableId,
+      raceId: prestartState.race?.raceId,
+      scheduledStartAtMs: Date.parse(prestartState.race!.scheduledStartAt!),
+    });
     expect(tableConfigService.advanceRaceLifecycle).toHaveBeenCalledTimes(1);
+    expect(tableConfigService.advanceRaceLifecycle).toHaveBeenCalledWith(
+      prestartState.tableId,
+      new Date(prestartState.race!.scheduledStartAt!),
+    );
     expect(tableService.configureTable).toHaveBeenCalledTimes(1);
     expect(tableService.recordRaceTick).toHaveBeenCalledTimes(1);
 
@@ -173,6 +182,64 @@ describe('RacingGateway race tick loop', () => {
 
     expect(raceStartedIndex).toBeGreaterThan(-1);
     expect(firstRaceTickIndex).toBeGreaterThan(raceStartedIndex);
+
+    gateway.onModuleDestroy();
+  });
+
+  it('emits the first race tick before slow lifecycle persistence resolves', async () => {
+    const prestartState = createPrestartState({
+      phase: 'LOCKING_BETS',
+      scheduledStartAt: '2026-06-18T12:00:05.000Z',
+    });
+    const runningState = createRunningState({
+      startedAt: '2026-06-18T12:00:05.000Z',
+    });
+    const tableService = createTableServiceMock(prestartState);
+    let resolveLifecycle!: (value: { cancelled: null; settled: null }) => void;
+    const lifecyclePromise = new Promise<{ cancelled: null; settled: null }>(
+      (resolve) => {
+        resolveLifecycle = resolve;
+      },
+    );
+    const tableConfigService = {
+      advanceRaceLifecycle: jest.fn(() => lifecyclePromise),
+      getScheduledRace: jest.fn(async () => runningState.race),
+      getTableConfig: jest.fn(async () => createConfigFromState(runningState)),
+    };
+    const { emit, server } = createServerMock();
+    const gateway = new RacingGateway(
+      tableConfigService as never,
+      tableService as never,
+      {} as never,
+      {} as never,
+    );
+    gateway.server = server;
+
+    getGatewayHarness(gateway).ensurePrestartTimer(prestartState);
+
+    await jest.advanceTimersByTimeAsync(5_000);
+
+    expect(tableService.startScheduledRace).toHaveBeenCalledTimes(1);
+    expect(tableConfigService.advanceRaceLifecycle).toHaveBeenCalledTimes(1);
+    expect(tableService.recordRaceTick).toHaveBeenCalledTimes(1);
+    expect(tableService.configureTable).not.toHaveBeenCalled();
+
+    const emittedEvents = emit.mock.calls
+      .filter(([eventName]) => eventName === 'table:event')
+      .map(([, payload]) => payload);
+    const raceStartedIndex = emittedEvents.findIndex(
+      (event) => event.type === 'RACE_STARTED',
+    );
+    const firstRaceTickIndex = emittedEvents.findIndex(
+      (event) => event.type === 'RACE_TICK',
+    );
+
+    expect(raceStartedIndex).toBeGreaterThan(-1);
+    expect(firstRaceTickIndex).toBeGreaterThan(raceStartedIndex);
+
+    resolveLifecycle({ cancelled: null, settled: null });
+    await Promise.resolve();
+    await Promise.resolve();
 
     gateway.onModuleDestroy();
   });
@@ -307,11 +374,47 @@ function createTableServiceMock(state: RacingTableState) {
     state: currentState,
     event: createTableEvent(currentState, 'RACE_SCHEDULED'),
   }));
+  const startScheduledRace = jest.fn(
+    (input: {
+      raceId: string;
+      scheduledStartAtMs: number;
+      tableId: string;
+    }) => {
+      const race = currentState.race;
+
+      if (
+        !race ||
+        race.raceId !== input.raceId ||
+        Date.parse(race.scheduledStartAt ?? '') !== input.scheduledStartAtMs
+      ) {
+        return null;
+      }
+
+      currentState = {
+        ...currentState,
+        phase: 'RUNNING',
+        race: {
+          ...race,
+          status: 'RUNNING',
+          phase: 'RUNNING',
+          startedAt: race.scheduledStartAt,
+        },
+        updatedAt: new Date().toISOString(),
+        version: currentState.version + 1,
+      };
+
+      return {
+        state: currentState,
+        event: createTableEvent(currentState, 'RACE_STARTED'),
+      };
+    },
+  );
 
   return {
     configureTable,
     getTableState: jest.fn(() => currentState),
     recordRaceTick,
+    startScheduledRace,
     setState(nextState: RacingTableState) {
       currentState = nextState;
     },

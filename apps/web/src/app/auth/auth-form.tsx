@@ -127,10 +127,10 @@ export function AuthForm() {
   };
 
   return (
-    <section className="overflow-hidden rounded-[1.35rem] border-[2px] border-[#111827] bg-[#fff8ed] shadow-[8px_9px_0_#0b3b73]">
-      <div className="border-b border-[#dfcdb3] bg-white p-5 sm:p-6">
+    <section className="overflow-hidden rounded-[1.35rem] border-[2px] border-[#111827] bg-[#f1f7fd] shadow-[8px_9px_0_#0b3b73]">
+      <div className="border-b border-[#b8c7da] bg-white p-5 sm:p-6">
         <div className="flex items-start gap-4">
-          <div className="grid size-12 shrink-0 place-items-center rounded-md border border-[#071c3f] bg-[#f5c95f] text-[#111827] shadow-[0_5px_0_#071c3f]">
+          <div className="grid size-12 shrink-0 place-items-center rounded-md border border-[#071c3f] bg-[#d8ecff] text-[#111827] shadow-[0_5px_0_#071c3f]">
             <ModeIcon className="size-5" />
           </div>
           <div className="min-w-0">
@@ -159,9 +159,9 @@ export function AuthForm() {
               <button
                 aria-pressed={isActive}
                 className={cn(
-                  "inline-flex min-h-12 items-center justify-center rounded-[0.7rem] px-3 text-sm font-black tracking-normal uppercase transition focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#f5c95f]",
+                  "inline-flex min-h-12 items-center justify-center rounded-[0.7rem] px-3 text-sm font-black tracking-normal uppercase transition focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#8fc4e8]",
                   isActive
-                    ? "bg-[#fff8ed] text-[#071c3f] shadow-[0_3px_0_#c8272e]"
+                    ? "bg-[#eef7ff] text-[#071c3f] shadow-[0_3px_0_#c8272e]"
                     : "text-[#d8ecff] hover:bg-white/10 hover:text-white",
                 )}
                 disabled={isSubmitting}
@@ -194,7 +194,7 @@ export function AuthForm() {
           </AuthSubmitButton>
         </form>
 
-        <div className="mt-5 flex items-start gap-2 rounded-[0.95rem] border border-[#dfcdb3] bg-white px-4 py-3 text-sm leading-6 font-bold text-[#4b5874]">
+        <div className="mt-5 flex items-start gap-2 rounded-[0.95rem] border border-[#b8c7da] bg-white px-4 py-3 text-sm leading-6 font-bold text-[#4b5874]">
           <BadgeCheck className="mt-0.5 size-4 shrink-0 text-[#0b3b73]" />
           Login is only needed when you claim points or place a bet.
         </div>
@@ -265,7 +265,7 @@ function AuthField({
         {label}
       </Label>
       <Input
-        className="h-12 rounded-md border-[#071c3f] bg-white px-3 text-base font-bold text-[#111827] shadow-[0_3px_0_#dfcdb3] focus-visible:border-[#0b3b73] focus-visible:ring-[#8fc4e8]/60 disabled:bg-[#f7efe2]"
+        className="h-12 rounded-md border-[#071c3f] bg-white px-3 text-base font-bold text-[#111827] shadow-[0_3px_0_#b8c7da] focus-visible:border-[#0b3b73] focus-visible:ring-[#8fc4e8]/60 disabled:bg-[#edf4fb]"
         id={id}
         {...inputProps}
       />

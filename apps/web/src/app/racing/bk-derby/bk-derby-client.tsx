@@ -219,7 +219,7 @@ type RacingBetTypeConfig = {
 };
 
 const tableId = "main";
-const restPollMs = 1_000;
+const fallbackRestPollMs = 15_000;
 const raceHistoryPollMs = 10_000;
 const localTickMs = 160;
 const startCountdownWindowMs = 5_000;
@@ -1853,7 +1853,7 @@ function useRacingTable() {
   useEffect(() => {
     let cancelled = false;
     const pollController = new AbortController();
-    let pollTimer: number | null = null;
+    let fallbackPollTimer: number | null = null;
 
     function applyTableState(nextState: RacingTableViewState) {
       const resolvedState = reconcileRacingTableState(
@@ -1903,6 +1903,33 @@ function useRacingTable() {
               : "Racing table polling failed.",
         });
       }
+    }
+
+    function clearFallbackPolling() {
+      if (fallbackPollTimer === null) {
+        return;
+      }
+
+      window.clearInterval(fallbackPollTimer);
+      fallbackPollTimer = null;
+    }
+
+    function startFallbackPolling(pollNow: boolean) {
+      if (cancelled) {
+        return;
+      }
+
+      if (fallbackPollTimer !== null) {
+        return;
+      }
+
+      if (pollNow) {
+        void pollTableState();
+      }
+
+      fallbackPollTimer = window.setInterval(() => {
+        void pollTableState();
+      }, fallbackRestPollMs);
     }
 
     async function connectSocket() {
@@ -1961,6 +1988,7 @@ function useRacingTable() {
       socketRef.current = socket;
 
       socket.on("connect", () => {
+        clearFallbackPolling();
         setConnectionStatus("connected");
         setSocketError(null);
         socket.emit(RACING_CLIENT_EVENTS.TABLE_JOIN, {
@@ -1977,17 +2005,20 @@ function useRacingTable() {
           code: "UNKNOWN_ERROR",
           message: error.message,
         });
+        startFallbackPolling(true);
       });
 
       socket.on("disconnect", () => {
         setConnectionStatus((currentStatus) =>
           currentStatus === "polling" ? currentStatus : "disconnected",
         );
+        startFallbackPolling(true);
       });
 
       socket.on(
         RACING_SERVER_EVENTS.TABLE_STATE,
         (payload: RacingTableState) => {
+          clearFallbackPolling();
           setConnectionStatus("connected");
           setSocketError(null);
           applyTableState(payload);
@@ -2060,25 +2091,24 @@ function useRacingTable() {
       return true;
     }
 
+    void pollTableState();
+
     void (async () => {
-      await connectSocket();
+      const isSocketConfigured = await connectSocket();
 
       if (cancelled) {
         return;
       }
 
-      void pollTableState();
-      pollTimer = window.setInterval(() => {
-        void pollTableState();
-      }, restPollMs);
+      if (!isSocketConfigured) {
+        startFallbackPolling(false);
+      }
     })();
 
     return () => {
       cancelled = true;
       pollController.abort();
-      if (pollTimer !== null) {
-        window.clearInterval(pollTimer);
-      }
+      clearFallbackPolling();
       socketRef.current?.disconnect();
       socketRef.current = null;
     };

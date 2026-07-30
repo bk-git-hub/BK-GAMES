@@ -7,6 +7,7 @@ import {
   WalletCards,
 } from "lucide-react";
 
+import { LandingHeaderAuth } from "@/components/auth/landing-header-auth";
 import { cn } from "@/lib/utils";
 
 type Game = {
@@ -84,12 +85,13 @@ function SiteHeader() {
         </Link>
 
         <nav className="flex items-center gap-3 text-sm font-bold sm:gap-5">
-          <a
-            href="#games"
+          <Link
+            href="/lobby"
             className="inline-flex h-11 items-center justify-center rounded-md border border-[#071c3f] bg-[#0b3b73] px-6 text-sm font-black tracking-normal text-white uppercase shadow-[0_5px_0_#071c3f] transition hover:-translate-y-0.5 hover:bg-[#c8272e] hover:shadow-[0_6px_0_#7d161b]"
           >
-            Games
-          </a>
+            Lobby
+          </Link>
+          <LandingHeaderAuth />
         </nav>
       </div>
     </header>

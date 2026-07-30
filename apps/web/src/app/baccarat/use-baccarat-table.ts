@@ -28,6 +28,7 @@ import { io, type Socket } from "socket.io-client";
 
 const tableId = "main";
 const eventLimit = 18;
+const gameSocketNamespaces = ["/blackjack", "/racing", BACCARAT_NAMESPACE];
 
 export type BaccaratConnectionStatus =
   | "requesting-token"
@@ -492,11 +493,23 @@ async function readErrorMessage(response: Response) {
 function resolveBaccaratSocketUrl() {
   const configuredUrl =
     process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? resolveRuntimeGameServerUrl();
-  const normalizedUrl = configuredUrl.replace(/\/$/, "");
+  const normalizedUrl = stripGameSocketNamespace(
+    configuredUrl.replace(/\/$/, ""),
+  );
 
   return normalizedUrl.endsWith(BACCARAT_NAMESPACE)
     ? normalizedUrl
     : `${normalizedUrl}${BACCARAT_NAMESPACE}`;
+}
+
+function stripGameSocketNamespace(url: string) {
+  for (const namespace of gameSocketNamespaces) {
+    if (url.endsWith(namespace)) {
+      return url.slice(0, -namespace.length);
+    }
+  }
+
+  return url;
 }
 
 function resolveRuntimeGameServerUrl() {

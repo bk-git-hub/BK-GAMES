@@ -717,27 +717,13 @@ function BaccaratCardFace({ card }: { card: BaccaratVisibleCardView }) {
       <CardCorner card={card} placement="top" />
       <CardCorner card={card} placement="bottom" />
 
-      <div className="absolute inset-x-[18%] top-[23%] grid place-items-center">
-        <div
-          className={cn(
-            "grid aspect-square w-[72%] max-w-14 place-items-center rounded-full border bg-white/82 shadow-inner sm:max-w-[4.25rem]",
-            suitTheme.borderClass,
-          )}
-        >
-          <SuitIcon
-            className={cn("size-[58%] drop-shadow-sm", suitTheme.fillClass)}
-            suit={card.suit}
-          />
-        </div>
-      </div>
-
-      <div className="absolute inset-x-[10%] bottom-[22%] grid place-items-center">
+      <div className="absolute inset-x-[8%] bottom-[22%] top-[24%] grid place-items-center">
         <p
           className={cn(
-            "leading-none font-black tracking-normal",
+            "leading-none font-black tracking-normal drop-shadow-[0_2px_0_rgba(255,255,255,0.72)]",
             card.rank === "10"
-              ? "text-[1.25rem] sm:text-[1.75rem] md:text-[2rem]"
-              : "text-[1.55rem] sm:text-[2.1rem] md:text-[2.45rem]",
+              ? "text-[1.9rem] sm:text-[2.45rem] md:text-[2.8rem]"
+              : "text-[2.45rem] sm:text-[3.25rem] md:text-[3.8rem]",
             suitTheme.textClass,
           )}
         >

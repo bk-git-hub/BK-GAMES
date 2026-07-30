@@ -2514,6 +2514,7 @@ function mergeServerAndLocalTickets(
   const serverBetIds = new Set(
     serverTickets.flatMap((ticket) => (ticket.betId ? [ticket.betId] : [])),
   );
+  const matchedServerTicketIds = new Set<string>();
   const mergedTickets = [...serverTickets];
 
   for (const ticket of localTickets) {
@@ -2521,10 +2522,69 @@ function mergeServerAndLocalTickets(
       continue;
     }
 
+    const matchingServerTicket = serverTickets.find(
+      (serverTicket) =>
+        serverTicket.betId &&
+        !matchedServerTicketIds.has(serverTicket.betId) &&
+        shouldServerTicketReplaceLocalTicket(serverTicket, ticket),
+    );
+
+    if (matchingServerTicket?.betId) {
+      matchedServerTicketIds.add(matchingServerTicket.betId);
+      continue;
+    }
+
     mergedTickets.push(ticket);
   }
 
   return mergedTickets;
+}
+
+function shouldServerTicketReplaceLocalTicket(
+  serverTicket: RacingTicketItem,
+  localTicket: RacingTicketItem,
+) {
+  if (localTicket.status !== "pending") {
+    return false;
+  }
+
+  if (
+    serverTicket.raceId !== localTicket.raceId ||
+    serverTicket.betType !== localTicket.betType
+  ) {
+    return false;
+  }
+
+  if (!hasMatchingTicketSelections(localTicket, serverTicket)) {
+    return false;
+  }
+
+  return areTicketAmountsCompatible(serverTicket.amount, localTicket.amount);
+}
+
+function hasMatchingTicketSelections(
+  leftTicket: RacingTicketItem,
+  rightTicket: RacingTicketItem,
+) {
+  if (getRacingBetTypeConfig(leftTicket.betType).ordered) {
+    return hasSameTicketSelections(
+      leftTicket.selections,
+      rightTicket.selections,
+    );
+  }
+
+  return hasSameTicketSelectionSet(leftTicket.selections, rightTicket.selections);
+}
+
+function areTicketAmountsCompatible(
+  leftAmount: number | null,
+  rightAmount: number | null,
+) {
+  return (
+    leftAmount === null ||
+    rightAmount === null ||
+    leftAmount === rightAmount
+  );
 }
 
 function getTicketSelectionEntriesForRace(input: {
@@ -2608,7 +2668,7 @@ function upsertAcceptedTicket(
     const nextTickets = [...currentTickets];
     const currentTicket = nextTickets[duplicateIndex];
 
-    nextTickets[duplicateIndex] = {
+    const updatedTicket: RacingTicketItem = {
       ...currentTicket,
       ...acceptedTicket,
       amount: currentTicket.amount ?? acceptedTicket.amount,
@@ -2618,7 +2678,13 @@ function upsertAcceptedTicket(
       status: "accepted",
     };
 
-    return nextTickets;
+    nextTickets[duplicateIndex] = updatedTicket;
+
+    return removeOnePendingTicketReplacedByAcceptedTicket(
+      nextTickets,
+      duplicateIndex,
+      updatedTicket,
+    );
   }
 
   const pendingIndex = currentTickets.findIndex(
@@ -2626,7 +2692,7 @@ function upsertAcceptedTicket(
       ticket.status === "pending" &&
       ticket.raceId === acceptedTicket.raceId &&
       ticket.betType === acceptedTicket.betType &&
-      hasSameTicketSelections(ticket.selections, acceptedTicket.selections),
+      hasMatchingTicketSelections(ticket, acceptedTicket),
   );
 
   if (pendingIndex >= 0) {
@@ -2650,6 +2716,34 @@ function upsertAcceptedTicket(
   return [acceptedTicket, ...currentTickets];
 }
 
+function removeOnePendingTicketReplacedByAcceptedTicket(
+  tickets: RacingTicketItem[],
+  acceptedIndex: number,
+  acceptedTicket: RacingTicketItem,
+) {
+  let hasRemovedPending = false;
+
+  return tickets.filter((ticket, index) => {
+    if (index === acceptedIndex || hasRemovedPending) {
+      return true;
+    }
+
+    const shouldRemove =
+      ticket.status === "pending" &&
+      ticket.raceId === acceptedTicket.raceId &&
+      ticket.betType === acceptedTicket.betType &&
+      hasMatchingTicketSelections(ticket, acceptedTicket) &&
+      areTicketAmountsCompatible(acceptedTicket.amount, ticket.amount);
+
+    if (!shouldRemove) {
+      return true;
+    }
+
+    hasRemovedPending = true;
+    return false;
+  });
+}
+
 function hasSameTicketSelections(
   leftSelections: RacingTicketSelection[],
   rightSelections: RacingTicketSelection[],
@@ -2661,6 +2755,23 @@ function hasSameTicketSelections(
   return leftSelections.every(
     (selection, index) =>
       selection.raceEntryId === rightSelections[index]?.raceEntryId,
+  );
+}
+
+function hasSameTicketSelectionSet(
+  leftSelections: RacingTicketSelection[],
+  rightSelections: RacingTicketSelection[],
+) {
+  if (leftSelections.length !== rightSelections.length) {
+    return false;
+  }
+
+  const rightRaceEntryIds = new Set(
+    rightSelections.map((selection) => selection.raceEntryId),
+  );
+
+  return leftSelections.every((selection) =>
+    rightRaceEntryIds.has(selection.raceEntryId),
   );
 }
 

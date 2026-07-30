@@ -1212,9 +1212,14 @@
 }
 
 .ticketList {
-  background: rgb(255 255 255 / 5%);
-  border: 1px solid rgb(255 255 255 / 10%);
+  background:
+    linear-gradient(180deg, rgb(9 18 19 / 94%), rgb(5 11 12 / 96%)),
+    linear-gradient(90deg, rgb(255 244 196 / 8%), transparent);
+  border: 1px solid rgb(255 255 255 / 14%);
   border-radius: 6px;
+  box-shadow:
+    0 16px 42px rgb(0 0 0 / 28%),
+    inset 0 1px 0 rgb(255 255 255 / 10%);
   display: grid;
   gap: 7px;
   padding: 8px;
@@ -1262,7 +1267,7 @@
 
 .ticketItem {
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 4%)),
+    linear-gradient(180deg, rgb(255 255 255 / 7%), rgb(255 255 255 / 3%)),
     repeating-linear-gradient(
       90deg,
       rgb(255 255 255 / 4%) 0 1px,
@@ -1450,9 +1455,14 @@
 .raceHistoryList,
 .horseRecordViewer,
 .ticketHistoryPanel {
-  background: rgb(255 255 255 / 5%);
-  border: 1px solid rgb(255 255 255 / 10%);
+  background:
+    linear-gradient(180deg, rgb(9 18 19 / 94%), rgb(5 11 12 / 96%)),
+    linear-gradient(90deg, rgb(255 244 196 / 8%), transparent);
+  border: 1px solid rgb(255 255 255 / 14%);
   border-radius: 8px;
+  box-shadow:
+    0 16px 42px rgb(0 0 0 / 28%),
+    inset 0 1px 0 rgb(255 255 255 / 10%);
   display: grid;
   gap: 8px;
   max-height: 186px;
@@ -1525,7 +1535,8 @@
 .raceHistoryItem,
 .horseRecordItem {
   align-items: center;
-  background: rgb(255 255 255 / 6%);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 7%), rgb(255 255 255 / 3%));
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 6px;
   display: grid;

@@ -29,6 +29,8 @@ import { io, type Socket } from "socket.io-client";
 const tableId = "main";
 const eventLimit = 18;
 const gameSocketNamespaces = ["/blackjack", "/racing", BACCARAT_NAMESPACE];
+const productionGameServerUrl =
+  "https://game-server-production-78cb.up.railway.app";
 
 export type BaccaratConnectionStatus =
   | "requesting-token"
@@ -145,6 +147,7 @@ export function useBaccaratTable({
           auth: {
             token: tokenResponse.token,
           },
+          transports: ["websocket"],
           withCredentials: true,
         });
 
@@ -492,14 +495,25 @@ async function readErrorMessage(response: Response) {
 
 function resolveBaccaratSocketUrl() {
   const configuredUrl =
-    process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? resolveRuntimeGameServerUrl();
-  const normalizedUrl = stripGameSocketNamespace(
-    configuredUrl.replace(/\/$/, ""),
+    normalizeConfiguredGameServerUrl(process.env.NEXT_PUBLIC_GAME_SERVER_URL) ??
+    resolveRuntimeGameServerUrl();
+  const normalizedUrl = stripGameSocketNamespace(configuredUrl).replace(
+    /\/+$/,
+    "",
   );
 
   return normalizedUrl.endsWith(BACCARAT_NAMESPACE)
     ? normalizedUrl
     : `${normalizedUrl}${BACCARAT_NAMESPACE}`;
+}
+
+function normalizeConfiguredGameServerUrl(value: string | undefined) {
+  const normalized = value
+    ?.replace(/\uFEFF/g, "")
+    .trim()
+    .replace(/^["']|["']$/g, "");
+
+  return normalized || null;
 }
 
 function stripGameSocketNamespace(url: string) {
@@ -514,10 +528,22 @@ function stripGameSocketNamespace(url: string) {
 
 function resolveRuntimeGameServerUrl() {
   if (typeof window !== "undefined" && window.location.hostname) {
+    if (!isLocalRuntimeHost(window.location.hostname)) {
+      return productionGameServerUrl;
+    }
+
     return `${window.location.protocol}//${window.location.hostname}:4000`;
   }
 
   return "http://localhost:4000";
+}
+
+function isLocalRuntimeHost(hostname: string) {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
+  );
 }
 
 function createCommandId(prefix: string) {

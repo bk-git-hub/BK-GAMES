@@ -443,6 +443,14 @@ Correction:
 - Cleaned the example game-server URL to use the base backend URL without a Socket.IO namespace suffix.
 - Added a backend deployment checklist covering required secrets, production environment variables, DB migration/seed order, build/start commands, health checks, and MVP scaling limits.
 
+### Local Tailscale Dev Origin
+
+Correction:
+
+- Added the local Tailscale host to Next.js `allowedDevOrigins` so Next dev resources are not blocked when the web app is opened through the Tailscale IP.
+- Expanded Better Auth trusted origins in non-production development to allow `localhost`, `127.0.0.1`, and the local Tailscale web origin.
+- Kept production trusted origins constrained to configured deployment URLs.
+
 ## Current Public Status
 
 Ready to show as portfolio material:

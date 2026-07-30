@@ -10,6 +10,25 @@ const authBaseUrl =
   process.env.NEXT_PUBLIC_APP_URL ??
   "http://localhost:3000";
 
+const devTrustedOrigins =
+  process.env.NODE_ENV === "production"
+    ? []
+    : [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://100.107.189.17:3000",
+      ];
+
+const trustedOrigins = Array.from(
+  new Set(
+    [
+      authBaseUrl,
+      process.env.NEXT_PUBLIC_APP_URL,
+      ...devTrustedOrigins,
+    ].filter((origin): origin is string => Boolean(origin)),
+  ),
+);
+
 const authSecret = process.env.BETTER_AUTH_SECRET;
 
 if (!authSecret) {
@@ -21,7 +40,7 @@ export const auth = betterAuth({
   baseURL: authBaseUrl,
   basePath: "/api/auth",
   secret: authSecret,
-  trustedOrigins: [authBaseUrl],
+  trustedOrigins,
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {

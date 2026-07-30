@@ -226,6 +226,7 @@ const startCountdownWindowMs = 5_000;
 const startCountdownHoldMs = 1_400;
 const prestartTickFreshMs = 1_500;
 const raceBgmLeadMs = 14_000;
+const raceBgmSyncDriftSeconds = 0.7;
 const raceBgmVolume = 0.58;
 const raceBgmSrc = "/racing/audio/william-tell-overture-remix.mp3";
 const worldScale = 7.2;
@@ -391,6 +392,7 @@ export function BkDerbyClient() {
   } | null>(null);
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const bgmRaceIdRef = useRef<string | null>(null);
+  const bgmTargetSecondsRef = useRef<number | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const finishMarksRef = useRef<RaceFinishMark[]>([]);
   const latestTickRef = useRef<RacingRaceTickSnapshot | null>(null);
@@ -556,6 +558,13 @@ export function BkDerbyClient() {
     clockMs,
     isVisuallyRunning,
   );
+  const raceBgmTargetSeconds = getRaceBgmTargetSeconds({
+    latestTick: serverTick,
+    nowMs: clockMs,
+    prestartTick: activePrestartTick,
+    shouldPlay: shouldRaceBgmPlay,
+    tableState: racing.tableState,
+  });
   const bgmButtonLabel = isBgmPlaying
     ? "BGM playing"
     : isBgmBlocked
@@ -563,6 +572,10 @@ export function BkDerbyClient() {
       : isBgmUnlocked
         ? "BGM ready"
         : "Prime BGM";
+
+  useEffect(() => {
+    bgmTargetSecondsRef.current = raceBgmTargetSeconds;
+  }, [raceBgmTargetSeconds]);
 
   useEffect(() => {
     tableStateRef.current = racing.tableState;
@@ -637,14 +650,17 @@ export function BkDerbyClient() {
       audio.pause();
       audio.currentTime = 0;
       bgmRaceIdRef.current = null;
+      bgmTargetSecondsRef.current = null;
       return;
     }
 
     let isCancelled = false;
 
     if (bgmRaceIdRef.current !== currentRaceId) {
-      audio.currentTime = 0;
       bgmRaceIdRef.current = currentRaceId;
+      syncRaceBgmPlaybackTime(audio, bgmTargetSecondsRef.current ?? 0, true);
+    } else {
+      syncRaceBgmPlaybackTime(audio, bgmTargetSecondsRef.current ?? 0, false);
     }
 
     if (audio.paused) {
@@ -672,6 +688,22 @@ export function BkDerbyClient() {
       isCancelled = true;
     };
   }, [currentRaceId, shouldRaceBgmPlay]);
+
+  useEffect(() => {
+    const audio = bgmRef.current;
+
+    if (
+      !audio ||
+      !shouldRaceBgmPlay ||
+      !currentRaceId ||
+      raceBgmTargetSeconds === null ||
+      audio.paused
+    ) {
+      return;
+    }
+
+    syncRaceBgmPlaybackTime(audio, raceBgmTargetSeconds, false);
+  }, [currentRaceId, raceBgmTargetSeconds, shouldRaceBgmPlay]);
 
   useEffect(() => {
     const trackNode = trackRef.current;
@@ -748,10 +780,10 @@ export function BkDerbyClient() {
     try {
       if (shouldRaceBgmPlay && currentRaceId) {
         if (bgmRaceIdRef.current !== currentRaceId) {
-          audio.currentTime = 0;
           bgmRaceIdRef.current = currentRaceId;
         }
 
+        syncRaceBgmPlaybackTime(audio, bgmTargetSecondsRef.current ?? 0, true);
         await audio.play();
         setIsBgmPlaying(true);
       } else {
@@ -3801,6 +3833,81 @@ function getStartCountdownOverlay(
     label: "Race starts in",
     value: seconds.toString(),
   };
+}
+
+function getRaceBgmTargetSeconds(input: {
+  latestTick: RacingRaceTickSnapshot | null;
+  nowMs: number;
+  prestartTick: PrestartTickView | null;
+  shouldPlay: boolean;
+  tableState: RacingTableViewState | null;
+}) {
+  const raceId = input.tableState?.race?.raceId ?? null;
+
+  if (!input.shouldPlay || !input.tableState?.race || !raceId) {
+    return null;
+  }
+
+  if (input.latestTick?.raceId === raceId) {
+    return Math.max(0, (raceBgmLeadMs + input.latestTick.elapsedMs) / 1_000);
+  }
+
+  if (input.prestartTick?.raceId === raceId) {
+    const remainingMs = getPrestartRemainingMs(
+      input.prestartTick,
+      input.nowMs,
+    );
+
+    if (remainingMs !== null) {
+      return Math.max(0, (raceBgmLeadMs - remainingMs) / 1_000);
+    }
+  }
+
+  const startMs = getRaceStartTargetMs(input.tableState);
+
+  if (startMs === null) {
+    return 0;
+  }
+
+  if (input.nowMs < startMs) {
+    return Math.max(0, (raceBgmLeadMs - (startMs - input.nowMs)) / 1_000);
+  }
+
+  return Math.max(0, (raceBgmLeadMs + input.nowMs - startMs) / 1_000);
+}
+
+function syncRaceBgmPlaybackTime(
+  audio: HTMLAudioElement,
+  targetSeconds: number,
+  force: boolean,
+) {
+  const nextTime = getNormalizedRaceBgmTimeSeconds(audio, targetSeconds);
+
+  if (
+    !force &&
+    Math.abs(audio.currentTime - nextTime) <= raceBgmSyncDriftSeconds
+  ) {
+    return;
+  }
+
+  try {
+    audio.currentTime = nextTime;
+  } catch {
+    return;
+  }
+}
+
+function getNormalizedRaceBgmTimeSeconds(
+  audio: HTMLAudioElement,
+  targetSeconds: number,
+) {
+  const safeTargetSeconds = Math.max(0, targetSeconds);
+
+  if (Number.isFinite(audio.duration) && audio.duration > 0) {
+    return safeTargetSeconds % audio.duration;
+  }
+
+  return safeTargetSeconds;
 }
 
 function shouldPlayRaceBgm(

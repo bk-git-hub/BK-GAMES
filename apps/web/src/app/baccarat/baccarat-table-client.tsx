@@ -379,6 +379,7 @@ export function BaccaratTableClient({
           <aside className="grid min-w-0 content-start gap-3">
             <RoadmapPanel roadmaps={state?.roadmaps ?? null} />
             <RecentRoundsPanel rounds={state?.recentRounds ?? []} />
+            <RulesPanel />
           </aside>
         </div>
       </section>
@@ -1496,6 +1497,53 @@ function RecentRoundsPanel({ rounds }: { rounds: BaccaratRoundResultView[] }) {
             No settled rounds yet.
           </p>
         )}
+      </div>
+    </section>
+  );
+}
+
+function RulesPanel() {
+  const payoutRows = betChoices.map((choice) => ({
+    label: choice.label,
+    value: `Pays ${choice.odds}`,
+  }));
+  const ruleRows = [
+    {
+      label: "Total",
+      value: "Only the final digit counts",
+    },
+    {
+      label: "Natural",
+      value: "8 or 9 on the first two cards",
+    },
+  ];
+
+  return (
+    <section className="rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/95 p-3 shadow-xl shadow-black/25">
+      <div className="flex items-center gap-2">
+        <CheckCircle2 className="size-4 text-[#f5c95f]" />
+        <h2 className="text-lg font-semibold">Rules</h2>
+      </div>
+      <div className="mt-3 overflow-hidden rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90 text-sm">
+        <table className="w-full border-collapse">
+          <caption className="sr-only">Baccarat quick rules</caption>
+          <tbody>
+            {[...payoutRows, ...ruleRows].map((rule) => (
+              <tr
+                className="border-b border-[#d8ecff]/[0.12] last:border-b-0"
+                key={rule.label}
+              >
+                <th
+                  className="w-24 bg-[#0b3b73]/70 px-3 py-2 text-left font-semibold text-white"
+                  scope="row"
+                >
+                  {rule.label}
+                </th>
+                <td className="px-3 py-2 text-white/70">{rule.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );

@@ -14,11 +14,9 @@ import {
   CheckCircle2,
   CircleDot,
   Coins,
-  Gauge,
   History,
   PlugZap,
   RefreshCw,
-  Sparkles,
   Timer,
   WalletCards,
 } from "lucide-react";
@@ -328,7 +326,7 @@ export function BaccaratTableClient({
                   state={state}
                 />
 
-                <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.46fr)_minmax(0,1fr)] lg:items-start">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:items-start">
                   <div className="min-w-0">
                     <HandPanel
                       activeReveal={activeReveal}
@@ -337,13 +335,6 @@ export function BaccaratTableClient({
                       label="Player"
                       revealProgress={revealProgress}
                       tone="player"
-                    />
-                  </div>
-                  <div className="order-3 col-span-2 min-w-0 lg:order-none lg:col-span-1">
-                    <RevealPanel
-                      activeReveal={activeReveal}
-                      revealProgress={revealProgress}
-                      state={state}
                     />
                   </div>
                   <div className="min-w-0">
@@ -933,72 +924,6 @@ function EmptyCardRow() {
         />
       ))}
     </div>
-  );
-}
-
-function RevealPanel({
-  activeReveal,
-  revealProgress,
-  state,
-}: {
-  activeReveal: ReturnType<typeof getActiveReveal>;
-  revealProgress: number;
-  state: BaccaratTableState | null;
-}) {
-  const progress = revealProgress;
-  const countdown = useCountdown(activeReveal?.endsAt);
-
-  if (!state || !activeReveal) {
-    return (
-      <section className="rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/92 p-3 text-center shadow-xl shadow-black/25">
-        <div className="mx-auto grid size-12 place-items-center rounded-lg border border-[#d8ecff]/25 bg-[#0b3b73] text-[#f5c95f]">
-          <Sparkles className="size-5" />
-        </div>
-        <h2 className="mt-3 text-lg font-semibold">Card Reveal</h2>
-        <p className="mt-1 text-sm text-white/65">
-          {state?.phase === "WAITING_BETS"
-            ? "Betting window is open."
-            : "Waiting for the next server reveal."}
-        </p>
-      </section>
-    );
-  }
-
-  return (
-    <section className="rounded-[1rem] border border-[#f5c95f]/45 bg-[#071c3f]/95 p-3 text-center shadow-xl shadow-black/25">
-      <div className="mx-auto grid size-12 place-items-center rounded-lg border border-[#f5c95f]/35 bg-[#805f12] text-[#fff8d6]">
-        <Gauge className="size-5" />
-      </div>
-      <h2 className="mt-3 text-lg font-semibold">{slotLabel(activeReveal.slot)}</h2>
-      <p className="mt-1 text-sm text-white/65">
-        {activeReveal.isAutoReveal
-          ? "Automatic server reveal"
-          : "Server reveal in progress"}
-      </p>
-
-      <div className="mt-4 flex justify-center">
-        <BaccaratCardBack
-          isActive={activeReveal.status === "ACTIVE"}
-          progress={progress}
-          size="featured"
-          slot={activeReveal.slot}
-        />
-      </div>
-
-      <div className="mt-4 rounded-lg border border-[#d8ecff]/20 bg-[#0b3b73]/90 p-3">
-        <div className="flex items-center justify-between text-xs text-white/65">
-          <span>{activeReveal.status}</span>
-          <span>{countdown ?? "No timer"}</span>
-        </div>
-        <div className="mt-3 h-3 overflow-hidden rounded-full bg-black/35">
-          <div
-            className="h-full rounded-full bg-[linear-gradient(90deg,#8fc4e8,#f5c95f,#c8272e)] transition-[width]"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <p className="mt-2 text-sm font-semibold">{progress}%</p>
-      </div>
-    </section>
   );
 }
 

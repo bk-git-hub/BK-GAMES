@@ -1,15 +1,14 @@
-# BK Games Final Check
+# BK Games Docs Index
 
-프로젝트 폴더 생성 전 최종 점검 문서다.
+BK Games 문서 인덱스다.
 
-이번 버전의 기준은 다음과 같다.
+일부 초기 문서는 프로젝트 시작 시점의 MVP 설계 기록을 포함한다. 현재 구현/노출 상태를 빠르게 확인할 때는 루트 `README.md`와 `docs/17_BACKEND_TECHNICAL_OVERVIEW.md`를 우선한다.
 
 ```text
-초기 MVP = 무료 포인트 게임 플랫폼 기반 + 첫 게임인 단일 실시간 블랙잭 테이블 + 일일 보상 + 최소 관리자 기능
+현재 visible game lineup = BK Derby + Blackjack + Baccarat
 ```
 
-상점/컬렉터블은 아직 기획하지 않았으므로 MVP 문서에서 제외한다.
-추후 확장 후보로만 남긴다.
+Boxing은 현재 visible game list, web route, game-server module, DB transaction helper에 연결되어 있지 않다. `16_BOXING_BACKEND_SPEC.md`는 재활성화 전까지 archived/future backend-facing spec으로 취급한다.
 
 ---
 
@@ -17,7 +16,7 @@
 
 | 파일 | 목적 |
 |---|---|
-| `01_FINAL_SCOPE.md` | 최종 MVP 범위와 제외 범위 |
+| `01_FINAL_SCOPE.md` | 초기 Blackjack-first MVP 범위와 제외 범위 |
 | `02_ARCHITECTURE.md` | 모노레포/서버 구조 |
 | `03_REALTIME_BLACKJACK_TABLE_SPEC.md` | 테이블제 실시간 블랙잭 스펙 |
 | `04_SOCKET_EVENTS.md` | Socket.IO 이벤트 계약 |
@@ -32,7 +31,7 @@
 | `13_BACCARAT_REALTIME_TABLE_SPEC.md` | 실시간 바카라 테이블 스펙 |
 | `14_BACCARAT_IMPLEMENTATION_PLAN.md` | 바카라 구현 순서와 작업 단위 |
 | `15_HORSE_RACING_BACKEND_SPEC.md` | 실시간 경마 백엔드 구현 사양 |
-| `16_BOXING_BACKEND_SPEC.md` | 실시간 복싱 백엔드 구현 사양 |
+| `16_BOXING_BACKEND_SPEC.md` | archived/future 복싱 백엔드 사양, 현재 활성 게임 아님 |
 | `17_BACKEND_TECHNICAL_OVERVIEW.md` | 현재 백엔드 구조/기술 선택/포트폴리오 설명 기준 |
 | `18_BACKEND_DEPLOYMENT_CHECKLIST.md` | 백엔드 배포 전 환경변수/DB 초기화/검증 체크리스트 |
 
@@ -41,7 +40,7 @@
 
 ---
 
-## 최종 방향
+## 현재 방향
 
 ```text
 Next.js 단일 풀스택 앱으로 시작하지 않는다.

@@ -22,7 +22,7 @@ BK Games is a portfolio-scale full-stack game platform focused on real-time syst
 - Server-authoritative game state and settlement
 - Socket.IO table updates for real-time game screens
 
-The core loop is simple: sign in, claim free points, enter the lobby, pick a game, play with the shared wallet, and receive private wallet updates after accepted actions or settlement.
+The core loop is simple: browse the public landing page and lobby, sign in when you are ready to claim free points or place a bet, pick a game, play with the shared wallet, and receive private wallet updates after accepted actions or settlement.
 
 ## Screenshots
 
@@ -34,7 +34,7 @@ The core loop is simple: sign in, claim free points, enter the lobby, pick a gam
 |---|
 | <img src="./docs/screenshots/readme/bk-derby.png" alt="BK Derby racing screen" width="640" /> |
 
-Authenticated lobby, Blackjack, and Baccarat table screenshots should be added after signing in locally, because those routes depend on a browser session and the game server.
+Lobby, Blackjack, and Baccarat table screenshots should be added after a local browser pass. Blackjack and Baccarat currently depend on a signed-in browser session and the game server.
 
 ## Product Surfaces
 
@@ -42,10 +42,10 @@ Authenticated lobby, Blackjack, and Baccarat table screenshots should be added a
 |---|---|---|
 | `/` | Public landing page and current game lineup | Public |
 | `/auth` | Sign in and sign up | Public |
-| `/lobby` | Wallet summary, daily reward, and game selection | Required |
+| `/lobby` | Game selection plus guest/login-aware reward and wallet panel | Public; login required to claim |
 | `/blackjack` | Real-time Blackjack table | Required |
 | `/baccarat` | Real-time Baccarat table | Required |
-| `/racing/bk-derby` | BK Derby racing game screen | Public preview / backend-linked |
+| `/racing/bk-derby` | BK Derby racing game screen | Public; login/backend required to bet |
 
 ## Tech Stack
 
@@ -63,16 +63,16 @@ Authenticated lobby, Blackjack, and Baccarat table screenshots should be added a
 
 | Game | Status | Notes |
 |---|---|---|
+| BK Derby | Backend-linked racing screen | Fixed race cycle, tickets, race history, horse records, and wallet-backed betting flow |
 | Blackjack | Playable real-time table | Seat taking, betting, actions, table state, event stream, settlement, and private wallet updates |
 | Baccarat | Playable real-time table | Player, Banker, and Tie betting with server-revealed cards, settlement, roadmaps, and private wallet updates |
-| BK Derby | Backend-linked racing screen | Fixed race cycle, tickets, race history, horse records, and wallet-backed betting flow |
 
 ## Planned And Specified Work
 
-- Add authenticated lobby and Blackjack table screenshots to this README after local sign-in.
+- Add lobby, Blackjack, and Baccarat table screenshots to this README after a local browser pass.
 - Continue Blackjack table UX polish around result review, card reveal pacing, split hands, and mobile layout.
 - Continue Baccarat table UX polish around betting clarity, reveal pacing, and mobile layout.
-- Revisit Boxing later from the existing backend-facing specification if it returns to the active game lineup.
+- Keep Boxing out of the visible game lineup unless it is explicitly reactivated; `docs/16_BOXING_BACKEND_SPEC.md` is an archived/future backend-facing spec only.
 - Continue production hardening for deployment, observability, and operational recovery.
 
 ## Architecture
@@ -156,6 +156,7 @@ Start local PostgreSQL and prepare data:
 docker compose up -d postgres
 pnpm db:migrate
 pnpm --filter @bk-games/db seed:blackjack-main
+pnpm --filter @bk-games/db seed:baccarat-main
 pnpm --filter @bk-games/db seed:racing-main
 ```
 
@@ -179,6 +180,8 @@ Useful checks:
 pnpm typecheck
 pnpm lint
 pnpm --filter game-server test
+pnpm --filter @bk-games/db smoke:baccarat-betting
+pnpm --filter @bk-games/db smoke:baccarat-settlement
 pnpm --filter @bk-games/db smoke:racing-runner
 pnpm --filter @bk-games/db smoke:racing-wallet
 ```
@@ -201,7 +204,7 @@ pnpm --filter @bk-games/db smoke:racing-wallet
 | [docs/13_BACCARAT_REALTIME_TABLE_SPEC.md](./docs/13_BACCARAT_REALTIME_TABLE_SPEC.md) | Baccarat real-time table spec |
 | [docs/14_BACCARAT_IMPLEMENTATION_PLAN.md](./docs/14_BACCARAT_IMPLEMENTATION_PLAN.md) | Baccarat implementation plan |
 | [docs/15_HORSE_RACING_BACKEND_SPEC.md](./docs/15_HORSE_RACING_BACKEND_SPEC.md) | BK Derby backend-facing design |
-| [docs/16_BOXING_BACKEND_SPEC.md](./docs/16_BOXING_BACKEND_SPEC.md) | Boxing backend-facing design |
+| [docs/16_BOXING_BACKEND_SPEC.md](./docs/16_BOXING_BACKEND_SPEC.md) | Archived/future Boxing backend-facing design; not in the active game lineup |
 
 ## Portfolio Framing
 

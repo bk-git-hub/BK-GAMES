@@ -1509,12 +1509,50 @@ function RulesPanel() {
   }));
   const ruleRows = [
     {
+      label: "Cards",
+      value: "A=1, 10/J/Q/K=0",
+    },
+    {
       label: "Total",
       value: "Only the final digit counts",
     },
     {
       label: "Natural",
-      value: "8 or 9 on the first two cards",
+      value: "8 or 9 on first two cards; both stand",
+    },
+  ];
+  const drawRows = [
+    {
+      label: "Player",
+      value: "Draws 0 to 5; stands 6 to 7",
+    },
+    {
+      label: "Banker",
+      value: "If Player stands: draws 0 to 5; stands 6 to 7",
+    },
+    {
+      label: "B 0-2",
+      value: "Draws after any Player third card",
+    },
+    {
+      label: "B 3",
+      value: "Draws unless Player third card is 8",
+    },
+    {
+      label: "B 4",
+      value: "Draws when Player third card is 2 to 7",
+    },
+    {
+      label: "B 5",
+      value: "Draws when Player third card is 4 to 7",
+    },
+    {
+      label: "B 6",
+      value: "Draws when Player third card is 6 or 7",
+    },
+    {
+      label: "B 7",
+      value: "Stands",
     },
   ];
 
@@ -1535,6 +1573,30 @@ function RulesPanel() {
               >
                 <th
                   className="w-24 bg-[#0b3b73]/70 px-3 py-2 text-left font-semibold text-white"
+                  scope="row"
+                >
+                  {rule.label}
+                </th>
+                <td className="px-3 py-2 text-white/70">{rule.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-3 overflow-hidden rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90 text-sm">
+        <div className="border-b border-[#d8ecff]/[0.12] bg-[#0b3b73]/70 px-3 py-2 text-xs font-semibold uppercase text-white/70">
+          Third-card draw
+        </div>
+        <table className="w-full border-collapse">
+          <caption className="sr-only">Baccarat third-card draw rules</caption>
+          <tbody>
+            {drawRows.map((rule) => (
+              <tr
+                className="border-b border-[#d8ecff]/[0.12] last:border-b-0"
+                key={rule.label}
+              >
+                <th
+                  className="w-24 bg-[#0b3b73]/45 px-3 py-2 text-left font-semibold text-white"
                   scope="row"
                 >
                   {rule.label}

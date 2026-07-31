@@ -642,6 +642,7 @@ export class BaccaratGateway implements OnModuleDestroy {
     this.scheduleBettingTimer(state);
     this.scheduleDealingTimer(state);
     this.scheduleRevealTimer(state);
+    this.recoverMissingRevealTimer(state);
     this.scheduleSettledTimer(state);
     this.scheduleRoundEndTimer(state);
   }
@@ -700,6 +701,26 @@ export class BaccaratGateway implements OnModuleDestroy {
 
     handle.unref?.();
     this.revealTimers.set(state.tableId, handle);
+  }
+
+  private recoverMissingRevealTimer(state: BaccaratTableState) {
+    if (state.phase !== 'SQUEEZE' || !state.round || state.timers.revealEndsAt) {
+      return;
+    }
+
+    const recover = state.reveal
+      ? () => this.completeRevealFromTimer(state.tableId)
+      : () => this.startNextReveal(state.tableId);
+
+    queueMicrotask(() => {
+      void recover().catch((error: unknown) =>
+        this.emitTableError(
+          state.tableId,
+          error,
+          'Unexpected baccarat reveal recovery error.',
+        ),
+      );
+    });
   }
 
   private scheduleSettledTimer(state: BaccaratTableState) {

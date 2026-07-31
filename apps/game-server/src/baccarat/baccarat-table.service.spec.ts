@@ -327,6 +327,56 @@ describe('BaccaratTableService', () => {
     );
   });
 
+  it('can recover a squeeze round that has no active reveal timer', () => {
+    const service = new BaccaratTableService();
+
+    service.configureTable(
+      createConfiguredTable({
+        round: createRound({ status: 'SQUEEZE' }),
+        reveals: createStalledSqueezeReveals(),
+      }),
+    );
+
+    const stalled = service.getTableState('main');
+
+    expect(stalled.phase).toBe('SQUEEZE');
+    expect(stalled.reveal).toBeNull();
+    expect(stalled.timers.revealEndsAt).toBeNull();
+    expect(stalled.player.cards[0]).toEqual({
+      slot: 'PLAYER_CARD_1',
+      rank: 'A',
+      suit: 'clubs',
+      value: 1,
+      hidden: false,
+    });
+    expect(stalled.banker.cards[0]).toEqual({
+      slot: 'BANKER_CARD_1',
+      rank: '9',
+      suit: 'spades',
+      value: 9,
+      hidden: false,
+    });
+
+    const recovered = service.startNextReveal({
+      tableId: 'main',
+      now: new Date('2026-07-06T00:00:10.000Z'),
+    });
+
+    expect(recovered?.state.reveal).toEqual(
+      expect.objectContaining({
+        slot: 'PLAYER_CARD_2',
+        status: 'ACTIVE',
+        startedAt: '2026-07-06T00:00:10.000Z',
+        endsAt: '2026-07-06T00:00:11.500Z',
+        isAutoReveal: true,
+      }),
+    );
+    expect(recovered?.state.player.cards[1]).toEqual({
+      slot: 'PLAYER_CARD_2',
+      hidden: true,
+    });
+  });
+
   it('auto-reveals when the active squeezer fully disconnects', () => {
     const service = new BaccaratTableService();
 
@@ -535,6 +585,32 @@ function createLegacySqueezerReveals(): BaccaratRuntimeRevealSnapshot[] {
         progress: 0,
         startedAt: '2026-07-06T00:00:00.000Z',
         endsAt: '2026-07-06T00:00:08.000Z',
+      };
+    }
+
+    return reveal;
+  });
+}
+
+function createStalledSqueezeReveals(): BaccaratRuntimeRevealSnapshot[] {
+  return createReveals().map((reveal) => {
+    if (reveal.revealId === 'reveal-player-1') {
+      return {
+        ...reveal,
+        status: 'REVEALED',
+        progress: 100,
+        revealedAt: '2026-07-06T00:00:03.000Z',
+        card: card('A'),
+      };
+    }
+
+    if (reveal.revealId === 'reveal-banker-1') {
+      return {
+        ...reveal,
+        status: 'REVEALED',
+        progress: 100,
+        revealedAt: '2026-07-06T00:00:05.000Z',
+        card: card('9', 'spades'),
       };
     }
 

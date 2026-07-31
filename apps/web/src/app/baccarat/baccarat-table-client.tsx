@@ -39,7 +39,6 @@ import {
 
 import {
   type BaccaratConnectionStatus,
-  type BaccaratTimelineEntry,
   useBaccaratTable,
 } from "./use-baccarat-table";
 import { Button } from "@/components/ui/button";
@@ -377,10 +376,9 @@ export function BaccaratTableClient({
             </section>
           </div>
 
-          <aside className="grid min-w-0 gap-3 xl:grid-rows-[auto_auto_minmax(0,1fr)]">
+          <aside className="grid min-w-0 content-start gap-3">
             <RoadmapPanel roadmaps={state?.roadmaps ?? null} />
             <RecentRoundsPanel rounds={state?.recentRounds ?? []} />
-            <TimelinePanel timeline={table.timeline} />
           </aside>
         </div>
       </section>
@@ -1499,45 +1497,6 @@ function RecentRoundsPanel({ rounds }: { rounds: BaccaratRoundResultView[] }) {
   );
 }
 
-function TimelinePanel({
-  timeline,
-}: {
-  timeline: BaccaratTimelineEntry[];
-}) {
-  return (
-    <section className="min-h-0 rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/95 p-3 shadow-xl shadow-black/25">
-      <div className="flex items-center gap-2">
-        <PlugZap className="size-4 text-[#f5c95f]" />
-        <h2 className="text-lg font-semibold">Live Events</h2>
-      </div>
-      <div className="mt-3 grid max-h-[360px] gap-2 overflow-auto pr-1 xl:max-h-none">
-        {timeline.length ? (
-          timeline.map((event) => (
-            <div
-              className="rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90 px-3 py-2 text-sm"
-              key={event.id}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <p className={cn("font-semibold", timelineToneClass(event.tone))}>
-                  {event.title}
-                </p>
-                <span className="shrink-0 text-xs text-white/40">
-                  {formatTime(event.createdAt)}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-white/65">{event.detail}</p>
-            </div>
-          ))
-        ) : (
-          <p className="rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90 px-3 py-5 text-center text-sm text-white/65">
-            Waiting for table events.
-          </p>
-        )}
-      </div>
-    </section>
-  );
-}
-
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-[#d8ecff]/20 bg-[#0b3b73]/80 px-3 py-2 text-sm">
@@ -1782,22 +1741,6 @@ function outcomeTextClass(outcome: BaccaratRoundOutcome) {
   return "text-[#f5c95f]";
 }
 
-function timelineToneClass(tone: BaccaratTimelineEntry["tone"]) {
-  if (tone === "success") {
-    return "text-[#d8ecff]";
-  }
-
-  if (tone === "warning") {
-    return "text-[#f5c95f]";
-  }
-
-  if (tone === "danger") {
-    return "text-[#ffb8bd]";
-  }
-
-  return "text-white";
-}
-
 function slotLabel(slot: BaccaratRevealSlot) {
   return slot
     .toLowerCase()
@@ -1839,12 +1782,4 @@ function getActivePendingBet(
   }
 
   return pendingBet;
-}
-
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(new Date(value));
 }

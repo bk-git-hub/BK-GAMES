@@ -1453,6 +1453,10 @@ function RoadCell({
 }
 
 function RecentRoundsPanel({ rounds }: { rounds: BaccaratRoundResultView[] }) {
+  const visibleRounds = [...rounds]
+    .sort((left, right) => right.roundNo - left.roundNo)
+    .slice(0, 8);
+
   return (
     <section className="rounded-[1rem] border border-[#d8ecff]/20 bg-[#071c3f]/95 p-3 shadow-xl shadow-black/25">
       <div className="flex items-center gap-2">
@@ -1460,8 +1464,8 @@ function RecentRoundsPanel({ rounds }: { rounds: BaccaratRoundResultView[] }) {
         <h2 className="text-lg font-semibold">Recent</h2>
       </div>
       <div className="mt-3 grid max-h-[214px] gap-2 overflow-auto pr-1">
-        {rounds.length ? (
-          rounds.slice(0, 8).map((round) => (
+        {visibleRounds.length ? (
+          visibleRounds.map((round) => (
             <div
               className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg border border-[#d8ecff]/20 bg-[#061833]/90 px-3 py-2 text-sm"
               key={round.roundId}

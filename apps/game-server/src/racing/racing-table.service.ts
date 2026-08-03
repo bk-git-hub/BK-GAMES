@@ -66,6 +66,12 @@ export type RacingStartScheduledRaceInput = {
   scheduledStartAtMs: number;
 };
 
+export type RacingCloseBettingWindowInput = {
+  tableId: string;
+  raceId: string;
+  bettingClosesAtMs: number;
+};
+
 export type RacingTableMutationResult = {
   state: RacingTableState;
   event: RacingTableEventPayload;
@@ -99,6 +105,7 @@ export class RacingTableService {
     const previousKey = buildSyncKey(existing);
 
     this.applyTableConfig(existing, config, input.race ?? null);
+    retainLiveBetsForCurrentRace(existing);
 
     if (previousKey === buildSyncKey(existing)) {
       return null;
@@ -160,6 +167,7 @@ export class RacingTableService {
     const table = this.getTable(input.tableId);
     const user = normalizeSocketUser(input.user);
 
+    table.liveBetRaceIds.add(input.raceId);
     this.bump(table);
 
     return {
@@ -169,6 +177,45 @@ export class RacingTableService {
         betId: input.betId,
         betType: input.betType,
         raceEntryIds: input.raceEntryIds,
+      }),
+    };
+  }
+
+  closeBettingWindow(
+    input: RacingCloseBettingWindowInput,
+  ): RacingTableMutationResult | null {
+    const table = this.getTable(input.tableId);
+    const race = table.race;
+
+    if (!race || race.raceId !== input.raceId.trim()) {
+      return null;
+    }
+
+    const bettingClosesAtMs = Date.parse(race.bettingClosesAt ?? '');
+
+    if (
+      !Number.isFinite(bettingClosesAtMs) ||
+      bettingClosesAtMs !== input.bettingClosesAtMs
+    ) {
+      return null;
+    }
+
+    if (table.phase !== 'BETTING' || race.phase !== 'BETTING') {
+      return null;
+    }
+
+    table.phase = 'LOCKING_BETS';
+    table.race = {
+      ...race,
+      status: 'LOCKING_BETS',
+      phase: 'LOCKING_BETS',
+    };
+    this.bump(table);
+
+    return {
+      state: this.toState(table),
+      event: this.toEvent(table, 'RACE_SCHEDULED', 'SYSTEM', {
+        raceId: table.race.raceId,
       }),
     };
   }
@@ -295,6 +342,24 @@ export class RacingTableService {
     };
   }
 
+  hasTable(tableId: string) {
+    return this.tables.has(normalizeTableId(tableId));
+  }
+
+  getViewerCount(tableId: string) {
+    const normalizedTableId = normalizeTableId(tableId);
+    const table = this.tables.get(normalizedTableId);
+
+    return table ? countUniqueViewers(table) : 0;
+  }
+
+  hasLiveBets(tableId: string) {
+    const normalizedTableId = normalizeTableId(tableId);
+    const table = this.tables.get(normalizedTableId);
+
+    return Boolean(table && table.liveBetRaceIds.size > 0);
+  }
+
   private getTable(tableId: string) {
     const normalizedTableId = normalizeTableId(tableId);
     const table = this.tables.get(normalizedTableId);
@@ -322,6 +387,7 @@ export class RacingTableService {
       phase: race?.phase ?? 'WAITING',
       race,
       connections: new Map(),
+      liveBetRaceIds: new Set(),
       version: 0,
       updatedAt: now,
     };
@@ -419,6 +485,7 @@ type RacingTableRuntime = RacingTableConfig & {
   phase: RacingTablePhase;
   race: RacingRaceSnapshot | null;
   connections: Map<string, RacingSocketUser>;
+  liveBetRaceIds: Set<string>;
   version: number;
   updatedAt: string;
 };
@@ -529,6 +596,26 @@ function countUniqueViewers(table: RacingTableRuntime) {
   ).size;
 }
 
+function retainLiveBetsForCurrentRace(table: RacingTableRuntime) {
+  if (!table.race) {
+    table.liveBetRaceIds.clear();
+    return;
+  }
+
+  for (const raceId of Array.from(table.liveBetRaceIds)) {
+    if (
+      raceId !== table.race.raceId ||
+      isLiveBetTerminalPhase(table.race.phase)
+    ) {
+      table.liveBetRaceIds.delete(raceId);
+    }
+  }
+}
+
+function isLiveBetTerminalPhase(phase: RacingTablePhase) {
+  return phase === 'SETTLED' || phase === 'ROUND_END' || phase === 'CANCELLED';
+}
+
 function buildSyncKey(table: RacingTableRuntime) {
   return JSON.stringify({
     status: table.status,
@@ -561,6 +648,7 @@ function buildSyncKey(table: RacingTableRuntime) {
           entries: table.race.entries.map((entry) => entry.raceEntryId),
         }
       : null,
+    liveBetRaceIds: Array.from(table.liveBetRaceIds).sort(),
   });
 }
 

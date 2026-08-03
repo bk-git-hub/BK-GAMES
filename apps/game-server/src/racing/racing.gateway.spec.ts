@@ -99,6 +99,154 @@ describe('RacingGateway race tick loop', () => {
     expect(tableService.recordRaceTick).toHaveBeenCalledTimes(4);
   });
 
+  it('does not wake the DB scheduler while no runtime table is active', async () => {
+    const tableConfigService = {
+      advanceRaceLifecycle: jest.fn(),
+      getScheduledRace: jest.fn(),
+      getTableConfig: jest.fn(),
+    };
+    const tableService = {
+      hasTable: jest.fn(() => false),
+    };
+    const { server } = createServerMock();
+    const gateway = new RacingGateway(
+      tableConfigService as never,
+      tableService as never,
+      {} as never,
+      {} as never,
+    );
+    gateway.server = server;
+
+    gateway.afterInit();
+    await jest.advanceTimersByTimeAsync(60_000);
+
+    expect(tableConfigService.advanceRaceLifecycle).not.toHaveBeenCalled();
+    expect(tableConfigService.getScheduledRace).not.toHaveBeenCalled();
+    expect(tableConfigService.getTableConfig).not.toHaveBeenCalled();
+
+    gateway.onModuleDestroy();
+  });
+
+  it('closes betting from a runtime timer without waiting for DB sync', async () => {
+    const bettingState = createPrestartState({
+      phase: 'BETTING',
+      scheduledStartAt: '2026-06-18T12:00:05.000Z',
+    });
+    bettingState.race = {
+      ...bettingState.race!,
+      bettingClosesAt: '2026-06-18T12:00:02.000Z',
+    };
+    bettingState.timers = {
+      ...bettingState.timers,
+      bettingClosesAt: '2026-06-18T12:00:02.000Z',
+    };
+    const tableService = createTableServiceMock(bettingState);
+    const tableConfigService = {
+      advanceRaceLifecycle: jest.fn(),
+      getScheduledRace: jest.fn(),
+      getTableConfig: jest.fn(),
+    };
+    const { emit, server } = createServerMock();
+    const gateway = new RacingGateway(
+      tableConfigService as never,
+      tableService as never,
+      {} as never,
+      {} as never,
+    );
+    gateway.server = server;
+
+    getGatewayHarness(gateway).ensureRuntimeTimers(bettingState);
+    await jest.advanceTimersByTimeAsync(2_000);
+
+    expect(tableService.closeBettingWindow).toHaveBeenCalledWith({
+      tableId: bettingState.tableId,
+      raceId: bettingState.race?.raceId,
+      bettingClosesAtMs: Date.parse('2026-06-18T12:00:02.000Z'),
+    });
+    expect(tableConfigService.advanceRaceLifecycle).not.toHaveBeenCalled();
+
+    const tableStates = emit.mock.calls
+      .filter(([eventName]) => eventName === 'table:state')
+      .map(([, payload]) => payload);
+
+    expect(tableStates.at(-1)).toMatchObject({
+      phase: 'LOCKING_BETS',
+      race: {
+        phase: 'LOCKING_BETS',
+      },
+    });
+
+    gateway.onModuleDestroy();
+  });
+
+  it('persists race finish from the final runtime tick', async () => {
+    jest.setSystemTime(new Date('2026-06-18T12:00:25.000Z'));
+
+    const runningState = createRunningState({
+      startedAt: '2026-06-18T12:00:00.000Z',
+    });
+    const settledState: RacingTableState = {
+      ...runningState,
+      phase: 'SETTLED',
+      race: {
+        ...runningState.race!,
+        status: 'SETTLED',
+        phase: 'SETTLED',
+        resultOrder: runningState.race!.entries.map(
+          (entry) => entry.raceEntryId,
+        ),
+        settledAt: '2026-06-18T12:00:25.000Z',
+      },
+      updatedAt: '2026-06-18T12:00:25.000Z',
+      version: runningState.version + 1,
+    };
+    const tableService = createTableServiceMock(runningState);
+    const tableConfigService = {
+      advanceRaceLifecycle: jest.fn(async () => ({
+        cancelled: null,
+        settled: null,
+      })),
+      getScheduledRace: jest.fn(async () => settledState.race),
+      getTableConfig: jest.fn(async () => createConfigFromState(settledState)),
+    };
+    const { emit, server } = createServerMock();
+    const gateway = new RacingGateway(
+      tableConfigService as never,
+      tableService as never,
+      {} as never,
+      {} as never,
+    );
+    gateway.server = server;
+    tableService.configureTable.mockImplementation(() => {
+      tableService.setState(settledState);
+
+      return {
+        state: settledState,
+        event: createTableEvent(settledState, 'RACE_SETTLED'),
+      };
+    });
+
+    getGatewayHarness(gateway).ensureRaceTickLoop(runningState);
+    await jest.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    expect(tableConfigService.advanceRaceLifecycle).toHaveBeenCalledTimes(1);
+    expect(tableService.configureTable).toHaveBeenCalledTimes(1);
+
+    const emittedEvents = emit.mock.calls
+      .filter(([eventName]) => eventName === 'table:event')
+      .map(([, payload]) => payload);
+
+    expect(emittedEvents.some((event) => event.type === 'RACE_TICK')).toBe(
+      true,
+    );
+    expect(emittedEvents.some((event) => event.type === 'RACE_SETTLED')).toBe(
+      true,
+    );
+
+    gateway.onModuleDestroy();
+  });
+
   it('emits prestart ticks and starts the race without waiting for scheduler sync', async () => {
     const prestartState = createPrestartState({
       phase: 'LOCKING_BETS',
@@ -409,10 +557,44 @@ function createTableServiceMock(state: RacingTableState) {
       };
     },
   );
+  const closeBettingWindow = jest.fn(
+    (input: { bettingClosesAtMs: number; raceId: string; tableId: string }) => {
+      const race = currentState.race;
+
+      if (
+        !race ||
+        race.raceId !== input.raceId ||
+        Date.parse(race.bettingClosesAt ?? '') !== input.bettingClosesAtMs
+      ) {
+        return null;
+      }
+
+      currentState = {
+        ...currentState,
+        phase: 'LOCKING_BETS',
+        race: {
+          ...race,
+          status: 'LOCKING_BETS',
+          phase: 'LOCKING_BETS',
+        },
+        updatedAt: new Date().toISOString(),
+        version: currentState.version + 1,
+      };
+
+      return {
+        state: currentState,
+        event: createTableEvent(currentState, 'RACE_SCHEDULED'),
+      };
+    },
+  );
 
   return {
+    closeBettingWindow,
     configureTable,
     getTableState: jest.fn(() => currentState),
+    getViewerCount: jest.fn(() => currentState.viewerCount),
+    hasLiveBets: jest.fn(() => false),
+    hasTable: jest.fn(() => true),
     recordRaceTick,
     startScheduledRace,
     setState(nextState: RacingTableState) {
@@ -423,7 +605,7 @@ function createTableServiceMock(state: RacingTableState) {
 
 function createTableEvent(
   state: RacingTableState,
-  type: 'RACE_SCHEDULED' | 'RACE_STARTED' | 'RACE_TICK',
+  type: 'RACE_SCHEDULED' | 'RACE_STARTED' | 'RACE_TICK' | 'RACE_SETTLED',
 ) {
   return {
     tableId: state.tableId,
@@ -444,8 +626,7 @@ function createConfigFromState(state: RacingTableState) {
     payoutRateBps: 9000,
     bettingTimeoutSeconds: state.timing.bettingTimeoutSeconds,
     raceIntervalSeconds: state.timing.raceIntervalSeconds,
-    bettingCloseBeforeStartSeconds:
-      state.timing.bettingCloseBeforeStartSeconds,
+    bettingCloseBeforeStartSeconds: state.timing.bettingCloseBeforeStartSeconds,
     tickIntervalMs: state.timing.tickIntervalMs,
     raceDistanceM: state.timing.raceDistanceM,
     roundEndDelaySeconds: state.timing.roundEndDelaySeconds,
@@ -465,6 +646,7 @@ function createServerMock() {
 
 function getGatewayHarness(gateway: RacingGateway) {
   return gateway as unknown as {
+    ensureRuntimeTimers(state: RacingTableState): void;
     ensureRaceTickLoop(state: RacingTableState): void;
     ensurePrestartTimer(state: RacingTableState): void;
   };

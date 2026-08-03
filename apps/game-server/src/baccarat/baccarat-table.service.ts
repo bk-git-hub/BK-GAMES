@@ -209,7 +209,9 @@ export class BaccaratTableService {
       existing.round = input.round ? createRoundRuntime(input.round) : null;
       existing.reveals = createRevealRuntimes(input.reveals);
       existing.bets = createBetMap(input.bets);
-      existing.phase = input.round ? toTablePhase(input.round.status) : 'WAITING';
+      existing.phase = input.round
+        ? toTablePhase(input.round.status)
+        : 'WAITING';
 
       if (existing.round) {
         markRevealedCards(existing.round, existing.reveals);
@@ -378,7 +380,9 @@ export class BaccaratTableService {
       return null;
     }
 
-    const reveal = table.reveals.find((candidate) => candidate.status === 'PENDING');
+    const reveal = table.reveals.find(
+      (candidate) => candidate.status === 'PENDING',
+    );
 
     if (!reveal) {
       if (
@@ -482,7 +486,11 @@ export class BaccaratTableService {
       : normalizeSocketUser(input.user).userId;
 
     if (!input.system) {
-      assertUserCanControlSqueeze(table, reveal, normalizeSocketUser(input.user));
+      assertUserCanControlSqueeze(
+        table,
+        reveal,
+        normalizeSocketUser(input.user),
+      );
     }
 
     const card = requireRevealCard(round, reveal.slot);
@@ -505,7 +513,10 @@ export class BaccaratTableService {
     this.bump(table);
 
     const visibleCard = toVisibleCardView(reveal.slot, card);
-    const state = this.toState(table, actorUserId === 'SYSTEM' ? undefined : actorUserId);
+    const state = this.toState(
+      table,
+      actorUserId === 'SYSTEM' ? undefined : actorUserId,
+    );
 
     return {
       state,
@@ -531,7 +542,9 @@ export class BaccaratTableService {
     };
   }
 
-  confirmSettlement(input: BaccaratSettlementInput): BaccaratTableMutationResult {
+  confirmSettlement(
+    input: BaccaratSettlementInput,
+  ): BaccaratTableMutationResult {
     const table = this.getTable(input.tableId);
     const round = requireRound(table);
 
@@ -567,9 +580,7 @@ export class BaccaratTableService {
     this.bump(table);
 
     const state = this.toState(table);
-    const results = input.bets.map((bet) =>
-      toSettledPlayerResult(table, bet),
-    );
+    const results = input.bets.map((bet) => toSettledPlayerResult(table, bet));
 
     return {
       state,
@@ -661,6 +672,26 @@ export class BaccaratTableService {
     return this.tables.has(normalizeTableId(tableId));
   }
 
+  getViewerCount(tableId: string) {
+    const normalizedTableId = normalizeTableId(tableId);
+    const table = this.tables.get(normalizedTableId);
+
+    return table ? countUniqueViewers(table) : 0;
+  }
+
+  hasLiveBets(tableId: string) {
+    const normalizedTableId = normalizeTableId(tableId);
+    const table = this.tables.get(normalizedTableId);
+
+    if (!table) {
+      return false;
+    }
+
+    return Array.from(table.bets.values()).some(
+      (bet) => bet.status === 'PLACED',
+    );
+  }
+
   getRoundEndDelaySeconds(tableId: string) {
     return this.getTable(tableId).config.roundEndDelaySeconds;
   }
@@ -704,7 +735,9 @@ export class BaccaratTableService {
       (candidate) => candidate.revealId === input.revealId.trim(),
     );
 
-    return Boolean(reveal?.status === 'ACTIVE' && reveal.squeezerUserId === null);
+    return Boolean(
+      reveal?.status === 'ACTIVE' && reveal.squeezerUserId === null,
+    );
   }
 
   getTableState(tableId: string, viewerUserId?: string): BaccaratTableState {
@@ -782,8 +815,12 @@ export class BaccaratTableService {
       round: round ? toRoundSnapshot(table, round) : null,
       betting,
       shoe: table.shoe,
-      player: round ? toHandSnapshot(round, 'PLAYER', table.phase) : emptyHand(),
-      banker: round ? toHandSnapshot(round, 'BANKER', table.phase) : emptyHand(),
+      player: round
+        ? toHandSnapshot(round, 'PLAYER', table.phase)
+        : emptyHand(),
+      banker: round
+        ? toHandSnapshot(round, 'BANKER', table.phase)
+        : emptyHand(),
       reveal: currentReveal ? toRevealSnapshot(currentReveal) : null,
       squeeze: currentReveal
         ? {
@@ -966,7 +1003,9 @@ function isRevealSlotRevealed(
   reveals: BaccaratRuntimeRevealSnapshot[],
   slot: BaccaratRevealSlot,
 ) {
-  return reveals.some((reveal) => reveal.slot === slot && reveal.status === 'REVEALED');
+  return reveals.some(
+    (reveal) => reveal.slot === slot && reveal.status === 'REVEALED',
+  );
 }
 
 function markRevealedCards(
@@ -1013,7 +1052,9 @@ function applyRevealDerivedPhase(table: BaccaratTableRuntime) {
   }
 }
 
-function normalizeTableConfig(config: BaccaratTableConfig): BaccaratTableConfig {
+function normalizeTableConfig(
+  config: BaccaratTableConfig,
+): BaccaratTableConfig {
   if (config.minBet <= 0n || config.maxMainBet < config.minBet) {
     throw new BaccaratTableError(
       'UNKNOWN_ERROR',
@@ -1054,7 +1095,8 @@ function normalizeBetTypes(betTypes: BaccaratBetType[]) {
   if (
     uniqueBetTypes.length === 0 ||
     uniqueBetTypes.some(
-      (betType) => betType !== 'PLAYER' && betType !== 'BANKER' && betType !== 'TIE',
+      (betType) =>
+        betType !== 'PLAYER' && betType !== 'BANKER' && betType !== 'TIE',
     )
   ) {
     throw new BaccaratTableError(
@@ -1122,7 +1164,9 @@ function assertTableOpen(table: BaccaratTableRuntime) {
 }
 
 function isBettingWindowClosed(round: BaccaratRoundRuntime) {
-  return Boolean(round.bettingClosesAt && Date.now() >= Date.parse(round.bettingClosesAt));
+  return Boolean(
+    round.bettingClosesAt && Date.now() >= Date.parse(round.bettingClosesAt),
+  );
 }
 
 function requireRound(table: BaccaratTableRuntime): BaccaratRoundRuntime {
@@ -1217,7 +1261,11 @@ function assertUserCanControlSqueeze(
 
   const bet = table.bets.get(user.userId);
 
-  if (!bet || bet.status !== 'PLACED' || !hasConnectedUser(table, user.userId)) {
+  if (
+    !bet ||
+    bet.status !== 'PLACED' ||
+    !hasConnectedUser(table, user.userId)
+  ) {
     throw new BaccaratTableError(
       'NOT_SQUEEZER',
       `User ${user.userId} is not an active Baccarat squeezer.`,
@@ -1394,7 +1442,12 @@ function toHandSnapshot(
 
   return {
     cards: cards.map((card, index) =>
-      toCardView(target === 'PLAYER' ? playerSlotForIndex(index) : bankerSlotForIndex(index), card),
+      toCardView(
+        target === 'PLAYER'
+          ? playerSlotForIndex(index)
+          : bankerSlotForIndex(index),
+        card,
+      ),
     ),
     total:
       phase === 'SETTLING' ||
@@ -1444,7 +1497,9 @@ function toVisibleCardView(
   };
 }
 
-function toRevealSnapshot(reveal: BaccaratRevealRuntime): BaccaratRevealSnapshot {
+function toRevealSnapshot(
+  reveal: BaccaratRevealRuntime,
+): BaccaratRevealSnapshot {
   return {
     revealId: reveal.revealId,
     slot: reveal.slot,
@@ -1512,7 +1567,9 @@ function toSettledPlayerResult(
   };
 }
 
-function buildRoadmapsFromRecentRounds(recentRounds: BaccaratRoundResultView[]) {
+function buildRoadmapsFromRecentRounds(
+  recentRounds: BaccaratRoundResultView[],
+) {
   return buildBaccaratRoadmaps(recentRounds);
 }
 

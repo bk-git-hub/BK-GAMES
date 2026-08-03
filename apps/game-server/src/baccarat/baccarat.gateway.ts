@@ -63,17 +63,9 @@ export class BaccaratGateway implements OnModuleDestroy {
   ) {}
 
   afterInit() {
-    void Promise.all(
-      baccaratLobbyTableIds.map((tableId) =>
-        this.configureRuntimeTable(tableId, true),
-      ),
-    ).catch((error: unknown) =>
-      this.emitTableError(
-        'main',
-        error,
-        'Unexpected baccarat bootstrap error.',
-      ),
-    );
+    for (const tableId of baccaratLobbyTableIds) {
+      this.stopRuntimeTimers(tableId);
+    }
   }
 
   onModuleDestroy() {
@@ -114,7 +106,10 @@ export class BaccaratGateway implements OnModuleDestroy {
     this.handleCommand(socket, BACCARAT_CLIENT_EVENTS.TABLE_JOIN, async () => {
       const tableId = readRequiredTableId(body.tableId);
 
-      await this.configureRuntimeTable(tableId);
+      await this.configureRuntimeTable(
+        tableId,
+        this.shouldRefreshOnNextViewer(tableId),
+      );
 
       const user = this.resolveSocketUser(socket, body.nickname);
       const update = this.tableService.joinTable({
@@ -160,7 +155,10 @@ export class BaccaratGateway implements OnModuleDestroy {
       const payload = body as Partial<BaccaratPlaceBetPayload> | undefined;
       const tableId = readRequiredTableId(payload?.tableId);
 
-      await this.configureRuntimeTable(tableId);
+      await this.configureRuntimeTable(
+        tableId,
+        this.shouldRefreshOnNextViewer(tableId),
+      );
 
       const user = this.resolveSocketUser(socket);
       const round = this.tableService.requireBettingRound({ tableId });
@@ -229,7 +227,11 @@ export class BaccaratGateway implements OnModuleDestroy {
         });
 
         if (!update.squeezeProgressed) {
-          this.emitPersonalTableState(socket, update.state.tableId, user.userId);
+          this.emitPersonalTableState(
+            socket,
+            update.state.tableId,
+            user.userId,
+          );
           return;
         }
 
@@ -392,9 +394,7 @@ export class BaccaratGateway implements OnModuleDestroy {
       await this.tableConfigService.markRevealCompleted({
         revealId: input.revealId,
         roundId: input.roundId,
-        revealedBy: input.system
-          ? 'SYSTEM'
-          : input.user?.userId ?? 'SYSTEM',
+        revealedBy: input.system ? 'SYSTEM' : (input.user?.userId ?? 'SYSTEM'),
         revealedAt: update.cardRevealed?.createdAt ?? new Date().toISOString(),
         card: {
           rank: card.rank,
@@ -503,8 +503,7 @@ export class BaccaratGateway implements OnModuleDestroy {
       }
 
       const roundEndsAt = new Date(
-        Date.now() +
-          this.getRoundEndDelaySeconds(state) * 1000,
+        Date.now() + this.getRoundEndDelaySeconds(state) * 1000,
       );
       const nextState = this.tableService.enterRoundEnd({
         tableId,
@@ -524,7 +523,8 @@ export class BaccaratGateway implements OnModuleDestroy {
 
   private async resetRound(tableId: string) {
     try {
-      const snapshot = await this.tableConfigService.getNextRoundSnapshot(tableId);
+      const snapshot =
+        await this.tableConfigService.getNextRoundSnapshot(tableId);
       const round = snapshot.round;
 
       if (!round) {
@@ -570,13 +570,18 @@ export class BaccaratGateway implements OnModuleDestroy {
     const room = baccaratTableRoom(update.state.tableId);
 
     if (update.event) {
-      this.server.to(room).emit(BACCARAT_SERVER_EVENTS.TABLE_EVENT, update.event);
+      this.server
+        .to(room)
+        .emit(BACCARAT_SERVER_EVENTS.TABLE_EVENT, update.event);
     }
 
     if (update.squeezeProgressed) {
       this.server
         .to(room)
-        .emit(BACCARAT_SERVER_EVENTS.SQUEEZE_PROGRESS, update.squeezeProgressed);
+        .emit(
+          BACCARAT_SERVER_EVENTS.SQUEEZE_PROGRESS,
+          update.squeezeProgressed,
+        );
     }
 
     if (update.cardRevealed) {
@@ -639,12 +644,44 @@ export class BaccaratGateway implements OnModuleDestroy {
   }
 
   private ensureRuntimeTimers(state: BaccaratTableState) {
+    if (!this.shouldKeepRuntimeActive(state.tableId)) {
+      this.stopRuntimeTimers(state.tableId);
+      return;
+    }
+
     this.scheduleBettingTimer(state);
     this.scheduleDealingTimer(state);
     this.scheduleRevealTimer(state);
     this.recoverMissingRevealTimer(state);
     this.scheduleSettledTimer(state);
     this.scheduleRoundEndTimer(state);
+  }
+
+  private shouldKeepRuntimeActive(tableId: string) {
+    if (!this.tableService.hasTable(tableId)) {
+      return false;
+    }
+
+    return (
+      this.tableService.getViewerCount(tableId) > 0 ||
+      this.tableService.hasLiveBets(tableId)
+    );
+  }
+
+  private shouldRefreshOnNextViewer(tableId: string) {
+    return (
+      !this.tableService.hasTable(tableId) ||
+      (this.tableService.getViewerCount(tableId) === 0 &&
+        !this.tableService.hasLiveBets(tableId))
+    );
+  }
+
+  private stopRuntimeTimers(tableId: string) {
+    resetTimer(this.bettingTimers, tableId);
+    resetTimer(this.dealingTimers, tableId);
+    resetTimer(this.revealTimers, tableId);
+    resetTimer(this.settledTimers, tableId);
+    resetTimer(this.roundEndTimers, tableId);
   }
 
   private scheduleBettingTimer(state: BaccaratTableState) {
@@ -704,7 +741,11 @@ export class BaccaratGateway implements OnModuleDestroy {
   }
 
   private recoverMissingRevealTimer(state: BaccaratTableState) {
-    if (state.phase !== 'SQUEEZE' || !state.round || state.timers.revealEndsAt) {
+    if (
+      state.phase !== 'SQUEEZE' ||
+      !state.round ||
+      state.timers.revealEndsAt
+    ) {
       return;
     }
 
@@ -775,7 +816,11 @@ export class BaccaratGateway implements OnModuleDestroy {
     );
   }
 
-  private emitError(socket: Socket, event: BaccaratClientEvent, error: unknown) {
+  private emitError(
+    socket: Socket,
+    event: BaccaratClientEvent,
+    error: unknown,
+  ) {
     const payload: BaccaratSocketErrorPayload =
       error instanceof BaccaratTableError
         ? { code: error.code, message: error.message, event }
@@ -981,7 +1026,9 @@ function toRuntimeBetSnapshot(
 }
 
 function toSettlementBetInput(
-  bet: Awaited<ReturnType<WalletService['settleBaccaratRound']>>['bets'][number],
+  bet: Awaited<
+    ReturnType<WalletService['settleBaccaratRound']>
+  >['bets'][number],
 ): BaccaratSettlementBetInput {
   return {
     betId: bet.betId,
@@ -1032,7 +1079,9 @@ function isSocketErrorLike(
 
   const candidate = error as { code?: unknown; message?: unknown };
 
-  return typeof candidate.code === 'string' && typeof candidate.message === 'string';
+  return (
+    typeof candidate.code === 'string' && typeof candidate.message === 'string'
+  );
 }
 
 function toBigInt(value: bigint | string) {
@@ -1040,7 +1089,9 @@ function toBigInt(value: bigint | string) {
 }
 
 function toIsoString(value: Date | string) {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+  return value instanceof Date
+    ? value.toISOString()
+    : new Date(value).toISOString();
 }
 
 const socketErrorCodes = new Set<string>([

@@ -39,7 +39,7 @@ import {
 import { buildRaceTick } from './racing-race-tick';
 
 const racingLobbyTableIds = ['main'] as const;
-const racingScheduleSyncIntervalMs = 5_000;
+const racingScheduleSyncIntervalMs = 60_000;
 const racingPrestartLeadMs = 5_000;
 const racingPrestartTickIntervalMs = 100;
 const minimumRaceTickIntervalMs = 10;
@@ -53,8 +53,13 @@ export class RacingGateway implements OnModuleDestroy {
   server!: Server;
 
   private scheduleSyncTimer?: NodeJS.Timeout;
+  private readonly bettingCloseTimers = new Map<
+    string,
+    RacingBettingCloseTimer
+  >();
   private readonly prestartTimers = new Map<string, RacingPrestartTimer>();
   private readonly raceTickTimers = new Map<string, RacingTickTimer>();
+  private readonly lifecycleCheckpointsInFlight = new Set<string>();
 
   constructor(
     private readonly tableConfigService: RacingTableConfigService,
@@ -80,11 +85,16 @@ export class RacingGateway implements OnModuleDestroy {
       this.stopPrestartTimer(tableId);
     }
 
+    for (const tableId of Array.from(this.bettingCloseTimers.keys())) {
+      this.stopBettingCloseTimer(tableId);
+    }
+
     for (const timer of this.raceTickTimers.values()) {
       clearInterval(timer.handle);
     }
 
     this.raceTickTimers.clear();
+    this.lifecycleCheckpointsInFlight.clear();
   }
 
   handleDisconnect(socket: Socket) {
@@ -101,10 +111,11 @@ export class RacingGateway implements OnModuleDestroy {
     @MessageBody() body: RacingJoinTablePayload,
   ) {
     this.handleCommand(socket, RACING_CLIENT_EVENTS.TABLE_JOIN, async () => {
-      await this.configureRuntimeTable(body.tableId);
+      const tableId = readRequiredTableId(body.tableId);
+      await this.refreshRuntimeTable(tableId);
       const user = this.resolveSocketUser(socket, body.nickname);
       const update = this.tableService.joinTable({
-        tableId: body.tableId,
+        tableId,
         socketId: socket.id,
         user,
       });
@@ -123,7 +134,7 @@ export class RacingGateway implements OnModuleDestroy {
       const payload = body as Partial<RacingPlaceBetPayload> | undefined;
       const tableId = readRequiredTableId(payload?.tableId);
       const raceId = readRequiredRaceId(payload?.raceId);
-      const syncUpdate = await this.configureRuntimeTable(tableId);
+      const syncUpdate = await this.refreshRuntimeTable(tableId);
 
       if (syncUpdate) {
         this.emitTableUpdate(syncUpdate);
@@ -193,6 +204,19 @@ export class RacingGateway implements OnModuleDestroy {
     return this.tableService.configureTable({ tableId, config, race });
   }
 
+  private async refreshRuntimeTable(tableId: string, now?: Date) {
+    return this.runLifecycleCheckpoint(tableId, async () => {
+      const lifecycle = await this.tableConfigService.advanceRaceLifecycle(
+        tableId,
+        now,
+      );
+      this.emitSettlementWalletUpdates(lifecycle.settled);
+      this.emitCancellationWalletUpdates(lifecycle.cancelled);
+
+      return this.configureRuntimeTable(tableId);
+    });
+  }
+
   private async syncLobbyTables() {
     await Promise.all(
       racingLobbyTableIds.map((tableId) => this.syncRuntimeTable(tableId)),
@@ -200,21 +224,38 @@ export class RacingGateway implements OnModuleDestroy {
   }
 
   private async syncRuntimeTable(tableId: string) {
-    try {
-      const lifecycle =
-        await this.tableConfigService.advanceRaceLifecycle(tableId);
-      this.emitSettlementWalletUpdates(lifecycle.settled);
-      this.emitCancellationWalletUpdates(lifecycle.cancelled);
+    if (!this.shouldKeepRuntimeActive(tableId)) {
+      this.stopRuntimeTimers(tableId);
+      return;
+    }
 
-      const update = await this.configureRuntimeTable(tableId);
+    try {
+      const update = await this.refreshRuntimeTable(tableId);
 
       if (update) {
         this.emitTableUpdate(update);
-      } else {
+      } else if (this.tableService.hasTable(tableId)) {
         this.ensureRuntimeTimers(this.tableService.getTableState(tableId));
       }
     } catch (error) {
       this.emitTableError(tableId, error, 'Unexpected racing scheduler error.');
+    }
+  }
+
+  private async runLifecycleCheckpoint<T>(
+    tableId: string,
+    command: () => Promise<T>,
+  ): Promise<T | null> {
+    if (this.lifecycleCheckpointsInFlight.has(tableId)) {
+      return null;
+    }
+
+    this.lifecycleCheckpointsInFlight.add(tableId);
+
+    try {
+      return await command();
+    } finally {
+      this.lifecycleCheckpointsInFlight.delete(tableId);
     }
   }
 
@@ -285,8 +326,111 @@ export class RacingGateway implements OnModuleDestroy {
   }
 
   private ensureRuntimeTimers(state: RacingTableState) {
+    if (!this.shouldKeepRuntimeActive(state.tableId)) {
+      this.stopRuntimeTimers(state.tableId);
+      return;
+    }
+
+    this.ensureBettingCloseTimer(state);
     this.ensurePrestartTimer(state);
     this.ensureRaceTickLoop(state);
+  }
+
+  private shouldKeepRuntimeActive(tableId: string) {
+    if (!this.tableService.hasTable(tableId)) {
+      return false;
+    }
+
+    return (
+      this.tableService.getViewerCount(tableId) > 0 ||
+      this.tableService.hasLiveBets(tableId)
+    );
+  }
+
+  private stopRuntimeTimers(tableId: string) {
+    this.stopBettingCloseTimer(tableId);
+    this.stopPrestartTimer(tableId);
+    this.stopRaceTickLoop(tableId);
+  }
+
+  private ensureBettingCloseTimer(state: RacingTableState) {
+    const race = getBettingRace(state);
+
+    if (!race) {
+      this.stopBettingCloseTimer(state.tableId);
+      return;
+    }
+
+    const bettingClosesAtMs = Date.parse(race.bettingClosesAt);
+
+    if (!Number.isFinite(bettingClosesAtMs)) {
+      this.stopBettingCloseTimer(state.tableId);
+      return;
+    }
+
+    const existing = this.bettingCloseTimers.get(state.tableId);
+
+    if (
+      existing?.raceId === race.raceId &&
+      existing.bettingClosesAtMs === bettingClosesAtMs
+    ) {
+      return;
+    }
+
+    this.stopBettingCloseTimer(state.tableId);
+
+    const delayMs = Math.max(0, bettingClosesAtMs - Date.now());
+
+    const handle = setTimeout(() => {
+      this.bettingCloseTimers.delete(state.tableId);
+      this.closeBettingWindowFromTimer(
+        state.tableId,
+        race.raceId,
+        bettingClosesAtMs,
+      );
+    }, delayMs);
+
+    handle.unref?.();
+    this.bettingCloseTimers.set(state.tableId, {
+      bettingClosesAtMs,
+      handle,
+      raceId: race.raceId,
+    });
+  }
+
+  private stopBettingCloseTimer(tableId: string) {
+    const existing = this.bettingCloseTimers.get(tableId);
+
+    if (!existing) {
+      return;
+    }
+
+    clearTimeout(existing.handle);
+    this.bettingCloseTimers.delete(tableId);
+  }
+
+  private closeBettingWindowFromTimer(
+    tableId: string,
+    raceId: string,
+    bettingClosesAtMs: number,
+  ) {
+    try {
+      const update = this.tableService.closeBettingWindow({
+        tableId,
+        raceId,
+        bettingClosesAtMs,
+      });
+
+      if (update) {
+        this.emitTableUpdate(update);
+      }
+    } catch (error) {
+      this.emitTableError(
+        tableId,
+        error,
+        'Unexpected racing betting close timer error.',
+      );
+    }
   }
 
   private ensurePrestartTimer(state: RacingTableState) {
@@ -481,23 +625,21 @@ export class RacingGateway implements OnModuleDestroy {
     scheduledStartAtMs?: number,
   ) {
     try {
-      const lifecycle = await this.tableConfigService.advanceRaceLifecycle(
+      const update = await this.refreshRuntimeTable(
         tableId,
         scheduledStartAtMs === undefined
           ? undefined
           : new Date(scheduledStartAtMs),
       );
-      this.emitSettlementWalletUpdates(lifecycle.settled);
-      this.emitCancellationWalletUpdates(lifecycle.cancelled);
-
-      const update = await this.configureRuntimeTable(tableId);
 
       if (update) {
         this.emitTableUpdate(update);
         return;
       }
 
-      this.ensureRuntimeTimers(this.tableService.getTableState(tableId));
+      if (this.tableService.hasTable(tableId)) {
+        this.ensureRuntimeTimers(this.tableService.getTableState(tableId));
+      }
     } catch (error) {
       this.emitTableError(
         tableId,
@@ -576,6 +718,31 @@ export class RacingGateway implements OnModuleDestroy {
     });
 
     this.emitTableUpdate(update);
+
+    if (isRaceTickFinished(tick)) {
+      void this.persistRaceFinishFromTick(state.tableId);
+    }
+  }
+
+  private async persistRaceFinishFromTick(tableId: string) {
+    try {
+      const update = await this.refreshRuntimeTable(tableId);
+
+      if (update) {
+        this.emitTableUpdate(update);
+        return;
+      }
+
+      if (this.tableService.hasTable(tableId)) {
+        this.ensureRuntimeTimers(this.tableService.getTableState(tableId));
+      }
+    } catch (error) {
+      this.emitTableError(
+        tableId,
+        error,
+        'Unexpected racing finish persistence error.',
+      );
+    }
   }
 
   private emitTableError(
@@ -671,11 +838,21 @@ type RacingTickTimer = {
   raceId: string;
 };
 
+type RacingBettingCloseTimer = {
+  bettingClosesAtMs: number;
+  handle: NodeJS.Timeout;
+  raceId: string;
+};
+
 type RacingPrestartTimer = {
   handle: NodeJS.Timeout;
   mode: 'waiting' | 'ticking';
   raceId: string;
   scheduledStartAtMs: number;
+};
+
+type RacingBettingRace = NonNullable<RacingTableState['race']> & {
+  bettingClosesAt: string;
 };
 
 type RacingPrestartRace = NonNullable<RacingTableState['race']> & {
@@ -762,6 +939,14 @@ function getActiveRunningRace(state: RacingTableState) {
   return state.race;
 }
 
+function getBettingRace(state: RacingTableState): RacingBettingRace | null {
+  if (state.phase !== 'BETTING' || !state.race?.bettingClosesAt) {
+    return null;
+  }
+
+  return state.race as RacingBettingRace;
+}
+
 function getPrestartRace(state: RacingTableState): RacingPrestartRace | null {
   if (
     (state.phase !== 'BETTING' && state.phase !== 'LOCKING_BETS') ||
@@ -771,6 +956,10 @@ function getPrestartRace(state: RacingTableState): RacingPrestartRace | null {
   }
 
   return state.race as RacingPrestartRace;
+}
+
+function isRaceTickFinished(tick: ReturnType<typeof buildRaceTick>) {
+  return tick.positions.every((position) => position.progress >= 1);
 }
 
 function normalizeRaceTickIntervalMs(tickIntervalMs: number) {

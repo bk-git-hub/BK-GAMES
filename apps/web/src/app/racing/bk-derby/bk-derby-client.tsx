@@ -493,6 +493,16 @@ export function BkDerbyClient() {
     clockMs,
     activePrestartTick,
   );
+  const raceTimerText = isVisuallyRunning
+    ? "LIVE"
+    : startCountdownOverlay
+      ? "LOCKED"
+      : getTimerText(racing.tableState, clockMs, activePrestartTick);
+  const raceTimerLabel = isVisuallyRunning
+    ? "Track"
+    : startCountdownOverlay
+      ? "Starting"
+      : getTimerLabel(racing.tableState);
   const isPendingBetForCurrentRace =
     pendingBetRequest?.raceId === currentRaceId;
   const acceptedBetEvent = getAcceptedBetEvent({
@@ -996,20 +1006,8 @@ export function BkDerbyClient() {
                   <div className={styles.gameStatus}>
                     <span>{statusLabel}</span>
                     <strong>{statusDetail}</strong>
-                    <small>
-                      {isVisuallyRunning
-                        ? "Track"
-                        : getTimerLabel(racing.tableState)}
-                    </small>
-                    <em>
-                      {isVisuallyRunning
-                        ? "LIVE"
-                        : getTimerText(
-                            racing.tableState,
-                            clockMs,
-                            activePrestartTick,
-                          )}
-                    </em>
+                    <small>{raceTimerLabel}</small>
+                    <em>{raceTimerText}</em>
                     <button
                       aria-label={bgmButtonLabel}
                       aria-pressed={isBgmUnlocked && !isBgmBlocked}
@@ -1123,6 +1121,7 @@ export function BkDerbyClient() {
                 selectedBetType={effectiveBetType}
                 selectedEntryIds={activeSelectedBetEntryIds}
                 tableState={racing.tableState}
+                timerText={raceTimerText}
                 validationReason={bettingValidation.reason}
                 walletBalance={racing.walletBalance}
               />
@@ -1208,6 +1207,7 @@ function RacingBettingPanel({
   selectedBetType,
   selectedEntryIds,
   tableState,
+  timerText,
   validationReason,
   walletBalance,
 }: {
@@ -1228,6 +1228,7 @@ function RacingBettingPanel({
   selectedBetType: RacingBetType;
   selectedEntryIds: string[];
   tableState: RacingTableViewState | null;
+  timerText: string;
   validationReason: string | null;
   walletBalance: string | null;
 }) {
@@ -1266,7 +1267,7 @@ function RacingBettingPanel({
         </div>
         <div className={styles.betPanelMeta}>
           <span>{getBettingPhaseLabel(tableState)}</span>
-          <strong>{getTimerText(tableState)}</strong>
+          <strong>{timerText}</strong>
         </div>
       </div>
 

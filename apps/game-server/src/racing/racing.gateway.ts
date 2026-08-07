@@ -112,7 +112,7 @@ export class RacingGateway implements OnModuleDestroy {
   ) {
     this.handleCommand(socket, RACING_CLIENT_EVENTS.TABLE_JOIN, async () => {
       const tableId = readRequiredTableId(body.tableId);
-      await this.refreshRuntimeTable(tableId);
+      const syncUpdate = await this.refreshRuntimeTable(tableId);
       const user = this.resolveSocketUser(socket, body.nickname, {
         allowGuest: true,
       });
@@ -124,6 +124,10 @@ export class RacingGateway implements OnModuleDestroy {
 
       await this.joinRacingRooms(socket, update.state.tableId, user.userId);
       this.emitTableUpdate(update);
+
+      if (syncUpdate) {
+        this.emitTableEvent(syncUpdate.event);
+      }
     });
   }
 
@@ -276,8 +280,14 @@ export class RacingGateway implements OnModuleDestroy {
     const room = racingTableRoom(update.state.tableId);
 
     this.server.to(room).emit(RACING_SERVER_EVENTS.TABLE_STATE, update.state);
-    this.server.to(room).emit(RACING_SERVER_EVENTS.TABLE_EVENT, update.event);
+    this.emitTableEvent(update.event);
     this.ensureRuntimeTimers(update.state);
+  }
+
+  private emitTableEvent(event: RacingTableEventPayload) {
+    this.server
+      .to(racingTableRoom(event.tableId))
+      .emit(RACING_SERVER_EVENTS.TABLE_EVENT, event);
   }
 
   private emitWalletUpdated(

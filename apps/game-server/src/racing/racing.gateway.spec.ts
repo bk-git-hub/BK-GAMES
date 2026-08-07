@@ -160,6 +160,94 @@ describe('RacingGateway race tick loop', () => {
     ).toThrow('Game token is required.');
   });
 
+  it('emits a recovered settled event after an idle viewer joins', async () => {
+    const runningState = createRunningState({
+      startedAt: '2026-06-18T12:00:00.000Z',
+    });
+    const settledState: RacingTableState = {
+      ...runningState,
+      phase: 'SETTLED',
+      viewerCount: 0,
+      race: {
+        ...runningState.race!,
+        status: 'SETTLED',
+        phase: 'SETTLED',
+        settledAt: '2026-06-18T12:00:25.000Z',
+      },
+      version: 2,
+      updatedAt: '2026-06-18T12:00:25.000Z',
+    };
+    const joinedState: RacingTableState = {
+      ...settledState,
+      viewerCount: 1,
+      version: 3,
+    };
+    const syncUpdate = {
+      state: settledState,
+      event: createTableEvent(settledState, 'RACE_SETTLED'),
+    };
+    const joinUpdate = {
+      state: joinedState,
+      event: {
+        ...createTableEvent(joinedState, 'RACE_SCHEDULED'),
+        actorUserId: 'guest:socket-guest-2',
+        type: 'TABLE_JOINED' as const,
+      },
+    };
+    const tableConfigService = {
+      advanceRaceLifecycle: jest.fn(() =>
+        Promise.resolve({ cancelled: null, settled: null }),
+      ),
+      getScheduledRace: jest.fn(() => Promise.resolve(settledState.race)),
+      getTableConfig: jest.fn(() =>
+        Promise.resolve(createConfigFromState(settledState)),
+      ),
+    };
+    const tableService = {
+      configureTable: jest.fn(() => syncUpdate),
+      getViewerCount: jest.fn(() => 1),
+      hasLiveBets: jest.fn(() => false),
+      hasTable: jest.fn(() => true),
+      joinTable: jest.fn(() => joinUpdate),
+    };
+    const gameTokenService = {
+      isDevAuthEnabled: jest.fn(() => false),
+      verify: jest.fn(),
+    };
+    const { emit, server } = createServerMock();
+    const gateway = new RacingGateway(
+      tableConfigService as never,
+      tableService as never,
+      gameTokenService as never,
+      {} as never,
+    );
+    const socket = {
+      handshake: { auth: { guest: true }, query: {} },
+      id: 'socket-guest-2',
+      join: jest.fn(() => Promise.resolve()),
+    };
+    gateway.server = server;
+
+    gateway.handleTableJoin(socket as never, {
+      tableId: 'main',
+      nickname: 'Returning Visitor',
+    });
+    await flushAsyncCommands();
+
+    const tableStates = emit.mock.calls
+      .filter(([eventName]) => eventName === 'table:state')
+      .map(([, payload]) => payload);
+    const tableEvents = emit.mock.calls
+      .filter(([eventName]) => eventName === 'table:event')
+      .map(([, payload]) => payload);
+
+    expect(tableStates).toEqual([joinedState]);
+    expect(tableEvents.map((event) => event.type)).toEqual([
+      'TABLE_JOINED',
+      'RACE_SETTLED',
+    ]);
+  });
+
   it('closes betting from a runtime timer without waiting for DB sync', async () => {
     const bettingState = createPrestartState({
       phase: 'BETTING',
@@ -692,4 +780,10 @@ function getGatewayHarness(gateway: RacingGateway) {
       userId: string;
     };
   };
+}
+
+async function flushAsyncCommands() {
+  for (let index = 0; index < 10; index += 1) {
+    await Promise.resolve();
+  }
 }

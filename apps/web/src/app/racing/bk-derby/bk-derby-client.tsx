@@ -199,6 +199,11 @@ type GameTokenResponse = {
   walletBalance: string;
 };
 
+export type BkDerbyInitialAuth = {
+  player: GameTokenResponse["user"];
+  walletBalance: string;
+};
+
 type ConnectionStatus =
   | "requesting-token"
   | "connecting"
@@ -364,9 +369,13 @@ const baseHorseProfiles: DisplayHorse[] = assetHorses.map((horse, index) => ({
   startX: "10.5%",
 }));
 
-export function BkDerbyClient() {
+export function BkDerbyClient({
+  initialAuth = null,
+}: {
+  initialAuth?: BkDerbyInitialAuth | null;
+}) {
   const router = useRouter();
-  const racing = useRacingTable();
+  const racing = useRacingTable(initialAuth);
   const raceHistoryRefreshKey =
     racing.latestTableEvent?.type === "RACE_SETTLED"
       ? getRacingTableEventKey(racing.latestTableEvent)
@@ -1849,11 +1858,12 @@ function useRacingBetHistory(gameToken: string | null): BetHistoryViewState {
   return history;
 }
 
-function useRacingTable() {
+function useRacingTable(initialAuth: BkDerbyInitialAuth | null) {
   const socketRef = useRef<Socket | null>(null);
-  const latestTableStateRef = useRef<RacingTableViewState | null>(null);
   const [gameToken, setGameToken] = useState<string | null>(null);
-  const [player, setPlayer] = useState<GameTokenResponse["user"] | null>(null);
+  const [player, setPlayer] = useState<GameTokenResponse["user"] | null>(
+    initialAuth?.player ?? null,
+  );
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("requesting-token");
   const [latestTableEvent, setLatestTableEvent] =
@@ -1873,7 +1883,9 @@ function useRacingTable() {
   const [tableState, setTableState] = useState<RacingTableViewState | null>(
     null,
   );
-  const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState<string | null>(
+    initialAuth?.walletBalance ?? null,
+  );
 
   const placeBet = useCallback((payload: RacingPlaceBetPayload) => {
     const socket = socketRef.current;
@@ -1893,20 +1905,13 @@ function useRacingTable() {
     let fallbackPollTimer: number | null = null;
 
     function applyTableState(nextState: RacingTableViewState) {
-      const resolvedState = reconcileRacingTableState(
-        latestTableStateRef.current,
-        nextState,
-        Date.now(),
-      );
-
-      latestTableStateRef.current = resolvedState;
-      setTableState(resolvedState);
+      setTableState(nextState);
       setLatestTick((currentTick) =>
-        currentTick?.raceId === resolvedState.race?.raceId ? currentTick : null,
+        currentTick?.raceId === nextState.race?.raceId ? currentTick : null,
       );
       setLatestPrestartTick((currentTick) =>
-        currentTick?.raceId === resolvedState.race?.raceId &&
-        isRaceStartCountdownPhase(resolvedState)
+        currentTick?.raceId === nextState.race?.raceId &&
+        isRaceStartCountdownPhase(nextState)
           ? currentTick
           : null,
       );
@@ -2267,50 +2272,6 @@ function resolveRacingServerUrl() {
   return (
     process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? "http://localhost:4000"
   ).replace(/\/$/, "");
-}
-
-function reconcileRacingTableState(
-  currentState: RacingTableViewState | null,
-  nextState: RacingTableViewState,
-  nowMs: number,
-) {
-  if (shouldKeepCurrentRaceState(currentState, nextState, nowMs)) {
-    return currentState ?? nextState;
-  }
-
-  return nextState;
-}
-
-function shouldKeepCurrentRaceState(
-  currentState: RacingTableViewState | null,
-  nextState: RacingTableViewState,
-  nowMs: number,
-) {
-  const currentRace = currentState?.race;
-  const nextRace = nextState.race;
-
-  if (!currentState || !currentRace || !nextRace) {
-    return false;
-  }
-
-  if (currentRace.raceId === nextRace.raceId) {
-    return false;
-  }
-
-  if (nextRace.raceNo <= currentRace.raceNo) {
-    return false;
-  }
-
-  if (!isRaceVisuallyRunning(currentState, nowMs)) {
-    return false;
-  }
-
-  const nextStartMs = getScheduledRaceStartMs(nextState);
-  const isFutureWaitingRace =
-    (nextState.phase === "WAITING" || nextState.phase === "BETTING") &&
-    (nextStartMs === null || nextStartMs > nowMs);
-
-  return isFutureWaitingRace;
 }
 
 function getAvailableBetTypeConfigs(tableState: RacingTableViewState | null) {

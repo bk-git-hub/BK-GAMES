@@ -134,25 +134,55 @@ export function GameTableLoadingShell({
 
 export function DerbyLoadingShell() {
   return (
-    <LoadingFrame className="bg-[#dce9ef] text-[#17202a]">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-4 p-3 sm:p-5">
-        <header className="flex items-center justify-between rounded-xl border-2 border-[#17202a] bg-[#f4d35e] p-4 shadow-[5px_6px_0_#17202a]">
-          <div className="space-y-2">
-            <p className="text-xs font-black tracking-[0.18em] uppercase">
-              BK Derby
-            </p>
-            <SkeletonBlock className="h-7 w-52 bg-[#17202a]/20" />
+    <LoadingFrame className="bg-[#f7efe2] text-[#111827]">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1408px] flex-col gap-[18px] px-4 py-5 sm:px-6 sm:py-6">
+        <header className="flex min-h-[82px] items-center justify-between gap-4 rounded-[22px] border-2 border-[#111827] bg-[#fff8ed] px-[18px] py-4 shadow-[8px_9px_0_#0b3b73]">
+          <div className="flex items-center gap-4">
+            <SkeletonBlock className="h-11 w-14 bg-[#c8272e]/25" />
+            <div className="space-y-2">
+              <SkeletonBlock className="h-7 w-36 bg-[#111827]/20" />
+              <SkeletonBlock className="h-3 w-48 max-w-full bg-[#4b5874]/20" />
+            </div>
           </div>
-          <SkeletonBlock className="h-11 w-28 bg-[#17202a]/20" />
+          <div className="flex gap-2.5">
+            <SkeletonBlock className="h-10 w-20 bg-[#0b3b73]/25" />
+            <SkeletonBlock className="hidden h-10 w-20 bg-[#0b3b73]/25 sm:block" />
+          </div>
         </header>
 
-        <section className="relative min-h-[480px] flex-1 overflow-hidden rounded-xl border-2 border-[#17202a] bg-[#8fcf6b] shadow-[5px_6px_0_#17202a]">
-          <div className="absolute inset-x-0 top-1/3 h-2/5 border-y-4 border-white/70 bg-[#b98255]" />
-          <div className="absolute inset-x-0 top-[43%] border-t-2 border-dashed border-white/70" />
-          <div className="absolute inset-x-8 bottom-8 grid grid-cols-3 gap-4">
-            <SkeletonBlock className="h-24 bg-white/35" />
-            <SkeletonBlock className="h-24 bg-white/35" />
-            <SkeletonBlock className="h-24 bg-white/35" />
+        <section className="flex-1 rounded-[22px] border-2 border-[#111827] bg-[#fffaf0] p-4 shadow-[8px_9px_0_#0b3b73]">
+          <div className="grid gap-3.5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,430px)]">
+            <div className="space-y-3.5">
+              <div className="relative min-h-[370px] overflow-hidden rounded-lg border border-white/10 bg-[#081315]">
+                <div className="absolute inset-x-0 top-[42%] h-[38%] bg-[#193f35]" />
+                <div className="absolute inset-x-0 top-[55%] border-t-2 border-dashed border-white/15" />
+                <div className="absolute inset-x-5 top-5 flex justify-between">
+                  <SkeletonBlock className="h-24 w-32 bg-white/10" />
+                  <SkeletonBlock className="h-14 w-48 bg-white/10" />
+                </div>
+              </div>
+              <div className="grid gap-3.5 sm:grid-cols-2">
+                <SkeletonBlock className="h-36 bg-[#081315]/90" />
+                <SkeletonBlock className="h-36 bg-[#081315]/90" />
+              </div>
+            </div>
+
+            <div className="space-y-3.5">
+              <div className="space-y-4 rounded-lg border border-white/15 bg-[#081315] p-4">
+                <SkeletonBlock className="h-7 w-36 bg-white/15" />
+                <SkeletonBlock className="h-14 bg-white/10" />
+                <div className="grid grid-cols-3 gap-2">
+                  {Array.from({ length: 6 }, (_, index) => (
+                    <SkeletonBlock
+                      className="h-14 bg-white/10"
+                      key={index}
+                    />
+                  ))}
+                </div>
+                <SkeletonBlock className="h-11 bg-[#0b3b73]/70" />
+              </div>
+              <SkeletonBlock className="h-40 bg-[#081315]/90" />
+            </div>
           </div>
         </section>
       </div>

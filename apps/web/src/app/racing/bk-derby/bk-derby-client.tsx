@@ -974,7 +974,29 @@ export function BkDerbyClient({
           </nav>
         </header>
 
-        <div className={styles.raceFrame}>
+        {!racing.hasReceivedSocketTableState ? (
+          <div
+            aria-busy="true"
+            className={styles.connectionLoader}
+            role="status"
+          >
+            <span aria-hidden="true" className={styles.connectionSpinner} />
+            <div className={styles.connectionLoaderCopy}>
+              <strong>
+                {racing.connectionStatus === "connected"
+                  ? "레이스 정보 동기화 중"
+                  : "중계 서버 연결 중"}
+              </strong>
+              <span>실시간 레이스를 준비하고 있습니다.</span>
+            </div>
+          </div>
+        ) : null}
+
+        <div
+          aria-hidden={!racing.hasReceivedSocketTableState}
+          className={styles.raceFrame}
+          hidden={!racing.hasReceivedSocketTableState}
+        >
           <div className={`${styles.track} ${styles.trackWithBetting}`}>
             <div className={styles.raceColumn}>
               <div
@@ -1866,6 +1888,8 @@ function useRacingTable(initialAuth: BkDerbyInitialAuth | null) {
   );
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("requesting-token");
+  const [hasReceivedSocketTableState, setHasReceivedSocketTableState] =
+    useState(false);
   const [latestTableEvent, setLatestTableEvent] =
     useState<RacingTableEventPayload | null>(null);
   const [betEvents, setBetEvents] = useState<RacingTableEventPayload[]>([]);
@@ -2077,6 +2101,7 @@ function useRacingTable(initialAuth: BkDerbyInitialAuth | null) {
           setConnectionStatus("connected");
           setSocketError(null);
           applyTableState(payload);
+          setHasReceivedSocketTableState(true);
         },
       );
 
@@ -2173,6 +2198,7 @@ function useRacingTable(initialAuth: BkDerbyInitialAuth | null) {
     betEvents,
     connectionStatus,
     gameToken,
+    hasReceivedSocketTableState,
     latestPrestartTick,
     latestTableEvent,
     latestTick,
@@ -3692,7 +3718,7 @@ function getTimerText(
   prestartTick: PrestartTickView | null = null,
 ) {
   if (!tableState?.race) {
-    return "00:03";
+    return "--:--";
   }
 
   if (tableState.phase === "RUNNING") {

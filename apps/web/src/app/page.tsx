@@ -1,158 +1,77 @@
-import { headers } from "next/headers";
-import {
-  DEFAULT_DAILY_REWARD_AMOUNT,
-  db,
-  ensureUserGameAccount,
-  getDailyRewardClaimDate,
-} from "@bk-games/db";
+import { Suspense } from "react";
 
-import {
-  AccountRewardPanel,
-  type DailyRewardFeedback,
-} from "./_home/account-reward-panel";
 import { GameList } from "./_home/game-list";
+import {
+  HomeAccountActions,
+  HomeAccountReward,
+  HomeIdentity,
+  type HomeSearchParams,
+} from "./_home/home-personalization";
 import { HomeShell } from "./_home/home-shell";
-import { auth } from "@/lib/auth";
 
 type HomePageProps = {
-  searchParams?: Promise<{
-    code?: string | string[];
-    date?: string | string[];
-    reward?: string | string[];
-  }>;
+  searchParams?: Promise<HomeSearchParams>;
 };
 
-export default async function Home({ searchParams }: HomePageProps) {
-  const params = await searchParams;
-  const session = await getOptionalSession();
-  const today = getDailyRewardClaimDate();
-  const feedback = getDailyRewardFeedback(params);
-  const account = session
-    ? await getHomeAccountState({
-        displayName: session.user.name,
-        today,
-        userId: session.user.id,
-      })
-    : null;
-  const accountStatus = !session
-    ? "guest"
-    : account?.status === "ready"
-      ? "ready"
-      : "unavailable";
-
+export default function Home({ searchParams }: HomePageProps) {
   return (
-    <HomeShell userEmail={session?.user.email} userName={session?.user.name}>
+    <HomeShell
+      actions={
+        <Suspense fallback={<HomeActionsFallback />}>
+          <HomeAccountActions />
+        </Suspense>
+      }
+      identity={
+        <Suspense fallback={<HomeIdentityFallback />}>
+          <HomeIdentity />
+        </Suspense>
+      }
+    >
       <div className="flex flex-col gap-6">
-        <AccountRewardPanel
-          accountStatus={accountStatus}
-          balance={account?.status === "ready" ? account.balance : undefined}
-          feedback={feedback}
-          hasClaimedToday={
-            account?.status === "ready" ? account.hasClaimedToday : false
-          }
-          rewardAmount={DEFAULT_DAILY_REWARD_AMOUNT}
-          today={today}
-          walletStatus={
-            account?.status === "ready" ? account.walletStatus : undefined
-          }
-        />
+        <Suspense fallback={<HomeRewardFallback />}>
+          <HomeAccountReward searchParams={searchParams} />
+        </Suspense>
         <GameList />
       </div>
     </HomeShell>
   );
 }
 
-async function getOptionalSession() {
-  try {
-    return await auth.api.getSession({
-      headers: await headers(),
-    });
-  } catch (error) {
-    console.error("Failed to load home session.", error);
-    return null;
-  }
+function HomeIdentityFallback() {
+  return (
+    <div
+      aria-hidden="true"
+      className="mt-3 h-5 w-full max-w-md animate-pulse rounded-md bg-[#4b5874]/15 motion-reduce:animate-none"
+    />
+  );
 }
 
-async function getHomeAccountState({
-  displayName,
-  today,
-  userId,
-}: {
-  displayName: string;
-  today: string;
-  userId: string;
-}) {
-  try {
-    const gameAccount = await ensureUserGameAccount({
-      userId,
-      displayName,
-    });
-    const rewardClaim = await db.query.dailyRewardClaims.findFirst({
-      columns: {
-        id: true,
-      },
-      where: (claim, { and, eq }) =>
-        and(eq(claim.userId, userId), eq(claim.claimDate, today)),
-    });
-
-    return {
-      balance: gameAccount.wallet.balance,
-      hasClaimedToday: Boolean(rewardClaim),
-      status: "ready" as const,
-      walletStatus: gameAccount.wallet.status,
-    };
-  } catch (error) {
-    console.error("Failed to load home account data.", error);
-    return {
-      status: "unavailable" as const,
-    };
-  }
+function HomeActionsFallback() {
+  return (
+    <div
+      aria-hidden="true"
+      className="h-11 w-28 animate-pulse rounded-md bg-[#0b3b73]/20 motion-reduce:animate-none"
+    />
+  );
 }
 
-function getDailyRewardFeedback(
-  params:
-    | {
-        code?: string | string[];
-        date?: string | string[];
-        reward?: string | string[];
-      }
-    | undefined,
-): DailyRewardFeedback {
-  const reward = getFirstSearchParam(params?.reward);
-
-  if (reward === "claimed") {
-    return buildDailyRewardFeedback("claimed", params);
-  }
-
-  if (reward === "already-claimed") {
-    return buildDailyRewardFeedback("already-claimed", params);
-  }
-
-  if (reward === "error") {
-    return buildDailyRewardFeedback("error", params);
-  }
-
-  return {
-    status: "idle" as const,
-  };
-}
-
-function buildDailyRewardFeedback(
-  status: Exclude<DailyRewardFeedback["status"], "idle">,
-  params:
-    | {
-        code?: string | string[];
-        date?: string | string[];
-      }
-    | undefined,
-): DailyRewardFeedback {
-  return {
-    claimDate: getFirstSearchParam(params?.date),
-    code: getFirstSearchParam(params?.code),
-    status,
-  };
-}
-
-function getFirstSearchParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
+function HomeRewardFallback() {
+  return (
+    <section
+      aria-busy="true"
+      className="overflow-hidden rounded-[1.35rem] border-2 border-[#111827] bg-[#0b3b73] text-white shadow-[8px_9px_0_#c8272e]"
+    >
+      <span className="sr-only" role="status">
+        Loading player points
+      </span>
+      <div className="space-y-3 border-b border-white/15 p-5 sm:p-6">
+        <div className="h-8 w-52 animate-pulse rounded-lg bg-white/20 motion-reduce:animate-none" />
+        <div className="h-4 w-full max-w-xl animate-pulse rounded bg-white/10 motion-reduce:animate-none" />
+      </div>
+      <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+        <div className="h-32 animate-pulse rounded-[1.1rem] bg-white/10 motion-reduce:animate-none" />
+        <div className="h-32 animate-pulse rounded-[1.1rem] bg-white/10 motion-reduce:animate-none" />
+      </div>
+    </section>
+  );
 }

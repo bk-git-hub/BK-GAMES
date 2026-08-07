@@ -322,11 +322,15 @@ describe('RacingGateway race tick loop', () => {
       version: runningState.version + 1,
     };
     const tableService = createTableServiceMock(runningState);
+    let resolveLifecycle!: (value: { cancelled: null; settled: null }) => void;
+    const lifecyclePromise = new Promise<{
+      cancelled: null;
+      settled: null;
+    }>((resolve) => {
+      resolveLifecycle = resolve;
+    });
     const tableConfigService = {
-      advanceRaceLifecycle: jest.fn(async () => ({
-        cancelled: null,
-        settled: null,
-      })),
+      advanceRaceLifecycle: jest.fn(() => lifecyclePromise),
       getScheduledRace: jest.fn(async () => settledState.race),
       getTableConfig: jest.fn(async () => createConfigFromState(settledState)),
     };
@@ -348,8 +352,15 @@ describe('RacingGateway race tick loop', () => {
     });
 
     getGatewayHarness(gateway).ensureRaceTickLoop(runningState);
-    await jest.advanceTimersByTimeAsync(0);
-    await Promise.resolve();
+
+    await jest.advanceTimersByTimeAsync(500);
+
+    expect(tableService.recordRaceTick).toHaveBeenCalledTimes(1);
+    expect(tableConfigService.advanceRaceLifecycle).toHaveBeenCalledTimes(1);
+    expect(tableService.configureTable).not.toHaveBeenCalled();
+
+    resolveLifecycle({ cancelled: null, settled: null });
+    await flushAsyncCommands();
 
     expect(tableConfigService.advanceRaceLifecycle).toHaveBeenCalledTimes(1);
     expect(tableService.configureTable).toHaveBeenCalledTimes(1);
@@ -364,6 +375,92 @@ describe('RacingGateway race tick loop', () => {
     expect(emittedEvents.some((event) => event.type === 'RACE_SETTLED')).toBe(
       true,
     );
+
+    gateway.onModuleDestroy();
+  });
+
+  it('advances a settled race at its exact result deadline', async () => {
+    jest.setSystemTime(new Date('2026-06-18T12:00:50.000Z'));
+
+    const runningState = createRunningState({
+      startedAt: '2026-06-18T12:00:00.000Z',
+    });
+    const settledState: RacingTableState = {
+      ...runningState,
+      phase: 'SETTLED',
+      race: {
+        ...runningState.race!,
+        status: 'SETTLED',
+        phase: 'SETTLED',
+        resultOrder: runningState.race!.entries.map(
+          (entry) => entry.raceEntryId,
+        ),
+        settledAt: '2026-06-18T12:00:50.000Z',
+      },
+      updatedAt: '2026-06-18T12:00:50.000Z',
+      version: runningState.version + 1,
+    };
+    const nextRaceState = createPrestartState({
+      phase: 'BETTING',
+      scheduledStartAt: '2026-06-18T12:04:00.000Z',
+    });
+    nextRaceState.race = {
+      ...nextRaceState.race!,
+      raceId: 'race-main-43',
+      raceNo: 43,
+    };
+    const tableService = createTableServiceMock(settledState);
+    const tableConfigService = {
+      advanceRaceLifecycle: jest.fn(async () => ({
+        cancelled: null,
+        settled: null,
+      })),
+      getScheduledRace: jest.fn(async () => nextRaceState.race),
+      getTableConfig: jest.fn(async () => createConfigFromState(nextRaceState)),
+    };
+    const { emit, server } = createServerMock();
+    const gateway = new RacingGateway(
+      tableConfigService as never,
+      tableService as never,
+      {} as never,
+      {} as never,
+    );
+    gateway.server = server;
+    tableService.configureTable.mockImplementation(() => {
+      tableService.setState(nextRaceState);
+
+      return {
+        state: nextRaceState,
+        event: createTableEvent(nextRaceState, 'RACE_SCHEDULED'),
+      };
+    });
+
+    getGatewayHarness(gateway).ensureRuntimeTimers(settledState);
+
+    await jest.advanceTimersByTimeAsync(9_999);
+    expect(tableConfigService.advanceRaceLifecycle).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(1);
+    await flushAsyncCommands();
+
+    expect(tableConfigService.advanceRaceLifecycle).toHaveBeenCalledTimes(1);
+    expect(tableConfigService.advanceRaceLifecycle).toHaveBeenCalledWith(
+      settledState.tableId,
+      new Date('2026-06-18T12:01:00.000Z'),
+    );
+    expect(tableService.configureTable).toHaveBeenCalledTimes(1);
+
+    const tableStates = emit.mock.calls
+      .filter(([eventName]) => eventName === 'table:state')
+      .map(([, payload]) => payload);
+
+    expect(tableStates.at(-1)).toMatchObject({
+      phase: 'BETTING',
+      race: {
+        raceId: 'race-main-43',
+        phase: 'BETTING',
+      },
+    });
 
     gateway.onModuleDestroy();
   });

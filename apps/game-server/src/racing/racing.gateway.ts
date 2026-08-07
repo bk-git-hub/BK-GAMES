@@ -43,6 +43,7 @@ const racingScheduleSyncIntervalMs = 60_000;
 const racingPrestartLeadMs = 5_000;
 const racingPrestartTickIntervalMs = 100;
 const minimumRaceTickIntervalMs = 10;
+const racingLifecycleRetryDelayMs = 100;
 
 @WebSocketGateway({
   namespace: RACING_NAMESPACE,
@@ -59,6 +60,8 @@ export class RacingGateway implements OnModuleDestroy {
   >();
   private readonly prestartTimers = new Map<string, RacingPrestartTimer>();
   private readonly raceTickTimers = new Map<string, RacingTickTimer>();
+  private readonly roundEndTimers = new Map<string, RacingRoundEndTimer>();
+  private readonly raceFinishesInFlight = new Set<string>();
   private readonly lifecycleCheckpointsInFlight = new Set<string>();
 
   constructor(
@@ -93,7 +96,13 @@ export class RacingGateway implements OnModuleDestroy {
       clearInterval(timer.handle);
     }
 
+    for (const timer of this.roundEndTimers.values()) {
+      clearTimeout(timer.handle);
+    }
+
     this.raceTickTimers.clear();
+    this.roundEndTimers.clear();
+    this.raceFinishesInFlight.clear();
     this.lifecycleCheckpointsInFlight.clear();
   }
 
@@ -346,6 +355,7 @@ export class RacingGateway implements OnModuleDestroy {
     this.ensureBettingCloseTimer(state);
     this.ensurePrestartTimer(state);
     this.ensureRaceTickLoop(state);
+    this.ensureRoundEndTimer(state);
   }
 
   private shouldKeepRuntimeActive(tableId: string) {
@@ -363,6 +373,7 @@ export class RacingGateway implements OnModuleDestroy {
     this.stopBettingCloseTimer(tableId);
     this.stopPrestartTimer(tableId);
     this.stopRaceTickLoop(tableId);
+    this.stopRoundEndTimer(tableId);
   }
 
   private ensureBettingCloseTimer(state: RacingTableState) {
@@ -664,7 +675,7 @@ export class RacingGateway implements OnModuleDestroy {
   private ensureRaceTickLoop(state: RacingTableState) {
     const activeRace = getActiveRunningRace(state);
 
-    if (!activeRace) {
+    if (!activeRace || this.raceFinishesInFlight.has(state.tableId)) {
       this.stopRaceTickLoop(state.tableId);
       return;
     }
@@ -732,13 +743,116 @@ export class RacingGateway implements OnModuleDestroy {
     this.emitTableUpdate(update);
 
     if (isRaceTickFinished(tick)) {
+      this.stopRaceTickLoop(state.tableId);
       void this.persistRaceFinishFromTick(state.tableId);
     }
   }
 
   private async persistRaceFinishFromTick(tableId: string) {
+    if (this.raceFinishesInFlight.has(tableId)) {
+      return;
+    }
+
+    this.raceFinishesInFlight.add(tableId);
+
     try {
       const update = await this.refreshRuntimeTable(tableId);
+
+      if (update) {
+        this.emitTableUpdate(update);
+      }
+    } catch (error) {
+      this.emitTableError(
+        tableId,
+        error,
+        'Unexpected racing finish persistence error.',
+      );
+    } finally {
+      this.raceFinishesInFlight.delete(tableId);
+
+      if (this.tableService.hasTable(tableId)) {
+        this.ensureRuntimeTimers(this.tableService.getTableState(tableId));
+      }
+    }
+  }
+
+  private ensureRoundEndTimer(state: RacingTableState, minimumDelayMs = 0) {
+    const race = getSettledRace(state);
+
+    if (!race) {
+      this.stopRoundEndTimer(state.tableId);
+      return;
+    }
+
+    const scheduledStartAtMs = Date.parse(race.scheduledStartAt);
+    const roundEndAtMs =
+      scheduledStartAtMs + state.timing.raceAndResultSeconds * 1_000;
+
+    if (!Number.isFinite(roundEndAtMs)) {
+      this.stopRoundEndTimer(state.tableId);
+      return;
+    }
+
+    const existing = this.roundEndTimers.get(state.tableId);
+
+    if (
+      existing?.raceId === race.raceId &&
+      existing.roundEndAtMs === roundEndAtMs
+    ) {
+      return;
+    }
+
+    this.stopRoundEndTimer(state.tableId);
+
+    const handle = setTimeout(
+      () => {
+        this.roundEndTimers.delete(state.tableId);
+        void this.advanceRoundEndFromTimer(
+          state.tableId,
+          race.raceId,
+          roundEndAtMs,
+        );
+      },
+      Math.max(minimumDelayMs, roundEndAtMs - Date.now()),
+    );
+
+    handle.unref?.();
+    this.roundEndTimers.set(state.tableId, {
+      handle,
+      raceId: race.raceId,
+      roundEndAtMs,
+    });
+  }
+
+  private stopRoundEndTimer(tableId: string) {
+    const existing = this.roundEndTimers.get(tableId);
+
+    if (!existing) {
+      return;
+    }
+
+    clearTimeout(existing.handle);
+    this.roundEndTimers.delete(tableId);
+  }
+
+  private async advanceRoundEndFromTimer(
+    tableId: string,
+    raceId: string,
+    roundEndAtMs: number,
+  ) {
+    try {
+      const state = this.tableService.getTableState(tableId);
+      const race = getSettledRace(state);
+
+      if (!race || race.raceId !== raceId) {
+        this.ensureRuntimeTimers(state);
+        return;
+      }
+
+      const update = await this.refreshRuntimeTable(
+        tableId,
+        new Date(roundEndAtMs),
+      );
 
       if (update) {
         this.emitTableUpdate(update);
@@ -746,13 +860,19 @@ export class RacingGateway implements OnModuleDestroy {
       }
 
       if (this.tableService.hasTable(tableId)) {
-        this.ensureRuntimeTimers(this.tableService.getTableState(tableId));
+        const currentState = this.tableService.getTableState(tableId);
+
+        if (getSettledRace(currentState)) {
+          this.ensureRoundEndTimer(currentState, racingLifecycleRetryDelayMs);
+        } else {
+          this.ensureRuntimeTimers(currentState);
+        }
       }
     } catch (error) {
       this.emitTableError(
         tableId,
         error,
-        'Unexpected racing finish persistence error.',
+        'Unexpected racing round end timer error.',
       );
     }
   }
@@ -859,6 +979,12 @@ type RacingTickTimer = {
   raceId: string;
 };
 
+type RacingRoundEndTimer = {
+  handle: NodeJS.Timeout;
+  raceId: string;
+  roundEndAtMs: number;
+};
+
 type RacingBettingCloseTimer = {
   bettingClosesAtMs: number;
   handle: NodeJS.Timeout;
@@ -958,6 +1084,20 @@ function getActiveRunningRace(state: RacingTableState) {
   }
 
   return state.race;
+}
+
+function getSettledRace(state: RacingTableState) {
+  if (
+    state.phase !== 'SETTLED' ||
+    !state.race ||
+    !state.race.scheduledStartAt
+  ) {
+    return null;
+  }
+
+  return state.race as NonNullable<RacingTableState['race']> & {
+    scheduledStartAt: string;
+  };
 }
 
 function getBettingRace(state: RacingTableState): RacingBettingRace | null {

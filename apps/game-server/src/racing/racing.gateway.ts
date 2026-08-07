@@ -61,6 +61,7 @@ export class RacingGateway implements OnModuleDestroy {
   private readonly prestartTimers = new Map<string, RacingPrestartTimer>();
   private readonly raceTickTimers = new Map<string, RacingTickTimer>();
   private readonly roundEndTimers = new Map<string, RacingRoundEndTimer>();
+  private readonly raceFinishRetryTimers = new Map<string, NodeJS.Timeout>();
   private readonly raceFinishesInFlight = new Set<string>();
   private readonly lifecycleCheckpointsInFlight = new Set<string>();
 
@@ -100,8 +101,13 @@ export class RacingGateway implements OnModuleDestroy {
       clearTimeout(timer.handle);
     }
 
+    for (const timer of this.raceFinishRetryTimers.values()) {
+      clearTimeout(timer);
+    }
+
     this.raceTickTimers.clear();
     this.roundEndTimers.clear();
+    this.raceFinishRetryTimers.clear();
     this.raceFinishesInFlight.clear();
     this.lifecycleCheckpointsInFlight.clear();
   }
@@ -374,6 +380,7 @@ export class RacingGateway implements OnModuleDestroy {
     this.stopPrestartTimer(tableId);
     this.stopRaceTickLoop(tableId);
     this.stopRoundEndTimer(tableId);
+    this.stopRaceFinishRetry(tableId);
   }
 
   private ensureBettingCloseTimer(state: RacingTableState) {
@@ -675,7 +682,11 @@ export class RacingGateway implements OnModuleDestroy {
   private ensureRaceTickLoop(state: RacingTableState) {
     const activeRace = getActiveRunningRace(state);
 
-    if (!activeRace || this.raceFinishesInFlight.has(state.tableId)) {
+    if (
+      !activeRace ||
+      this.raceFinishesInFlight.has(state.tableId) ||
+      this.raceFinishRetryTimers.has(state.tableId)
+    ) {
       this.stopRaceTickLoop(state.tableId);
       return;
     }
@@ -754,12 +765,17 @@ export class RacingGateway implements OnModuleDestroy {
     }
 
     this.raceFinishesInFlight.add(tableId);
+    let shouldRetry = false;
 
     try {
       const update = await this.refreshRuntimeTable(tableId);
 
       if (update) {
         this.emitTableUpdate(update);
+      } else if (this.tableService.hasTable(tableId)) {
+        shouldRetry = Boolean(
+          getActiveRunningRace(this.tableService.getTableState(tableId)),
+        );
       }
     } catch (error) {
       this.emitTableError(
@@ -767,13 +783,39 @@ export class RacingGateway implements OnModuleDestroy {
         error,
         'Unexpected racing finish persistence error.',
       );
+      shouldRetry = this.tableService.hasTable(tableId);
     } finally {
       this.raceFinishesInFlight.delete(tableId);
 
-      if (this.tableService.hasTable(tableId)) {
+      if (shouldRetry && this.shouldKeepRuntimeActive(tableId)) {
+        this.scheduleRaceFinishRetry(tableId);
+      } else if (this.tableService.hasTable(tableId)) {
         this.ensureRuntimeTimers(this.tableService.getTableState(tableId));
       }
     }
+  }
+
+  private scheduleRaceFinishRetry(tableId: string) {
+    this.stopRaceFinishRetry(tableId);
+
+    const handle = setTimeout(() => {
+      this.raceFinishRetryTimers.delete(tableId);
+      void this.persistRaceFinishFromTick(tableId);
+    }, racingLifecycleRetryDelayMs);
+
+    handle.unref?.();
+    this.raceFinishRetryTimers.set(tableId, handle);
+  }
+
+  private stopRaceFinishRetry(tableId: string) {
+    const existing = this.raceFinishRetryTimers.get(tableId);
+
+    if (!existing) {
+      return;
+    }
+
+    clearTimeout(existing);
+    this.raceFinishRetryTimers.delete(tableId);
   }
 
   private ensureRoundEndTimer(state: RacingTableState, minimumDelayMs = 0) {

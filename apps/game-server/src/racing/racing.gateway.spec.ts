@@ -379,6 +379,82 @@ describe('RacingGateway race tick loop', () => {
     gateway.onModuleDestroy();
   });
 
+  it('retries final persistence without starving an active lifecycle check', async () => {
+    jest.setSystemTime(new Date('2026-06-18T12:00:25.000Z'));
+
+    const runningState = createRunningState({
+      startedAt: '2026-06-18T12:00:00.000Z',
+    });
+    const settledState: RacingTableState = {
+      ...runningState,
+      phase: 'SETTLED',
+      race: {
+        ...runningState.race!,
+        status: 'SETTLED',
+        phase: 'SETTLED',
+        resultOrder: runningState.race!.entries.map(
+          (entry) => entry.raceEntryId,
+        ),
+        settledAt: '2026-06-18T12:00:25.000Z',
+      },
+      updatedAt: '2026-06-18T12:00:25.000Z',
+      version: runningState.version + 1,
+    };
+    const tableService = createTableServiceMock(runningState);
+    let resolveLifecycle!: (value: { cancelled: null; settled: null }) => void;
+    const lifecyclePromise = new Promise<{
+      cancelled: null;
+      settled: null;
+    }>((resolve) => {
+      resolveLifecycle = resolve;
+    });
+    const tableConfigService = {
+      advanceRaceLifecycle: jest
+        .fn()
+        .mockImplementationOnce(() => lifecyclePromise)
+        .mockResolvedValue({ cancelled: null, settled: null }),
+      getScheduledRace: jest.fn(async () => settledState.race),
+      getTableConfig: jest.fn(async () => createConfigFromState(settledState)),
+    };
+    const { server } = createServerMock();
+    const gateway = new RacingGateway(
+      tableConfigService as never,
+      tableService as never,
+      {} as never,
+      {} as never,
+    );
+    gateway.server = server;
+    tableService.configureTable
+      .mockImplementationOnce(() => null as never)
+      .mockImplementation(() => {
+        tableService.setState(settledState);
+
+        return {
+          state: settledState,
+          event: createTableEvent(settledState, 'RACE_SETTLED'),
+        };
+      });
+
+    const syncPromise = getGatewayHarness(gateway).syncRuntimeTable('main');
+    await Promise.resolve();
+    getGatewayHarness(gateway).ensureRaceTickLoop(runningState);
+
+    await jest.advanceTimersByTimeAsync(500);
+
+    expect(tableService.recordRaceTick).toHaveBeenCalledTimes(1);
+    expect(tableConfigService.advanceRaceLifecycle).toHaveBeenCalledTimes(1);
+
+    resolveLifecycle({ cancelled: null, settled: null });
+    await syncPromise;
+    await jest.advanceTimersByTimeAsync(100);
+    await flushAsyncCommands();
+
+    expect(tableConfigService.advanceRaceLifecycle).toHaveBeenCalledTimes(2);
+    expect(tableService.getTableState()).toMatchObject({ phase: 'SETTLED' });
+
+    gateway.onModuleDestroy();
+  });
+
   it('advances a settled race at its exact result deadline', async () => {
     jest.setSystemTime(new Date('2026-06-18T12:00:50.000Z'));
 
@@ -867,6 +943,7 @@ function getGatewayHarness(gateway: RacingGateway) {
     ensureRuntimeTimers(state: RacingTableState): void;
     ensureRaceTickLoop(state: RacingTableState): void;
     ensurePrestartTimer(state: RacingTableState): void;
+    syncRuntimeTable(tableId: string): Promise<void>;
     resolveSocketUser(
       socket: never,
       nicknameOverride?: string,

@@ -227,3 +227,97 @@ Next.js client reference manifest의 route entry chunk를 중복 제거하고 ra
 5. 동적 Socket.IO chunk가 hydration 이후 연결 완료까지 미치는 시간을 별도 측정한다.
 
 현재 결과는 PPR shell 반응과 초기 JS 개선을 입증하지만, 실제 사용자 환경의 성능 보증이나 socket lifecycle 최종 승인으로 사용하면 안 된다.
+
+## 10. PPR push 전 Vercel 배포 기준선
+
+- 측정 URL: `https://bk-games-web.vercel.app`
+- 측정 시점 원격 `main`: `26131d0`
+- 배포 응답: `Server: Vercel`, `X-Vercel-Cache: MISS`
+- 요청 경로: `icn1 → iad1`
+- Cache-Control: `private, no-cache, no-store, max-age=0, must-revalidate`
+
+Vercel 응답에는 commit SHA가 포함되지 않아 원격 `main`과 배포 artifact의 SHA가 동일한지는 Vercel dashboard에서 별도 확인해야 한다. 화면 동작과 원격 상태는 Cache Components push 전 버전과 일치했다.
+
+### 10.1 Guest HTTP
+
+측정 조건:
+
+- route별 warm-up 5회
+- route별 본 측정 30회
+- route 순서를 교차해 시간 편향 축소
+- cache-busting query
+- HTTP/1.1 compression
+- redirect를 따라가지 않고 최초 응답 기록
+
+| Route              | Status | TTFB p50 | TTFB p75 | TTFB p95 | Total p50 | Total p75 | Total p95 | Response p50 |
+| ------------------ | -----: | -------: | -------: | -------: | --------: | --------: | --------: | -----------: |
+| `/`                |    200 | 272.27ms | 290.53ms | 328.54ms |  274.44ms |  308.53ms |  479.06ms |       7,945B |
+| `/auth`            |    200 | 278.27ms | 289.31ms | 312.64ms |  282.67ms |  296.67ms |  314.33ms |       7,114B |
+| `/blackjack`       |    200 | 280.29ms | 306.32ms | 345.11ms |  281.36ms |  307.12ms |  345.34ms |       3,549B |
+| `/baccarat`        |    200 | 276.21ms | 300.27ms | 355.12ms |  277.57ms |  301.10ms |  357.02ms |       3,547B |
+| `/racing/bk-derby` |    200 | 273.44ms | 281.19ms | 316.82ms |  275.18ms |  285.82ms |  454.02ms |       6,321B |
+
+Guest HTTP는 인증 cookie 없이 측정했다. 브라우저 guest navigation은 signed-in 측정을 위해 동일 브라우저 세션을 로그인 상태로 전환했으므로 별도 반복하지 않았다.
+
+### 10.2 Signed-in 홈 직접 로드
+
+동일 인앱 브라우저의 로그인 세션으로 새 탭 20회를 측정했다.
+
+| 지표                          | 성공 | p50 | p75 | p95 |
+| ----------------------------- | ---: | --: | --: | --: |
+| browser load 반환             | 20/20 | 770ms | 812ms | 872ms |
+| 사용자명·지갑 개인화 표시     | 20/20 | 1,030ms | 1,076ms | 2,193ms |
+
+개인화 p95는 최초 두 표본의 2초대 cold/outlier 영향을 받았다. 나머지 18개 표본은 `939ms`에서 `1,174ms` 범위였다.
+
+### 10.3 Signed-in client navigation
+
+각 표본은 다음 순서로 실행했다.
+
+1. 새 탭에서 로그인 홈 로드
+2. 사용자명·지갑 개인화 완료 확인
+3. 1,200ms prefetch 대기
+4. 게임 링크 클릭
+5. URL commit과 게임 heading 표시 시각 기록
+
+| Route        | 성공 | Commit p50 | Commit p75 | Commit p95 | UI ready p50 | UI ready p75 | UI ready p95 |
+| ------------ | ---: | ---------: | ---------: | ---------: | -----------: | -----------: | -----------: |
+| Blackjack    | 15/15 | 3,258ms | 3,298ms | 3,328ms | 3,296ms | 3,328ms | 3,358ms |
+| Baccarat     | 14/15 | 3,307ms | 3,322ms | 3,377ms | 3,337ms | 3,383ms | 3,399ms |
+| BK Derby     | 15/15 | 3,220ms | 3,246ms | 3,299ms | 3,296ms | 3,347ms | 3,377ms |
+
+Baccarat 1회는 15초 안에 navigation 완료 신호를 받지 못했다. 추가 홈 왕복 확인에서도 URL은 `/baccarat`로 변경됐지만 navigation 완료 신호가 timeout되는 현상이 한 번 더 발생했다.
+
+해석:
+
+- 현재 배포의 보호 게임 전환은 일관되게 약 3.2초에서 3.4초가 걸린다.
+- 현재 배포에는 `cacheComponents`가 없으므로 세션과 게임 계정 조회가 화면 전환 commit을 막는다.
+- 로컬 PPR 최종 측정의 Auth navigation commit p75 `510ms`와 직접 비교하면 배포 signed-in 게임 전환의 개선 여지가 크다.
+- 다만 route와 인증 상태가 다르므로 PPR 배포 후 동일 signed-in 게임 route를 다시 측정해야 실제 개선율을 확정할 수 있다.
+
+### 10.4 로그인 상태와 실시간 연결
+
+| 검증 항목 | 결과 |
+| --------- | ---- |
+| 홈 사용자명·지갑 표시 | 정상 |
+| Derby 첫 실제 화면의 로그인 상태 | 15/15 정상 |
+| Baccarat socket | `connected`, 최신 table state 수신 |
+| Derby state | 현재 race, history, wallet 수신 |
+| Blackjack socket | `timeout`, table state 미수신 |
+
+Blackjack timeout은 페이지 UI 준비 시간과 분리된 배포 운영 문제다. PPR push 전후 측정에서 `UI ready`와 `realtime connected`를 별도 지표로 유지한다.
+
+### 10.5 PPR 배포 후 동일 조건 재측정
+
+```text
+Guest HTTP                 route별 30회
+Signed-in home             20회
+Signed-in Blackjack        15회
+Signed-in Baccarat         15회
+Signed-in BK Derby         15회
+Realtime connection        게임별 별도 상태와 완료 시간
+Navigation timeout         성공률과 함께 기록
+Vercel routing/cache       응답 header 재확인
+```
+
+동일한 배포 URL과 로그인 계정을 유지하고 PPR 커밋 push 후 위 표를 그대로 다시 채운다. 이 비교를 최종 배포 기준 성능 판단으로 사용한다.

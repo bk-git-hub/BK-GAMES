@@ -35,7 +35,7 @@ import {
   type RacingWalletUpdatedPayload,
 } from "@bk-games/shared/src/socket-events";
 import type { GameTokenRole } from "@bk-games/shared/src/types";
-import { io, type Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 
 import styles from "./page.module.css";
 
@@ -1980,6 +1980,8 @@ function useRacingTable(initialAuth: BkDerbyInitialAuth | null) {
       setGameToken(null);
       setSocketError(null);
 
+      const socketClientPromise = import("socket.io-client");
+
       let socketAuth: { guest: true; nickname: string } | { token: string };
       let socketNickname = "Guest";
 
@@ -2025,6 +2027,12 @@ function useRacingTable(initialAuth: BkDerbyInitialAuth | null) {
 
           return false;
         }
+      }
+
+      const { io } = await socketClientPromise;
+
+      if (cancelled) {
+        return false;
       }
 
       const socket = io(resolveRacingSocketUrl(), {

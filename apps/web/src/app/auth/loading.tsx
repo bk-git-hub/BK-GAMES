@@ -1,5 +1,10 @@
-import { AuthLoadingShell } from "../_loading/route-loading-shells";
+import { AuthSessionFallback } from "./page";
+import { AuthShell } from "./auth-shell";
 
 export default function Loading() {
-  return <AuthLoadingShell />;
+  return (
+    <AuthShell>
+      <AuthSessionFallback />
+    </AuthShell>
+  );
 }

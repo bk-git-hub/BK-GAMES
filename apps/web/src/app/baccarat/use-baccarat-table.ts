@@ -24,7 +24,7 @@ import {
   type BaccaratWalletUpdatedPayload,
 } from "@bk-games/shared/src/socket-events";
 import type { GameTokenRole } from "@bk-games/shared/src/types";
-import { io, type Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 
 const tableId = "main";
 const eventLimit = 18;
@@ -133,7 +133,10 @@ export function useBaccaratTable({
       setStatusMessage(null);
 
       try {
-        const tokenResponse = await requestGameToken(controller.signal);
+        const [tokenResponse, { io }] = await Promise.all([
+          requestGameToken(controller.signal),
+          import("socket.io-client"),
+        ]);
 
         if (cancelled) {
           return;

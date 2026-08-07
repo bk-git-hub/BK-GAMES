@@ -453,6 +453,14 @@ Correction:
 
 ## Current Public Status
 
+### Agent Guide Refresh
+
+Correction:
+
+- Replaced the repository agent guide with a concise English version focused on the current repository map, task-specific source routing, executable validation commands, and completion criteria.
+- Reclassified `docs/10_FIRST_TASKS.md` as historical setup guidance and added routing for the current Blackjack, Baccarat, horse racing, boxing, deployment, and Next.js PPR documentation.
+- Preserved the repository's critical wallet, settlement, socket privacy, explicit Git staging, commit, and manual dev-server ownership safeguards while removing repeated templates and obsolete orchestration-era ceremony.
+
 Ready to show as portfolio material:
 
 - Architecture and implementation docs

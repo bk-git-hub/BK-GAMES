@@ -42,11 +42,15 @@ export class RacingTableConfigService {
     };
   }
 
-  async getScheduledRace(tableId: string): Promise<RacingRaceSnapshot> {
+  async getScheduledRace(
+    tableId: string,
+    now?: Date,
+  ): Promise<RacingRaceSnapshot> {
     const db = (await import(dbPackageName)) as RacingDbModule;
-    const result =
-      (await db.getActiveRacingRaceForTable({ tableCode: tableId })) ??
-      (await db.ensureScheduledRacingRace({ tableCode: tableId }));
+    const result = now
+      ? await db.ensureScheduledRacingRace({ tableCode: tableId, now })
+      : ((await db.getActiveRacingRaceForTable({ tableCode: tableId })) ??
+        (await db.ensureScheduledRacingRace({ tableCode: tableId })));
 
     return {
       raceId: result.race.id,
@@ -120,11 +124,10 @@ type RacingDbHorse = {
 
 type RacingEnsureScheduledRaceInput = {
   tableCode: string;
-};
-
-type RacingLifecycleAdvanceInput = RacingEnsureScheduledRaceInput & {
   now?: Date;
 };
+
+type RacingLifecycleAdvanceInput = RacingEnsureScheduledRaceInput;
 
 type RacingScheduledRaceResult = {
   race: {

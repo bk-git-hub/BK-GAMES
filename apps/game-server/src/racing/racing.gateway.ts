@@ -58,6 +58,10 @@ export class RacingGateway implements OnModuleDestroy {
     string,
     RacingBettingCloseTimer
   >();
+  private readonly bettingOpenTimers = new Map<
+    string,
+    RacingBettingOpenTimer
+  >();
   private readonly prestartTimers = new Map<string, RacingPrestartTimer>();
   private readonly raceTickTimers = new Map<string, RacingTickTimer>();
   private readonly roundEndTimers = new Map<string, RacingRoundEndTimer>();
@@ -91,6 +95,10 @@ export class RacingGateway implements OnModuleDestroy {
 
     for (const tableId of Array.from(this.bettingCloseTimers.keys())) {
       this.stopBettingCloseTimer(tableId);
+    }
+
+    for (const tableId of Array.from(this.bettingOpenTimers.keys())) {
+      this.stopBettingOpenTimer(tableId);
     }
 
     for (const timer of this.raceTickTimers.values()) {
@@ -216,10 +224,10 @@ export class RacingGateway implements OnModuleDestroy {
     }
   }
 
-  private async configureRuntimeTable(tableId: string) {
+  private async configureRuntimeTable(tableId: string, now?: Date) {
     const [config, race] = await Promise.all([
       this.tableConfigService.getTableConfig(tableId),
-      this.tableConfigService.getScheduledRace(tableId),
+      this.tableConfigService.getScheduledRace(tableId, now),
     ]);
 
     return this.tableService.configureTable({ tableId, config, race });
@@ -236,6 +244,12 @@ export class RacingGateway implements OnModuleDestroy {
 
       return this.configureRuntimeTable(tableId);
     });
+  }
+
+  private async refreshScheduledPhase(tableId: string, now: Date) {
+    return this.runLifecycleCheckpoint(tableId, () =>
+      this.configureRuntimeTable(tableId, now),
+    );
   }
 
   private async syncLobbyTables() {
@@ -358,6 +372,7 @@ export class RacingGateway implements OnModuleDestroy {
       return;
     }
 
+    this.ensureBettingOpenTimer(state);
     this.ensureBettingCloseTimer(state);
     this.ensurePrestartTimer(state);
     this.ensureRaceTickLoop(state);
@@ -376,11 +391,114 @@ export class RacingGateway implements OnModuleDestroy {
   }
 
   private stopRuntimeTimers(tableId: string) {
+    this.stopBettingOpenTimer(tableId);
     this.stopBettingCloseTimer(tableId);
     this.stopPrestartTimer(tableId);
     this.stopRaceTickLoop(tableId);
     this.stopRoundEndTimer(tableId);
     this.stopRaceFinishRetry(tableId);
+  }
+
+  private ensureBettingOpenTimer(state: RacingTableState, minimumDelayMs = 0) {
+    const race = getWaitingRace(state);
+
+    if (!race) {
+      this.stopBettingOpenTimer(state.tableId);
+      return;
+    }
+
+    const bettingOpensAtMs = Date.parse(race.bettingOpensAt);
+
+    if (!Number.isFinite(bettingOpensAtMs)) {
+      this.stopBettingOpenTimer(state.tableId);
+      return;
+    }
+
+    const existing = this.bettingOpenTimers.get(state.tableId);
+
+    if (
+      existing?.raceId === race.raceId &&
+      existing.bettingOpensAtMs === bettingOpensAtMs
+    ) {
+      return;
+    }
+
+    this.stopBettingOpenTimer(state.tableId);
+
+    const handle = setTimeout(
+      () => {
+        this.bettingOpenTimers.delete(state.tableId);
+        void this.openBettingWindowFromTimer(
+          state.tableId,
+          race.raceId,
+          bettingOpensAtMs,
+        );
+      },
+      Math.max(minimumDelayMs, bettingOpensAtMs - Date.now()),
+    );
+
+    handle.unref?.();
+    this.bettingOpenTimers.set(state.tableId, {
+      bettingOpensAtMs,
+      handle,
+      raceId: race.raceId,
+    });
+  }
+
+  private stopBettingOpenTimer(tableId: string) {
+    const existing = this.bettingOpenTimers.get(tableId);
+
+    if (!existing) {
+      return;
+    }
+
+    clearTimeout(existing.handle);
+    this.bettingOpenTimers.delete(tableId);
+  }
+
+  private async openBettingWindowFromTimer(
+    tableId: string,
+    raceId: string,
+    bettingOpensAtMs: number,
+  ) {
+    try {
+      const state = this.tableService.getTableState(tableId);
+      const race = getWaitingRace(state);
+
+      if (!race || race.raceId !== raceId) {
+        this.ensureRuntimeTimers(state);
+        return;
+      }
+
+      const update = await this.refreshScheduledPhase(
+        tableId,
+        new Date(bettingOpensAtMs),
+      );
+
+      if (update) {
+        this.emitTableUpdate(update);
+        return;
+      }
+
+      if (this.tableService.hasTable(tableId)) {
+        const currentState = this.tableService.getTableState(tableId);
+
+        if (getWaitingRace(currentState)) {
+          this.ensureBettingOpenTimer(
+            currentState,
+            racingLifecycleRetryDelayMs,
+          );
+        } else {
+          this.ensureRuntimeTimers(currentState);
+        }
+      }
+    } catch (error) {
+      this.emitTableError(
+        tableId,
+        error,
+        'Unexpected racing betting open timer error.',
+      );
+    }
   }
 
   private ensureBettingCloseTimer(state: RacingTableState) {
@@ -1033,6 +1151,12 @@ type RacingBettingCloseTimer = {
   raceId: string;
 };
 
+type RacingBettingOpenTimer = {
+  bettingOpensAtMs: number;
+  handle: NodeJS.Timeout;
+  raceId: string;
+};
+
 type RacingPrestartTimer = {
   handle: NodeJS.Timeout;
   mode: 'waiting' | 'ticking';
@@ -1139,6 +1263,16 @@ function getSettledRace(state: RacingTableState) {
 
   return state.race as NonNullable<RacingTableState['race']> & {
     scheduledStartAt: string;
+  };
+}
+
+function getWaitingRace(state: RacingTableState) {
+  if (state.phase !== 'WAITING' || !state.race?.bettingOpensAt) {
+    return null;
+  }
+
+  return state.race as NonNullable<RacingTableState['race']> & {
+    bettingOpensAt: string;
   };
 }
 

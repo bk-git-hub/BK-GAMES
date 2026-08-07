@@ -1,29 +1,21 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { ensureUserGameAccount } from "@bk-games/db";
+import { Suspense } from "react";
 
 import { BlackjackTableClient } from "./blackjack-table-client";
-import { auth } from "@/lib/auth";
+import { getAuthenticatedGameEntry } from "../_games/authenticated-game-entry";
+import { GameTableLoadingShell } from "../_loading/route-loading-shells";
 
-export default async function BlackjackPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    redirect("/auth");
-  }
-
-  const gameAccount = await ensureUserGameAccount({
-    userId: session.user.id,
-    displayName: session.user.name,
-  });
-
+export default function BlackjackPage() {
   return (
-    <BlackjackTableClient
-      initialWalletBalance={gameAccount.wallet.balance.toString()}
-      userEmail={session.user.email}
-      userName={session.user.name}
-    />
+    <Suspense
+      fallback={<GameTableLoadingShell accent="blue" label="Blackjack table" />}
+    >
+      <AuthenticatedBlackjack />
+    </Suspense>
   );
+}
+
+async function AuthenticatedBlackjack() {
+  const entry = await getAuthenticatedGameEntry();
+
+  return <BlackjackTableClient {...entry} />;
 }

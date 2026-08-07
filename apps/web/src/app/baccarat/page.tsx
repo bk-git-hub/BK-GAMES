@@ -1,29 +1,21 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { ensureUserGameAccount } from "@bk-games/db";
+import { Suspense } from "react";
 
 import { BaccaratTableClient } from "./baccarat-table-client";
-import { auth } from "@/lib/auth";
+import { getAuthenticatedGameEntry } from "../_games/authenticated-game-entry";
+import { GameTableLoadingShell } from "../_loading/route-loading-shells";
 
-export default async function BaccaratPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    redirect("/auth");
-  }
-
-  const gameAccount = await ensureUserGameAccount({
-    userId: session.user.id,
-    displayName: session.user.name,
-  });
-
+export default function BaccaratPage() {
   return (
-    <BaccaratTableClient
-      initialWalletBalance={gameAccount.wallet.balance.toString()}
-      userEmail={session.user.email}
-      userName={session.user.name}
-    />
+    <Suspense
+      fallback={<GameTableLoadingShell accent="red" label="Baccarat table" />}
+    >
+      <AuthenticatedBaccarat />
+    </Suspense>
   );
+}
+
+async function AuthenticatedBaccarat() {
+  const entry = await getAuthenticatedGameEntry();
+
+  return <BaccaratTableClient {...entry} />;
 }

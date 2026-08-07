@@ -220,7 +220,7 @@ type RacingBetTypeConfig = {
 
 const tableId = "main";
 const fallbackRestPollMs = 15_000;
-const raceHistoryPollMs = 10_000;
+const raceHistoryPollMs = 60_000;
 const localTickMs = 160;
 const startCountdownWindowMs = 5_000;
 const startCountdownHoldMs = 1_400;
@@ -367,7 +367,11 @@ const baseHorseProfiles: DisplayHorse[] = assetHorses.map((horse, index) => ({
 export function BkDerbyClient() {
   const router = useRouter();
   const racing = useRacingTable();
-  const raceHistory = useRacingRaceHistory();
+  const raceHistoryRefreshKey =
+    racing.latestTableEvent?.type === "RACE_SETTLED"
+      ? getRacingTableEventKey(racing.latestTableEvent)
+      : null;
+  const raceHistory = useRacingRaceHistory(raceHistoryRefreshKey);
   const betHistory = useRacingBetHistory(racing.gameToken);
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [persistedResultBoard, setPersistedResultBoard] =
@@ -1708,7 +1712,7 @@ function RaceHistoryList({ history }: { history: RaceHistoryViewState }) {
   );
 }
 
-function useRacingRaceHistory(): RaceHistoryViewState {
+function useRacingRaceHistory(refreshKey: string | null): RaceHistoryViewState {
   const [history, setHistory] = useState<RaceHistoryViewState>({
     date: null,
     errorMessage: null,
@@ -1763,7 +1767,7 @@ function useRacingRaceHistory(): RaceHistoryViewState {
         window.clearInterval(pollTimer);
       }
     };
-  }, []);
+  }, [refreshKey]);
 
   return history;
 }
@@ -1971,10 +1975,23 @@ function useRacingTable() {
       setGameToken(null);
       setSocketError(null);
 
-      let tokenResponse: GameTokenResponse;
+      let socketAuth: { guest: true; nickname: string } | { token: string };
+      let socketNickname = "Guest";
 
       try {
-        tokenResponse = await requestGameToken(pollController.signal);
+        const tokenResponse = await requestGameToken(pollController.signal);
+
+        if (cancelled) {
+          return false;
+        }
+
+        socketAuth = {
+          token: tokenResponse.token,
+        };
+        socketNickname = tokenResponse.user.nickname;
+        setPlayer(tokenResponse.user);
+        setGameToken(tokenResponse.token);
+        setWalletBalance(tokenResponse.walletBalance);
       } catch (error) {
         if (cancelled) {
           return false;
@@ -1984,37 +2001,29 @@ function useRacingTable() {
           error instanceof Error ? error.message : "Game token request failed.";
 
         if (message === "Authentication required.") {
-          setConnectionStatus("polling");
+          socketAuth = {
+            guest: true,
+            nickname: socketNickname,
+          };
           setGameToken(null);
           setPlayer(null);
           setSocketError(null);
           setWalletBalance(null);
+        } else {
+          setSocketError(
+            (currentError) =>
+              currentError ?? {
+                code: "UNAUTHORIZED",
+                message,
+              },
+          );
+
           return false;
         }
-
-        setSocketError(
-          (currentError) =>
-            currentError ?? {
-              code: "UNAUTHORIZED",
-              message,
-            },
-        );
-
-        return false;
       }
-
-      if (cancelled) {
-        return false;
-      }
-
-      setPlayer(tokenResponse.user);
-      setGameToken(tokenResponse.token);
-      setWalletBalance(tokenResponse.walletBalance);
 
       const socket = io(resolveRacingSocketUrl(), {
-        auth: {
-          token: tokenResponse.token,
-        },
+        auth: socketAuth,
         withCredentials: true,
       });
 
@@ -2025,7 +2034,7 @@ function useRacingTable() {
         setConnectionStatus("connected");
         setSocketError(null);
         socket.emit(RACING_CLIENT_EVENTS.TABLE_JOIN, {
-          nickname: tokenResponse.user.nickname,
+          nickname: socketNickname,
           tableId,
         } satisfies RacingJoinTablePayload);
       });

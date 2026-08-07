@@ -127,6 +127,39 @@ describe('RacingGateway race tick loop', () => {
     gateway.onModuleDestroy();
   });
 
+  it('allows unauthenticated guest identity only when table join permits it', () => {
+    const gateway = new RacingGateway(
+      {} as never,
+      {} as never,
+      {
+        isDevAuthEnabled: jest.fn(() => false),
+        verify: jest.fn(),
+      } as never,
+      {} as never,
+    );
+    const socket = {
+      handshake: {
+        auth: {},
+        query: {},
+      },
+      id: 'socket-guest-1',
+    };
+
+    expect(
+      getGatewayHarness(gateway).resolveSocketUser(socket as never, 'Visitor', {
+        allowGuest: true,
+      }),
+    ).toEqual({
+      userId: 'guest:socket-guest-1',
+      nickname: 'Visitor',
+      role: 'USER',
+    });
+
+    expect(() =>
+      getGatewayHarness(gateway).resolveSocketUser(socket as never),
+    ).toThrow('Game token is required.');
+  });
+
   it('closes betting from a runtime timer without waiting for DB sync', async () => {
     const bettingState = createPrestartState({
       phase: 'BETTING',
@@ -649,5 +682,14 @@ function getGatewayHarness(gateway: RacingGateway) {
     ensureRuntimeTimers(state: RacingTableState): void;
     ensureRaceTickLoop(state: RacingTableState): void;
     ensurePrestartTimer(state: RacingTableState): void;
+    resolveSocketUser(
+      socket: never,
+      nicknameOverride?: string,
+      options?: { allowGuest?: boolean },
+    ): {
+      nickname: string;
+      role: 'ADMIN' | 'USER';
+      userId: string;
+    };
   };
 }

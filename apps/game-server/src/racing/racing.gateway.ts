@@ -113,7 +113,9 @@ export class RacingGateway implements OnModuleDestroy {
     this.handleCommand(socket, RACING_CLIENT_EVENTS.TABLE_JOIN, async () => {
       const tableId = readRequiredTableId(body.tableId);
       await this.refreshRuntimeTable(tableId);
-      const user = this.resolveSocketUser(socket, body.nickname);
+      const user = this.resolveSocketUser(socket, body.nickname, {
+        allowGuest: true,
+      });
       const update = this.tableService.joinTable({
         tableId,
         socketId: socket.id,
@@ -781,6 +783,7 @@ export class RacingGateway implements OnModuleDestroy {
   private resolveSocketUser(
     socket: Socket,
     nicknameOverride?: string,
+    options?: { allowGuest?: boolean },
   ): RacingSocketUser {
     const token = readSocketToken(socket);
 
@@ -797,6 +800,14 @@ export class RacingGateway implements OnModuleDestroy {
       return {
         ...user,
         nickname: nicknameOverride?.trim() || user.nickname,
+      };
+    }
+
+    if (options?.allowGuest) {
+      return {
+        userId: `guest:${socket.id}`,
+        nickname: nicknameOverride?.trim() || `Guest ${socket.id.slice(0, 6)}`,
+        role: 'USER',
       };
     }
 

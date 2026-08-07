@@ -2,15 +2,15 @@
 
 Next.js frontend for BK Games.
 
-This app owns the public landing page, auth screens, lobby, playable game screens, and web-facing API routes such as Better Auth and `POST /api/game-token`.
+This app owns the public home page, auth screens, playable game screens, and web-facing API routes such as Better Auth and `POST /api/game-token`.
 
 ## Current Routes
 
 | Route | Purpose | Auth |
 |---|---|---|
-| `/` | Public landing page with the current game lineup | Public |
+| `/` | Game list plus guest/login-aware reward and wallet panel | Public; login required to claim |
 | `/auth` | Sign in and sign up | Public |
-| `/lobby` | Game list plus guest/login-aware reward and wallet panel | Public; login required to claim |
+| `/lobby` | Legacy redirect to `/` | Public |
 | `/racing/bk-derby` | BK Derby racing screen | Public; login/backend required to bet |
 | `/blackjack` | Real-time Blackjack table | Required |
 | `/baccarat` | Real-time Baccarat table | Required |
@@ -53,7 +53,7 @@ corepack pnpm --filter web build
 
 ## Runtime Dependencies
 
-The public landing page should render without requiring the game server.
+The public home page should render without requiring the game server.
 
 Authenticated or betting flows require the relevant backend pieces:
 

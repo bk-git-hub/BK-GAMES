@@ -26,32 +26,31 @@ export async function claimDailyRewardAction() {
     displayName: session.user.name,
   });
 
-  let redirectTarget = "/lobby?reward=error";
+  let redirectTarget = "/?reward=error";
 
   try {
     const result = await claimDailyReward({
       userId: session.user.id,
-      memo: "Daily reward claimed from the web lobby.",
+      memo: "Daily reward claimed from the web home page.",
       metadata: {
-        source: "web:lobby",
+        source: "web:home",
       },
     });
 
     redirectTarget = result.idempotent
-      ? `/lobby?reward=already-claimed&date=${result.claimDate}`
-      : `/lobby?reward=claimed&date=${result.claimDate}`;
+      ? `/?reward=already-claimed&date=${result.claimDate}`
+      : `/?reward=claimed&date=${result.claimDate}`;
   } catch (error) {
     if (
       error instanceof DailyRewardClaimError ||
       error instanceof WalletMutationError
     ) {
-      redirectTarget = `/lobby?reward=error&code=${error.code}`;
+      redirectTarget = `/?reward=error&code=${error.code}`;
     } else {
       throw error;
     }
   }
 
   revalidatePath("/");
-  revalidatePath("/lobby");
   redirect(redirectTarget);
 }

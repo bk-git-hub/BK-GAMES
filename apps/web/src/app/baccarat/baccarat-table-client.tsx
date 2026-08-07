@@ -430,9 +430,9 @@ function BaccaratHeader({
     <header className="grid gap-3 rounded-[1rem] border-[2px] border-[#111827] bg-[#fff8ed]/95 px-3 py-2.5 text-[#111827] shadow-[6px_7px_0_#0b3b73] backdrop-blur md:grid-cols-[1fr_auto] md:items-center">
       <div className="flex min-w-0 items-center gap-3">
         <Link
-          href="/lobby"
+          href="/"
           className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[#071c3f] bg-[#0b3b73] text-white transition hover:bg-[#c8272e]"
-          aria-label="Back to lobby"
+          aria-label="Back to home"
         >
           <ArrowLeft className="size-4" />
         </Link>

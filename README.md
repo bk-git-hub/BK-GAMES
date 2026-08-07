@@ -6,10 +6,6 @@ The project started with Blackjack, but it is not a Blackjack-only app. The plat
 
 > Draft status: this README is a working project overview. Screenshots are local development snapshots and can be replaced before publishing.
 
-<p align="center">
-  <img src="./docs/screenshots/readme/landing.png" alt="BK Games landing page" width="900" />
-</p>
-
 ## What This Project Is
 
 BK Games is a portfolio-scale full-stack game platform focused on real-time systems and point-wallet correctness.
@@ -22,27 +18,27 @@ BK Games is a portfolio-scale full-stack game platform focused on real-time syst
 - Server-authoritative game state and settlement
 - Socket.IO table updates for real-time game screens
 
-The core loop is simple: browse the public landing page and lobby, sign in when you are ready to claim free points or place a bet, pick a game, play with the shared wallet, and receive private wallet updates after accepted actions or settlement.
+The core loop is simple: browse the public home page, sign in when you are ready to claim free points or place a bet, pick a game, play with the shared wallet, and receive private wallet updates after accepted actions or settlement.
 
 ## Screenshots
 
-| Landing | Account Access |
-|---|---|
-| <img src="./docs/screenshots/readme/landing.png" alt="Landing page" width="420" /> | <img src="./docs/screenshots/readme/auth.png" alt="Sign in and sign up page" width="420" /> |
+| Account Access |
+|---|
+| <img src="./docs/screenshots/readme/auth.png" alt="Sign in and sign up page" width="420" /> |
 
 | BK Derby |
 |---|
 | <img src="./docs/screenshots/readme/bk-derby.png" alt="BK Derby racing screen" width="640" /> |
 
-Lobby, Blackjack, and Baccarat table screenshots should be added after a local browser pass. Blackjack and Baccarat currently depend on a signed-in browser session and the game server.
+Home, Blackjack, and Baccarat table screenshots should be refreshed after a local browser pass. Blackjack and Baccarat currently depend on a signed-in browser session and the game server.
 
 ## Product Surfaces
 
 | Route | Purpose | Auth |
 |---|---|---|
-| `/` | Public landing page and current game lineup | Public |
+| `/` | Game selection plus guest/login-aware reward and wallet panel | Public; login required to claim |
 | `/auth` | Sign in and sign up | Public |
-| `/lobby` | Game selection plus guest/login-aware reward and wallet panel | Public; login required to claim |
+| `/lobby` | Legacy redirect to `/` | Public |
 | `/blackjack` | Real-time Blackjack table | Required |
 | `/baccarat` | Real-time Baccarat table | Required |
 | `/racing/bk-derby` | BK Derby racing game screen | Public; login/backend required to bet |
@@ -79,7 +75,7 @@ Lobby, Blackjack, and Baccarat table screenshots should be added after a local b
 
 ```text
 apps/web
-  Next.js app for landing, auth, lobby, game screens, and web-facing API routes.
+  Next.js app for the public home, auth, game screens, and web-facing API routes.
 
 apps/game-server
   NestJS + Socket.IO runtime for real-time tables, game phases, player commands, and settlement.

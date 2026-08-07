@@ -1,16 +1,16 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Home, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 
-type LobbyShellProps = {
+type HomeShellProps = {
   children: ReactNode;
   userEmail?: string;
   userName?: string;
 };
 
-export function LobbyShell({ children, userEmail, userName }: LobbyShellProps) {
+export function HomeShell({ children, userEmail, userName }: HomeShellProps) {
   const isSignedIn = Boolean(userEmail || userName);
 
   return (
@@ -42,13 +42,6 @@ export function LobbyShell({ children, userEmail, userName }: LobbyShellProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href="/"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-[#071c3f] bg-[#fffaf0] px-5 text-sm font-black tracking-normal text-[#0b3b73] uppercase transition hover:-translate-y-0.5 hover:bg-[#d8ecff]"
-              >
-                <Home className="size-4" />
-                Home
-              </Link>
               {isSignedIn ? (
                 <div className="[&_button]:h-11 [&_button]:rounded-md [&_button]:border-[#071c3f] [&_button]:bg-[#0b3b73] [&_button]:px-5 [&_button]:text-sm [&_button]:font-black [&_button]:tracking-normal [&_button]:text-white [&_button]:uppercase [&_button]:shadow-[0_5px_0_#071c3f] [&_button]:transition [&_button:hover]:-translate-y-0.5 [&_button:hover]:bg-[#c8272e] [&_button:hover]:shadow-[0_6px_0_#7d161b]">
                   <SignOutButton />

@@ -417,9 +417,9 @@ function TableHeader({
     <header className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5 shadow-2xl shadow-black/20 backdrop-blur md:grid-cols-[1fr_auto] md:items-center">
       <div className="flex min-w-0 items-center gap-3">
         <Link
-          href="/lobby"
+          href="/"
           className="flex size-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/15"
-          aria-label="Back to lobby"
+          aria-label="Back to home"
         >
           <ArrowLeft className="size-4" />
         </Link>

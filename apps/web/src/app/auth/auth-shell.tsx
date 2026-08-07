@@ -36,12 +36,6 @@ export function AuthShell({ children }: AuthShellProps) {
               <ArrowLeft className="size-4" />
               Home
             </Link>
-            <Link
-              href="/lobby"
-              className="hidden h-10 items-center justify-center rounded-md border border-[#071c3f] bg-[#0b3b73] px-4 text-xs font-black tracking-normal text-white uppercase shadow-[0_4px_0_#071c3f] transition hover:-translate-y-0.5 hover:bg-[#c8272e] sm:inline-flex"
-            >
-              Games
-            </Link>
           </nav>
         </header>
 

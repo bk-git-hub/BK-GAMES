@@ -16,6 +16,7 @@ import {
   Undo2,
 } from "lucide-react";
 import {
+  BLACKJACK_CLIENT_EVENTS,
   type BlackjackCardSnapshot,
   type BlackjackHandSnapshot,
   type BlackjackPlayerAction,
@@ -86,6 +87,9 @@ export function BlackjackTableClient({
     Record<string, Record<number, string>>
   >({});
   const [chipHistory, setChipHistory] = useState<ChipHistoryEntry[]>([]);
+  const [pendingSeatBets, setPendingSeatBets] = useState<
+    Record<number, string>
+  >({});
   const [selectedSeatNoOverride, setSelectedSeatNoOverride] = useState<
     number | null
   >(null);
@@ -140,9 +144,11 @@ export function BlackjackTableClient({
   const canStackChips =
     canSendSeatCommand &&
     visibleState?.phase === "WAITING_BETS" &&
-    selectedSeat?.handStatus === "WAITING_BET";
+    selectedSeat?.handStatus === "WAITING_BET" &&
+    (selectedSeatNo === null || !pendingSeatBets[selectedSeatNo]);
   const canUndoChip =
     selectedSeatNo !== null &&
+    !pendingSeatBets[selectedSeatNo] &&
     bettingWindowKey !== null &&
     chipHistory.some(
       (entry) =>
@@ -170,10 +176,93 @@ export function BlackjackTableClient({
       setChipHistory((currentHistory) =>
         currentHistory.length ? [] : currentHistory,
       );
+      setPendingSeatBets((currentPendingBets) =>
+        Object.keys(currentPendingBets).length ? {} : currentPendingBets,
+      );
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
   }, [visibleState?.phase]);
+
+  useEffect(() => {
+    if (!visibleState || !bettingWindowKey) {
+      return;
+    }
+
+    const confirmedSeatNos = Object.keys(pendingSeatBets)
+      .map(Number)
+      .filter((seatNo) => {
+        const seat = visibleState.seats.find((entry) => entry.seatNo === seatNo);
+
+        return seat?.betAmount !== null && seat?.betAmount !== undefined;
+      });
+
+    if (confirmedSeatNos.length === 0) {
+      return;
+    }
+
+    const confirmedSeatNoSet = new Set(confirmedSeatNos);
+    const timeoutId = window.setTimeout(() => {
+      setPendingSeatBets((currentPendingBets) => {
+        const nextPendingBets = { ...currentPendingBets };
+
+        confirmedSeatNos.forEach((seatNo) => {
+          delete nextPendingBets[seatNo];
+        });
+
+        return nextPendingBets;
+      });
+      setSeatBetDraftsByWindow((currentDraftsByWindow) => {
+        const currentDrafts = currentDraftsByWindow[bettingWindowKey];
+
+        if (!currentDrafts) {
+          return currentDraftsByWindow;
+        }
+
+        const nextDrafts = { ...currentDrafts };
+
+        confirmedSeatNos.forEach((seatNo) => {
+          delete nextDrafts[seatNo];
+        });
+
+        const nextDraftsByWindow = { ...currentDraftsByWindow };
+
+        if (Object.keys(nextDrafts).length === 0) {
+          delete nextDraftsByWindow[bettingWindowKey];
+        } else {
+          nextDraftsByWindow[bettingWindowKey] = nextDrafts;
+        }
+
+        return nextDraftsByWindow;
+      });
+      setChipHistory((currentHistory) =>
+        currentHistory.filter(
+          (entry) =>
+            entry.bettingWindowKey !== bettingWindowKey ||
+            !confirmedSeatNoSet.has(entry.seatNo),
+        ),
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [bettingWindowKey, pendingSeatBets, visibleState]);
+
+  useEffect(() => {
+    if (
+      table.connectionStatus === "connected" &&
+      table.socketError?.event !== BLACKJACK_CLIENT_EVENTS.BET_PLACE
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setPendingSeatBets((currentPendingBets) =>
+        Object.keys(currentPendingBets).length ? {} : currentPendingBets,
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [table.connectionStatus, table.socketError]);
 
   function updateSeatBetDraft(seatNo: number | null, value: string) {
     if (seatNo === null || !bettingWindowKey) {
@@ -210,24 +299,16 @@ export function BlackjackTableClient({
     });
   }
 
-  function clearSeatBetDraft(seatNo: number) {
-    updateSeatBetDraft(seatNo, "");
-
-    if (!bettingWindowKey) {
+  function placeBetForSeat(seatNo: number, amount: string) {
+    if (pendingSeatBets[seatNo]) {
       return;
     }
 
-    setChipHistory((currentHistory) =>
-      currentHistory.filter(
-        (entry) =>
-          entry.seatNo !== seatNo || entry.bettingWindowKey !== bettingWindowKey,
-      ),
-    );
-  }
-
-  function placeBetForSeat(seatNo: number, amount: string) {
+    setPendingSeatBets((currentPendingBets) => ({
+      ...currentPendingBets,
+      [seatNo]: amount,
+    }));
     table.placeBet(seatNo, amount);
-    clearSeatBetDraft(seatNo);
   }
 
   function addChipToSelectedSeat(amount: (typeof quickBetAmounts)[number]) {
@@ -341,6 +422,7 @@ export function BlackjackTableClient({
                   seat.userId === table.player?.id &&
                   visibleState.phase === "WAITING_BETS" &&
                   seat.handStatus === "WAITING_BET" &&
+                  !pendingSeatBets[seatNo] &&
                   seatBetAmount &&
                   isSeatBetAmountWithinLimits
                 ) {
@@ -349,6 +431,7 @@ export function BlackjackTableClient({
               }}
               roundResultReview={table.roundResultReview}
               selectedSeatNo={selectedSeatNo}
+              pendingSeatBets={pendingSeatBets}
               seatBetDrafts={seatBetDrafts}
               state={visibleState}
             />
@@ -469,6 +552,7 @@ function CasinoTable({
   myUserId,
   onLeaveSeat,
   onSeatClick,
+  pendingSeatBets,
   roundResultReview,
   selectedSeatNo,
   seatBetDrafts,
@@ -479,6 +563,7 @@ function CasinoTable({
   myUserId: string | null;
   onLeaveSeat: (seatNo: number) => void;
   onSeatClick: (seatNo: number, seat: BlackjackSeatSnapshot | null) => void;
+  pendingSeatBets: Record<number, string>;
   roundResultReview: { endsAt: string; state: BlackjackTableState } | null;
   selectedSeatNo: number | null;
   seatBetDrafts: Record<number, string>;
@@ -595,15 +680,19 @@ function CasinoTable({
           {tableSeatNumbers.map((seatNo) => {
             const seat = seatsByNo.get(seatNo) ?? null;
             const draftBetAmount = seatBetDrafts[seatNo] ?? "";
+            const pendingBetAmount = pendingSeatBets[seatNo] ?? "";
+            const hasPendingBet = pendingBetAmount !== "";
             const isMine = seat?.userId === myUserId;
             const isSeatBettable =
               isMine &&
               state?.phase === "WAITING_BETS" &&
               seat?.handStatus === "WAITING_BET" &&
+              !hasPendingBet &&
               draftBetAmount !== "" &&
               (state ? isBetWithinLimits(draftBetAmount, state.bettingLimits) : false);
             const canClickSeat =
               canUseSeatCommands &&
+              !hasPendingBet &&
               Boolean(state) &&
               (seat
                 ? isMine
@@ -624,7 +713,14 @@ function CasinoTable({
                 key={seat.seatNo}
                 onClick={() => onSeatClick(seatNo, seat)}
                 onLeaveSeat={() => onLeaveSeat(seatNo)}
-                quickActionLabel={canClickSeat ? actionLabel : null}
+                pendingBetAmount={pendingBetAmount}
+                quickActionLabel={
+                  hasPendingBet
+                    ? "Processing bet"
+                    : canClickSeat
+                      ? actionLabel
+                      : null
+                }
                 draftBetAmount={draftBetAmount}
                 seat={seat}
               />
@@ -906,6 +1002,7 @@ function SeatSpot({
   isSelected,
   onClick,
   onLeaveSeat,
+  pendingBetAmount,
   quickActionLabel,
   seat,
 }: {
@@ -917,12 +1014,18 @@ function SeatSpot({
   isSelected: boolean;
   onClick: () => void;
   onLeaveSeat: () => void;
+  pendingBetAmount: string;
   quickActionLabel: string | null;
   seat: BlackjackSeatSnapshot;
 }) {
   const activeHand = findActiveHand(seat) ?? seat.hands[0] ?? null;
   const hasSplitHands = seat.hands.length > 1;
-  const hasDraftBet = draftBetAmount.trim() !== "" && seat.betAmount === null;
+  const hasPendingBet =
+    pendingBetAmount.trim() !== "" && seat.betAmount === null;
+  const hasDraftBet =
+    !hasPendingBet &&
+    draftBetAmount.trim() !== "" &&
+    seat.betAmount === null;
 
   return (
     <div
@@ -956,9 +1059,11 @@ function SeatSpot({
 
       <div className="grid grid-cols-2 gap-2 text-xs">
         <MiniMetric
-          label={hasDraftBet ? "Stack" : "Bet"}
+          label={hasPendingBet ? "Pending" : hasDraftBet ? "Stack" : "Bet"}
           value={
-            hasDraftBet
+            hasPendingBet
+              ? `${formatBetAmountLabel(pendingBetAmount)} pts`
+              : hasDraftBet
               ? `${formatBetAmountLabel(draftBetAmount)} pts`
               : formatNullablePoints(seat.betAmount)
           }
@@ -980,6 +1085,7 @@ function SeatSpot({
         {hasSplitHands ? <FeltBadge>{seat.hands.length} hands</FeltBadge> : null}
         {seat.activeHandNo ? <FeltBadge>Hand {seat.activeHandNo}</FeltBadge> : null}
         {seat.outcome ? <FeltBadge>{seat.outcome}</FeltBadge> : null}
+        {hasPendingBet ? <FeltBadge>Bet processing</FeltBadge> : null}
         {hasDraftBet ? (
           <FeltBadge>Stack {formatBetAmountLabel(draftBetAmount)}</FeltBadge>
         ) : null}
@@ -999,7 +1105,11 @@ function SeatSpot({
             disabled={!isClickEnabled}
             onClick={onClick}
           >
-            <CheckCircle className="size-4" />
+            {hasPendingBet ? (
+              <RefreshCw className="size-4 animate-spin motion-reduce:animate-none" />
+            ) : (
+              <CheckCircle className="size-4" />
+            )}
             {quickActionLabel ?? "Select"}
           </Button>
           <Button

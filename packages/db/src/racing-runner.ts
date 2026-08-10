@@ -298,6 +298,7 @@ async function findDueRaceIdForStart(
     from racing_races
     where table_id = ${tableId}
       and phase in ('WAITING', 'BETTING', 'LOCKING_BETS')
+      and paused_at is null
       and scheduled_start_at is not null
       and scheduled_start_at <= ${now}
     order by scheduled_start_at asc
@@ -319,6 +320,7 @@ async function findRunningRaceIdForResolution(
     from racing_races
     where table_id = ${table.id}
       and phase = 'RUNNING'
+      and paused_at is null
       and coalesce(scheduled_start_at, started_at) is not null
       and coalesce(started_at, scheduled_start_at) <= ${now}
     order by coalesce(started_at, scheduled_start_at) asc
@@ -344,6 +346,7 @@ async function findDueSettledRaceIdForRoundEnd(
     where table_id = ${table.id}
       and status = 'SETTLED'
       and phase = 'SETTLED'
+      and paused_at is null
       and coalesce(scheduled_start_at, settled_at) is not null
       and coalesce(scheduled_start_at, settled_at) <= ${roundEndAt}
     order by coalesce(scheduled_start_at, settled_at) asc

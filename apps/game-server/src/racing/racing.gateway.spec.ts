@@ -104,6 +104,7 @@ describe('RacingGateway race tick loop', () => {
       advanceRaceLifecycle: jest.fn(),
       getScheduledRace: jest.fn(),
       getTableConfig: jest.fn(),
+      pauseRaceClock: jest.fn(() => Promise.resolve()),
     };
     const tableService = {
       hasTable: jest.fn(() => false),
@@ -123,6 +124,7 @@ describe('RacingGateway race tick loop', () => {
     expect(tableConfigService.advanceRaceLifecycle).not.toHaveBeenCalled();
     expect(tableConfigService.getScheduledRace).not.toHaveBeenCalled();
     expect(tableConfigService.getTableConfig).not.toHaveBeenCalled();
+    expect(tableConfigService.pauseRaceClock).toHaveBeenCalledWith('main');
 
     gateway.onModuleDestroy();
   });
@@ -195,6 +197,7 @@ describe('RacingGateway race tick loop', () => {
       },
     };
     const tableConfigService = {
+      resumeRaceClock: jest.fn(() => Promise.resolve()),
       advanceRaceLifecycle: jest.fn(() =>
         Promise.resolve({ cancelled: null, settled: null }),
       ),
@@ -233,6 +236,14 @@ describe('RacingGateway race tick loop', () => {
       nickname: 'Returning Visitor',
     });
     await flushAsyncCommands();
+    await flushAsyncCommands();
+
+    expect(tableConfigService.resumeRaceClock).toHaveBeenCalledWith('main');
+    expect(
+      tableConfigService.resumeRaceClock.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      tableConfigService.advanceRaceLifecycle.mock.invocationCallOrder[0]!,
+    );
 
     const tableStates = emit.mock.calls
       .filter(([eventName]) => eventName === 'table:state')

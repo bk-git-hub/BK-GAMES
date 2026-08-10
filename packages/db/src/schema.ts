@@ -1542,6 +1542,7 @@ export const racingRaces = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     settledAt: timestamp("settled_at", { withTimezone: true }),
+    pausedAt: timestamp("paused_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     cancelReason: text("cancel_reason"),
     resultOrder: jsonb("result_order")

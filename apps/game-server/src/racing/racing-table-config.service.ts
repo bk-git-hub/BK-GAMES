@@ -85,6 +85,18 @@ export class RacingTableConfigService {
 
     return db.advanceRacingRaceLifecycle({ tableCode: tableId, now });
   }
+
+  async pauseRaceClock(tableId: string, now?: Date) {
+    const db = (await import(dbPackageName)) as RacingDbModule;
+
+    return db.pauseRacingRaceClock({ tableCode: tableId, now });
+  }
+
+  async resumeRaceClock(tableId: string, now?: Date) {
+    const db = (await import(dbPackageName)) as RacingDbModule;
+
+    return db.resumeRacingRaceClock({ tableCode: tableId, now });
+  }
 }
 
 type RacingDbModule = {
@@ -99,6 +111,12 @@ type RacingDbModule = {
   advanceRacingRaceLifecycle(
     input: RacingLifecycleAdvanceInput,
   ): Promise<RacingLifecycleAdvanceResult>;
+  pauseRacingRaceClock(
+    input: RacingLifecycleAdvanceInput,
+  ): Promise<unknown>;
+  resumeRacingRaceClock(
+    input: RacingLifecycleAdvanceInput,
+  ): Promise<unknown>;
 };
 
 type RacingDbTable = {

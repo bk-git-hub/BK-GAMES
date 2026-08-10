@@ -10,6 +10,7 @@ export * from "./racing-bet-history.js";
 export * from "./racing-history.js";
 export * from "./racing-scheduler.js";
 export * from "./racing-runner.js";
+export * from "./racing-clock.js";
 export * from "./racing-seed.js";
 export * from "./baccarat-betting.js";
 export * from "./baccarat-seed.js";

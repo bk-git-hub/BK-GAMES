@@ -214,10 +214,10 @@ async function findActiveDisplayRace(
     .where(
       and(
         eq(racingRaces.tableId, tableId),
-        sql`${racingRaces.phase} in ('RUNNING', 'FINISHING', 'SETTLING', 'SETTLED')`,
+        sql`${racingRaces.phase} not in ('ROUND_END', 'CANCELLED')`,
       ),
     )
-    .orderBy(sql`${racingRaces.scheduledStartAt} desc nulls last`)
+    .orderBy(sql`${racingRaces.raceNo} desc`)
     .limit(1);
 
   return rows[0] ?? null;

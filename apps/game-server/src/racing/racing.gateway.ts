@@ -68,6 +68,7 @@ export class RacingGateway implements OnModuleDestroy {
   private readonly raceFinishRetryTimers = new Map<string, NodeJS.Timeout>();
   private readonly raceFinishesInFlight = new Set<string>();
   private readonly lifecycleCheckpointsInFlight = new Set<string>();
+  private readonly raceClockUpdates = new Map<string, Promise<void>>();
 
   constructor(
     private readonly tableConfigService: RacingTableConfigService,
@@ -80,7 +81,19 @@ export class RacingGateway implements OnModuleDestroy {
     this.scheduleSyncTimer = setInterval(() => {
       void this.syncLobbyTables();
     }, racingScheduleSyncIntervalMs);
-    void this.syncLobbyTables();
+    void Promise.all(
+      racingLobbyTableIds.map((tableId) => this.pauseRuntimeClock(tableId)),
+    )
+      .then(() => this.syncLobbyTables())
+      .catch((error: unknown) => {
+        for (const tableId of racingLobbyTableIds) {
+          this.emitTableError(
+            tableId,
+            error,
+            'Unexpected racing clock initialization error.',
+          );
+        }
+      });
   }
 
   onModuleDestroy() {
@@ -118,6 +131,7 @@ export class RacingGateway implements OnModuleDestroy {
     this.raceFinishRetryTimers.clear();
     this.raceFinishesInFlight.clear();
     this.lifecycleCheckpointsInFlight.clear();
+    this.raceClockUpdates.clear();
   }
 
   handleDisconnect(socket: Socket) {
@@ -135,6 +149,7 @@ export class RacingGateway implements OnModuleDestroy {
   ) {
     this.handleCommand(socket, RACING_CLIENT_EVENTS.TABLE_JOIN, async () => {
       const tableId = readRequiredTableId(body.tableId);
+      await this.resumeRuntimeClock(tableId);
       const syncUpdate = await this.refreshRuntimeTable(tableId);
       const user = this.resolveSocketUser(socket, body.nickname, {
         allowGuest: true,
@@ -261,6 +276,7 @@ export class RacingGateway implements OnModuleDestroy {
   private async syncRuntimeTable(tableId: string) {
     if (!this.shouldKeepRuntimeActive(tableId)) {
       this.stopRuntimeTimers(tableId);
+      await this.pauseRuntimeClock(tableId);
       return;
     }
 
@@ -369,6 +385,13 @@ export class RacingGateway implements OnModuleDestroy {
   private ensureRuntimeTimers(state: RacingTableState) {
     if (!this.shouldKeepRuntimeActive(state.tableId)) {
       this.stopRuntimeTimers(state.tableId);
+      void this.pauseRuntimeClock(state.tableId).catch((error: unknown) =>
+        this.emitTableError(
+          state.tableId,
+          error,
+          'Unexpected racing clock pause error.',
+        ),
+      );
       return;
     }
 
@@ -397,6 +420,47 @@ export class RacingGateway implements OnModuleDestroy {
     this.stopRaceTickLoop(tableId);
     this.stopRoundEndTimer(tableId);
     this.stopRaceFinishRetry(tableId);
+  }
+
+  private pauseRuntimeClock(tableId: string) {
+    if (typeof this.tableConfigService.pauseRaceClock !== 'function') {
+      return Promise.resolve();
+    }
+
+    return this.queueRaceClockUpdate(tableId, () =>
+      this.tableConfigService.pauseRaceClock(tableId),
+    );
+  }
+
+  private resumeRuntimeClock(tableId: string) {
+    if (typeof this.tableConfigService.resumeRaceClock !== 'function') {
+      return Promise.resolve();
+    }
+
+    return this.queueRaceClockUpdate(tableId, () =>
+      this.tableConfigService.resumeRaceClock(tableId),
+    );
+  }
+
+  private queueRaceClockUpdate(
+    tableId: string,
+    update: () => Promise<unknown>,
+  ) {
+    const previous = this.raceClockUpdates.get(tableId) ?? Promise.resolve();
+    const current = previous
+      .catch(() => undefined)
+      .then(update)
+      .then(() => undefined);
+
+    this.raceClockUpdates.set(tableId, current);
+    const cleanup = () => {
+      if (this.raceClockUpdates.get(tableId) === current) {
+        this.raceClockUpdates.delete(tableId);
+      }
+    };
+    void current.then(cleanup, cleanup);
+
+    return current;
   }
 
   private ensureBettingOpenTimer(state: RacingTableState, minimumDelayMs = 0) {

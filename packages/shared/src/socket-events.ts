@@ -497,7 +497,7 @@ export type RacingSettledRaceSnapshot = Omit<RacingRaceSnapshot, "entries"> & {
 
 export type RacingRaceResultsResponse = {
   tableId: string;
-  date: string;
+  date: string | null;
   limit: number;
   races: RacingSettledRaceSnapshot[];
 };
@@ -527,7 +527,7 @@ export type RacingHorseStatsSnapshot = RacingHorseSnapshot & {
 
 export type RacingHorseStatsResponse = {
   tableId: string;
-  date: string;
+  date: string | null;
   limit: number;
   raceCount: number;
   horses: RacingHorseStatsSnapshot[];

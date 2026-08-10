@@ -13,8 +13,8 @@ const maxRaceHistoryLimit = 100;
 
 export type ListRacingRaceResultsInput = {
   tableCode: string;
-  from: Date;
-  to: Date;
+  from?: Date;
+  to?: Date;
   limit?: number;
 };
 
@@ -47,7 +47,7 @@ export type RacingHistoryRaceEntryResult = {
   finishedAtMs: number;
 };
 
-export async function listRacingRaceResultsForDate(
+export async function listRacingRaceResults(
   input: ListRacingRaceResultsInput,
 ): Promise<RacingHistoryRaceResult[]> {
   const limit = normalizeHistoryLimit(input.limit);
@@ -56,6 +56,20 @@ export async function listRacingRaceResultsForDate(
     ${racingRaces.startedAt},
     ${racingRaces.settledAt}
   )`;
+
+  const conditions = [
+    eq(racingTables.code, input.tableCode),
+    sql`${racingRaces.settledAt} is not null`,
+    sql`${racingRaces.cancelledAt} is null`,
+  ];
+
+  if (input.from) {
+    conditions.push(sql`${raceDate} >= ${input.from}`);
+  }
+
+  if (input.to) {
+    conditions.push(sql`${raceDate} < ${input.to}`);
+  }
 
   const races = await db
     .select({
@@ -73,15 +87,7 @@ export async function listRacingRaceResultsForDate(
     })
     .from(racingRaces)
     .innerJoin(racingTables, eq(racingRaces.tableId, racingTables.id))
-    .where(
-      and(
-        eq(racingTables.code, input.tableCode),
-        sql`${racingRaces.settledAt} is not null`,
-        sql`${racingRaces.cancelledAt} is null`,
-        sql`${raceDate} >= ${input.from}`,
-        sql`${raceDate} < ${input.to}`,
-      ),
-    )
+    .where(and(...conditions))
     .orderBy(sql`${racingRaces.raceNo} desc`)
     .limit(limit);
 

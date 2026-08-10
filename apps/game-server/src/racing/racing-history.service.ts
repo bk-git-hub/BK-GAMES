@@ -57,7 +57,11 @@ export class RacingHistoryService {
   private async loadRaceResults(input: RacingHistoryRequest) {
     const tableId = normalizeTableId(input.tableId);
     const limit = normalizeHistoryLimit(input.limit);
-    const dayRange = resolveKoreaDateRange(input.date);
+    const historyQuery = buildRacingHistoryQuery({
+      tableCode: tableId,
+      date: input.date,
+      limit,
+    });
     const db = (await import(dbPackageName)) as RacingDbModule;
     const table = await db.getRacingTableByCode(tableId);
 
@@ -65,22 +69,36 @@ export class RacingHistoryService {
       throw new NotFoundException(`Racing table ${tableId} was not found.`);
     }
 
-    const results = await db.listRacingRaceResultsForDate({
-      tableCode: tableId,
-      from: dayRange.from,
-      to: dayRange.to,
-      limit,
-    });
+    const results = await db.listRacingRaceResults(historyQuery.query);
 
     return {
       db,
       table,
       tableId,
-      date: dayRange.date,
+      date: historyQuery.date,
       limit,
       results,
     };
   }
+}
+
+export function buildRacingHistoryQuery(input: {
+  tableCode: string;
+  date?: string;
+  limit: number;
+}) {
+  const dayRange = input.date?.trim()
+    ? resolveKoreaDateRange(input.date)
+    : null;
+
+  return {
+    date: dayRange?.date ?? null,
+    query: {
+      tableCode: input.tableCode,
+      limit: input.limit,
+      ...(dayRange ? { from: dayRange.from, to: dayRange.to } : {}),
+    },
+  };
 }
 
 export type RacingHistoryRequest = {
@@ -92,7 +110,7 @@ export type RacingHistoryRequest = {
 type RacingDbModule = {
   getRacingTableByCode(tableId: string): Promise<RacingDbTable | null>;
   listActiveRacingHorses(limit?: number): Promise<RacingDbHorse[]>;
-  listRacingRaceResultsForDate(
+  listRacingRaceResults(
     input: RacingDbHistoryRequest,
   ): Promise<RacingDbHistoryResult[]>;
 };
@@ -109,8 +127,8 @@ type RacingDbHorse = {
 
 type RacingDbHistoryRequest = {
   tableCode: string;
-  from: Date;
-  to: Date;
+  from?: Date;
+  to?: Date;
   limit?: number;
 };
 

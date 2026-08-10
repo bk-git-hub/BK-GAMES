@@ -1695,7 +1695,7 @@ function RaceHistoryList({ history }: { history: RaceHistoryViewState }) {
       <div className={styles.raceHistoryHeader}>
         <div>
           <span>Race history</span>
-          <strong>{history.date ?? "Today"}</strong>
+          <strong>{history.date ?? "Latest"}</strong>
         </div>
         <em>{history.races.length}</em>
       </div>

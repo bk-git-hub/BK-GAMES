@@ -1,4 +1,4 @@
-import { AuthSessionFallback } from "./page";
+import { AuthSessionFallback } from "./auth-session-fallback";
 import { AuthShell } from "./auth-shell";
 
 export default function Loading() {

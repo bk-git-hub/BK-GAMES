@@ -47,13 +47,15 @@ Home, Blackjack, and Baccarat table screenshots should be refreshed after a loca
 
 | Area | Stack |
 |---|---|
-| Web | Next.js, React, TypeScript |
-| Realtime server | NestJS, Socket.IO |
-| Database | PostgreSQL, Drizzle ORM |
-| Auth | Better Auth, server-issued game tokens |
-| Monorepo | pnpm workspaces, Turbo |
+| Web | Next.js 16, React 19, TypeScript, App Router, React Compiler, Cache Components |
+| Styling and UI | Tailwind CSS 4, Base UI, shadcn/ui primitives |
+| Realtime server | NestJS 11, Socket.IO 4 |
+| Database | PostgreSQL 17 locally, Drizzle ORM, node-postgres |
+| Auth | Better Auth, JOSE-issued short-lived game tokens |
+| Game rules | Pure TypeScript engine package with Vitest |
+| Monorepo | pnpm 10 workspaces, Turbo 2 |
 | Local infra | Docker Compose PostgreSQL |
-| Quality gates | TypeScript typecheck, ESLint, Jest, smoke scripts |
+| Quality gates | TypeScript typecheck, ESLint, Vitest engine tests, Jest game-server tests, PostgreSQL smoke scripts |
 
 ## Current Game Lineup
 
@@ -70,6 +72,9 @@ Home, Blackjack, and Baccarat table screenshots should be refreshed after a loca
 - Continue Baccarat table UX polish around betting clarity, reveal pacing, and mobile layout.
 - Keep Boxing out of the visible game lineup unless it is explicitly reactivated; `docs/16_BOXING_BACKEND_SPEC.md` is an archived/future backend-facing spec only.
 - Continue production hardening for deployment, observability, and operational recovery.
+- Add runtime schema validation for shared HTTP and Socket.IO payloads. `packages/shared` currently provides compile-time TypeScript contracts, while gateways perform runtime validation manually.
+- Add automated web, database, and shared-package test suites. Their current `test` scripts are placeholders; database behavior is verified through PostgreSQL-backed smoke scripts.
+- Encrypt persisted Baccarat shoe state or rename the legacy `encrypted_state` column. The current implementation stores the shuffled shoe as sensitive JSON rather than encrypted ciphertext.
 
 ## Architecture
 
@@ -81,7 +86,7 @@ apps/game-server
   NestJS + Socket.IO runtime for real-time tables, game phases, player commands, and settlement.
 
 packages/shared
-  Shared API, socket event names, payload schemas, and TypeScript contracts.
+  Shared API and socket event names, payload types, room helpers, and TypeScript contracts.
 
 packages/db
   Drizzle schema, repositories, wallet ledger helpers, seed scripts, and smoke scripts.
@@ -125,16 +130,20 @@ Blackjack currently uses:
 
 The same principles are used for other games: point-changing commands are idempotent, wallet changes are ledger-backed, and private wallet balances are not broadcast to public table rooms.
 
+The shared socket package currently provides compile-time TypeScript contracts rather than runtime schemas. Each gateway performs its own runtime parsing and validation at the network boundary.
+
 ## Wallet And Points
 
 The wallet system is intentionally conservative:
 
 - Daily rewards create free points for play.
-- Wallet balance is backed by immutable point ledger rows.
+- Wallet updates and point ledger inserts happen atomically in one database transaction.
 - Betting and settlement happen inside backend-controlled transactions.
 - Accepted point-changing commands use idempotency keys.
 - Private wallet updates are sent only to the affected user.
 - Broadcast table state does not expose private wallet balances.
+
+Application code treats point ledger rows as append-only. PostgreSQL unique and check constraints protect idempotency, non-negative balances, and ledger balance math, but the database does not currently use a ledger-specific trigger or restricted role to prohibit every `UPDATE` or `DELETE`.
 
 This keeps game animation and UX separate from financial correctness. UI can be polished freely while the backend remains authoritative.
 
@@ -143,24 +152,24 @@ This keeps game animation and UX separate from financial correctness. UI can be 
 Install dependencies:
 
 ```bash
-pnpm install
+corepack pnpm install
 ```
 
 Start local PostgreSQL and prepare data:
 
 ```bash
 docker compose up -d postgres
-pnpm db:migrate
-pnpm --filter @bk-games/db seed:blackjack-main
-pnpm --filter @bk-games/db seed:baccarat-main
-pnpm --filter @bk-games/db seed:racing-main
+corepack pnpm db:migrate
+corepack pnpm --filter @bk-games/db seed:blackjack-main
+corepack pnpm --filter @bk-games/db seed:baccarat-main
+corepack pnpm --filter @bk-games/db seed:racing-main
 ```
 
 Run the apps:
 
 ```bash
-pnpm --filter web dev
-pnpm --filter game-server dev
+corepack pnpm --filter web dev
+corepack pnpm --filter game-server dev
 ```
 
 Default local URLs:
@@ -173,14 +182,17 @@ Default local URLs:
 Useful checks:
 
 ```bash
-pnpm typecheck
-pnpm lint
-pnpm --filter game-server test
-pnpm --filter @bk-games/db smoke:baccarat-betting
-pnpm --filter @bk-games/db smoke:baccarat-settlement
-pnpm --filter @bk-games/db smoke:racing-runner
-pnpm --filter @bk-games/db smoke:racing-wallet
+corepack pnpm typecheck
+corepack pnpm lint
+corepack pnpm --filter @bk-games/game-engine test
+corepack pnpm --filter game-server test
+corepack pnpm --filter @bk-games/db smoke:baccarat-betting
+corepack pnpm --filter @bk-games/db smoke:baccarat-settlement
+corepack pnpm --filter @bk-games/db smoke:racing-runner
+corepack pnpm --filter @bk-games/db smoke:racing-wallet
 ```
+
+Automated tests are currently concentrated in `packages/game-engine` and `apps/game-server`. The web, database, and shared packages have typecheck coverage, while their package-level `test` scripts do not yet run unit tests. Database smoke scripts require a configured PostgreSQL instance and matching schema state.
 
 ## Documentation Map
 

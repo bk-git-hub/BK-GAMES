@@ -79,7 +79,15 @@ export class RacingGateway implements OnModuleDestroy {
 
   afterInit() {
     this.scheduleSyncTimer = setInterval(() => {
-      void this.syncLobbyTables();
+      void this.syncLobbyTables().catch((error: unknown) => {
+        for (const tableId of racingLobbyTableIds) {
+          this.emitTableError(
+            tableId,
+            error,
+            'Unexpected racing scheduler error.',
+          );
+        }
+      });
     }, racingScheduleSyncIntervalMs);
     void Promise.all(
       racingLobbyTableIds.map((tableId) => this.pauseRuntimeClock(tableId)),
@@ -276,7 +284,17 @@ export class RacingGateway implements OnModuleDestroy {
   private async syncRuntimeTable(tableId: string) {
     if (!this.shouldKeepRuntimeActive(tableId)) {
       this.stopRuntimeTimers(tableId);
-      await this.pauseRuntimeClock(tableId);
+
+      try {
+        await this.pauseRuntimeClock(tableId);
+      } catch (error) {
+        this.emitTableError(
+          tableId,
+          error,
+          'Unexpected racing scheduler error.',
+        );
+      }
+
       return;
     }
 

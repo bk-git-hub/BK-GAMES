@@ -21,7 +21,17 @@ if (!connectionString) {
   );
 }
 
-export const pool = new Pool({ connectionString });
+export const pool = new Pool({
+  connectionString,
+  connectionTimeoutMillis: 10_000,
+  keepAlive: true,
+});
+
+// Without this listener pg-pool re-emits idle client failures as an
+// unhandled 'error' event, which terminates the process.
+pool.on("error", (error) => {
+  console.error("[db] idle client error", error);
+});
 
 export const db = drizzle(pool, { schema });
 

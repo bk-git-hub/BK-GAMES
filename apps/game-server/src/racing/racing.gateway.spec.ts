@@ -766,6 +766,42 @@ describe('RacingGateway race tick loop', () => {
   });
 });
 
+describe('RacingGateway scheduler resilience', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('keeps serving when pausing an idle table clock fails', async () => {
+    const state = createRunningState({
+      startedAt: '2026-06-18T12:00:00.000Z',
+    });
+    const tableService = createTableServiceMock(state);
+    tableService.getViewerCount.mockReturnValue(0);
+    const tableConfigService = {
+      pauseRaceClock: jest.fn(() =>
+        Promise.reject(new Error('connect ETIMEDOUT 13.251.213.89:5432')),
+      ),
+    };
+    const { emit, server } = createServerMock();
+    const gateway = new RacingGateway(
+      tableConfigService as never,
+      tableService as never,
+      {} as never,
+      {} as never,
+    );
+    gateway.server = server;
+
+    await expect(
+      getGatewayHarness(gateway).syncRuntimeTable('main'),
+    ).resolves.toBeUndefined();
+
+    expect(tableConfigService.pauseRaceClock).toHaveBeenCalledWith('main');
+    expect(
+      emit.mock.calls.filter(([eventName]) => eventName === 'error'),
+    ).toHaveLength(1);
+  });
+});
+
 function createRunningState(input: { startedAt: string }): RacingTableState {
   const raceId = 'race-main-42';
   const scheduledStartAt = input.startedAt;

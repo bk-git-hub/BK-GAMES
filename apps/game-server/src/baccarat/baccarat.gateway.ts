@@ -93,7 +93,15 @@ export class BaccaratGateway implements OnModuleDestroy {
       );
 
       if (autoReveal) {
-        void this.completeReveal({ ...autoReveal, system: true });
+        void this.completeReveal({ ...autoReveal, system: true }).catch(
+          (error: unknown) => {
+            this.emitTableError(
+              autoReveal.tableId,
+              error,
+              'Unexpected baccarat disconnect reveal error.',
+            );
+          },
+        );
       }
     }
   }

@@ -60,3 +60,60 @@ describe('BaccaratGateway idle runtime', () => {
     expect(tableConfigService.getRuntimeSnapshot).not.toHaveBeenCalled();
   });
 });
+
+describe('BaccaratGateway disconnect auto reveal', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('reports a failed auto reveal instead of leaving the rejection unhandled', async () => {
+    const tableConfigService = {
+      markRevealCompleted: jest.fn(() =>
+        Promise.reject(new Error('Connection terminated unexpectedly')),
+      ),
+    };
+    const tableService = {
+      completeActiveReveal: jest.fn(() => ({
+        state: { tableId: 'main', phase: 'SQUEEZE' },
+        cardRevealed: {
+          card: { rank: 'A', suit: 'SPADES' },
+          createdAt: '2026-06-18T12:00:00.000Z',
+        },
+      })),
+      disconnectSocket: jest.fn(() => [
+        {
+          state: { tableId: 'main' },
+          event: { actorUserId: 'user-1' },
+        },
+      ]),
+      getAutoRevealAfterDisconnectedUser: jest.fn(() => ({
+        tableId: 'main',
+        roundId: 'round-1',
+        revealId: 'reveal-1',
+      })),
+    };
+    const emit = jest.fn();
+    const gateway = new BaccaratGateway(
+      tableConfigService as never,
+      tableService as never,
+      {} as never,
+      {} as never,
+    );
+    gateway.server = { to: jest.fn(() => ({ emit })) } as never;
+    jest
+      .spyOn(
+        gateway as unknown as { emitTableUpdate(update: unknown): void },
+        'emitTableUpdate',
+      )
+      .mockImplementation(() => undefined);
+
+    gateway.handleDisconnect({ id: 'socket-1' } as never);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(tableConfigService.markRevealCompleted).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith('error', {
+      code: 'UNKNOWN_ERROR',
+      message: 'Unexpected baccarat disconnect reveal error.',
+    });
+  });
+});

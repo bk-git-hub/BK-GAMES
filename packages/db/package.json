@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"db tests are not configured yet\"",
+    "test": "node --import tsx --test src/client.test.ts",
     "smoke:wallet": "tsx scripts/wallet-transactions-smoke.ts",
     "smoke:daily-reward": "tsx scripts/daily-rewards-smoke.ts",
     "smoke:blackjack-betting": "tsx scripts/blackjack-betting-smoke.ts",

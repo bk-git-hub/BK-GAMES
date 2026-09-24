@@ -1,11 +1,22 @@
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { config } from 'dotenv';
 import { resolve } from 'node:path';
+import { inspect } from 'node:util';
 import { AppModule } from './app.module';
 import { gameServerCorsOptions } from './cors';
 
 config({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 config({ path: resolve(process.cwd(), '.env'), quiet: true });
+
+const processLogger = new Logger('Process');
+
+// Last resort for a rejection that no call site handled. Node 24 would
+// otherwise exit, dropping every table's in-memory state and every socket.
+// Call sites should still catch and report their own errors.
+process.on('unhandledRejection', (reason) => {
+  processLogger.error('Unhandled promise rejection', describe(reason));
+});
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -17,6 +28,12 @@ async function bootstrap() {
     (process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost');
 
   await app.listen(port, host);
+}
+
+// inspect keeps what .stack drops: drizzle's wrapped pg error in .cause and
+// the per-address errors of an AggregateError. It also never throws.
+function describe(reason: unknown) {
+  return inspect(reason, { depth: 5 });
 }
 
 function readPort(value: string | undefined, fallback: number) {
@@ -33,4 +50,7 @@ function readPort(value: string | undefined, fallback: number) {
   return port;
 }
 
-void bootstrap();
+bootstrap().catch((error: unknown) => {
+  processLogger.error('Game server failed to start', describe(error));
+  process.exit(1);
+});

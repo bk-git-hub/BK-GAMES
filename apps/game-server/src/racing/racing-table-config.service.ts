@@ -5,6 +5,7 @@ import type {
   RacingRaceSnapshot,
   RacingTableStatus,
 } from '@bk-games/shared';
+import { RacingClockPauseTracker } from './racing-clock-pause-tracker';
 import {
   RacingTableError,
   type RacingTableConfig,
@@ -12,6 +13,8 @@ import {
 
 @Injectable()
 export class RacingTableConfigService {
+  private readonly clockPauses = new RacingClockPauseTracker();
+
   async getTableConfig(tableId: string): Promise<RacingTableConfig> {
     const db = (await import(dbPackageName)) as RacingDbModule;
     const table = await db.getRacingTableByCode(tableId);
@@ -47,10 +50,12 @@ export class RacingTableConfigService {
     now?: Date,
   ): Promise<RacingRaceSnapshot> {
     const db = (await import(dbPackageName)) as RacingDbModule;
-    const result = now
-      ? await db.ensureScheduledRacingRace({ tableCode: tableId, now })
-      : ((await db.getActiveRacingRaceForTable({ tableCode: tableId })) ??
-        (await db.ensureScheduledRacingRace({ tableCode: tableId })));
+    const result = await this.clockPauses.trackRaceChange(tableId, async () =>
+      now
+        ? await db.ensureScheduledRacingRace({ tableCode: tableId, now })
+        : ((await db.getActiveRacingRaceForTable({ tableCode: tableId })) ??
+          (await db.ensureScheduledRacingRace({ tableCode: tableId }))),
+    );
 
     return {
       raceId: result.race.id,
@@ -83,19 +88,25 @@ export class RacingTableConfigService {
   async advanceRaceLifecycle(tableId: string, now?: Date) {
     const db = (await import(dbPackageName)) as RacingDbModule;
 
-    return db.advanceRacingRaceLifecycle({ tableCode: tableId, now });
+    return this.clockPauses.trackRaceChange(tableId, () =>
+      db.advanceRacingRaceLifecycle({ tableCode: tableId, now }),
+    );
   }
 
   async pauseRaceClock(tableId: string, now?: Date) {
     const db = (await import(dbPackageName)) as RacingDbModule;
 
-    return db.pauseRacingRaceClock({ tableCode: tableId, now });
+    return this.clockPauses.pause(tableId, () =>
+      db.pauseRacingRaceClock({ tableCode: tableId, now }),
+    );
   }
 
   async resumeRaceClock(tableId: string, now?: Date) {
     const db = (await import(dbPackageName)) as RacingDbModule;
 
-    return db.resumeRacingRaceClock({ tableCode: tableId, now });
+    return this.clockPauses.trackRaceChange(tableId, () =>
+      db.resumeRacingRaceClock({ tableCode: tableId, now }),
+    );
   }
 }
 

@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["CARD_GAMES_ENABLED"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

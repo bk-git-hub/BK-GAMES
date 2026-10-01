@@ -4,6 +4,7 @@ import { config } from 'dotenv';
 import { resolve } from 'node:path';
 import { inspect } from 'node:util';
 import { AppModule } from './app.module';
+import { isCardGamesEnabled } from './card-games';
 import { gameServerCorsOptions } from './cors';
 
 config({ path: resolve(process.cwd(), '../../.env'), quiet: true });
@@ -19,7 +20,16 @@ process.on('unhandledRejection', (reason) => {
 });
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Read here, after dotenv, so a value set in a .env file counts.
+  const cardGamesEnabled = isCardGamesEnabled();
+
+  if (cardGamesEnabled) {
+    processLogger.log(
+      'CARD_GAMES_ENABLED=true: registering blackjack and baccarat',
+    );
+  }
+
+  const app = await NestFactory.create(AppModule.register(cardGamesEnabled));
   app.enableCors(gameServerCorsOptions);
 
   const port = readPort(process.env.GAME_SERVER_PORT ?? process.env.PORT, 4000);

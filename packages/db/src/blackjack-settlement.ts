@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 
+import { assertCardGamesEnabled } from "./card-games.js";
 import { db } from "./client.js";
 import {
   blackjackActions,
@@ -117,6 +118,8 @@ const zero = BigInt(0);
 export async function settleBlackjackRound(
   input: SettleBlackjackRoundInput,
 ): Promise<SettleBlackjackRoundResult> {
+  assertCardGamesEnabled();
+
   const normalizedInput = normalizeSettlementInput(input);
 
   return db.transaction((tx) =>
@@ -128,6 +131,8 @@ export async function settleBlackjackRoundInTransaction(
   tx: WalletMutationTransaction,
   input: SettleBlackjackRoundInput,
 ): Promise<SettleBlackjackRoundResult> {
+  assertCardGamesEnabled();
+
   const round = await lockBlackjackRound(tx, input.roundId);
 
   if (round.status === "SETTLED") {

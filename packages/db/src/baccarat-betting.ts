@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 
+import { assertCardGamesEnabled } from "./card-games.js";
 import { db } from "./client.js";
 import {
   baccaratActions,
@@ -114,6 +115,8 @@ type BaccaratOddsSnapshot = {
 export async function placeBaccaratBet(
   input: PlaceBaccaratBetInput,
 ): Promise<PlaceBaccaratBetResult> {
+  assertCardGamesEnabled();
+
   const normalizedInput = normalizePlaceBaccaratBetInput(input);
 
   return db.transaction((tx) =>
@@ -125,6 +128,8 @@ export async function placeBaccaratBetInTransaction(
   tx: WalletMutationTransaction,
   input: PlaceBaccaratBetInput,
 ): Promise<PlaceBaccaratBetResult> {
+  assertCardGamesEnabled();
+
   const context = await lockBaccaratBettingContext(tx, input);
   const existingBet = await findBaccaratBetByCommand(
     tx,

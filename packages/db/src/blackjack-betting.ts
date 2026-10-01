@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 
+import { assertCardGamesEnabled } from "./card-games.js";
 import { db } from "./client.js";
 import {
   blackjackActions,
@@ -279,6 +280,8 @@ type LockedInsuranceContextRow = Omit<
 };
 
 export async function ensureMainBlackjackTable() {
+  assertCardGamesEnabled();
+
   return db.transaction(async (tx) => {
     const existing = await findBlackjackTableByCode(
       tx,
@@ -325,6 +328,8 @@ export async function ensureMainBlackjackTable() {
 }
 
 export async function getBlackjackTableByCode(tableCode: string) {
+  assertCardGamesEnabled();
+
   const normalizedTableCode = tableCode.trim();
 
   if (!normalizedTableCode) {
@@ -346,6 +351,8 @@ export async function getBlackjackTableByCode(tableCode: string) {
 export async function placeBlackjackInitialBet(
   input: PlaceBlackjackInitialBetInput,
 ): Promise<PlaceBlackjackInitialBetResult> {
+  assertCardGamesEnabled();
+
   const normalizedInput = normalizeInitialBetInput(input);
 
   return db.transaction((tx) =>
@@ -357,6 +364,8 @@ export async function placeBlackjackInitialBetInTransaction(
   tx: WalletMutationTransaction,
   input: PlaceBlackjackInitialBetInput,
 ): Promise<PlaceBlackjackInitialBetResult> {
+  assertCardGamesEnabled();
+
   const table = await lockBlackjackTableByCode(tx, input.tableCode);
 
   if (table.status !== "OPEN") {
@@ -468,6 +477,8 @@ export async function placeBlackjackInitialBetInTransaction(
 export async function doubleBlackjackBet(
   input: DoubleBlackjackBetInput,
 ): Promise<DoubleBlackjackBetResult> {
+  assertCardGamesEnabled();
+
   const normalizedInput = normalizeDoubleBetInput(input);
 
   return db.transaction((tx) =>
@@ -479,6 +490,8 @@ export async function doubleBlackjackBetInTransaction(
   tx: WalletMutationTransaction,
   input: DoubleBlackjackBetInput,
 ): Promise<DoubleBlackjackBetResult> {
+  assertCardGamesEnabled();
+
   const context = await lockDoubleDownContext(tx, input);
   const doubleAmount = context.initialBetAmount;
   const serverCommandId = buildServerCommandId(input);
@@ -571,6 +584,8 @@ export async function doubleBlackjackBetInTransaction(
 export async function splitBlackjackBet(
   input: SplitBlackjackBetInput,
 ): Promise<SplitBlackjackBetResult> {
+  assertCardGamesEnabled();
+
   const normalizedInput = normalizeSplitBetInput(input);
 
   return db.transaction((tx) =>
@@ -582,6 +597,8 @@ export async function splitBlackjackBetInTransaction(
   tx: WalletMutationTransaction,
   input: SplitBlackjackBetInput,
 ): Promise<SplitBlackjackBetResult> {
+  assertCardGamesEnabled();
+
   const context = await lockSplitContext(tx, input);
   const splitAmount = context.sourceHandInitialBetAmount;
   const serverCommandId = buildServerCommandId(input);
@@ -702,6 +719,8 @@ export async function splitBlackjackBetInTransaction(
 export async function placeBlackjackInsuranceBet(
   input: PlaceBlackjackInsuranceBetInput,
 ): Promise<PlaceBlackjackInsuranceBetResult> {
+  assertCardGamesEnabled();
+
   const normalizedInput = normalizeInsuranceBetInput(input);
 
   return db.transaction((tx) =>
@@ -713,6 +732,8 @@ export async function placeBlackjackInsuranceBetInTransaction(
   tx: WalletMutationTransaction,
   input: PlaceBlackjackInsuranceBetInput,
 ): Promise<PlaceBlackjackInsuranceBetResult> {
+  assertCardGamesEnabled();
+
   const context = await lockInsuranceContext(tx, input);
   const amount = context.initialBetAmount / BigInt(2);
   const serverCommandId = buildServerCommandId(input);

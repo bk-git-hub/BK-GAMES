@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import {
   applyWalletMutation,
+  assertCardGamesEnabled,
   authUsers,
   baccaratActions,
   baccaratBets,
@@ -114,6 +115,10 @@ async function captureErrorCode(operation: () => Promise<unknown>) {
 
   return null;
 }
+
+// Ahead of the first cleanup: while card games are switched off this script
+// must stop before it reads or writes any card table.
+assertCardGamesEnabled();
 
 try {
   await cleanup();

@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { assertCardGamesEnabled } from "./card-games.js";
 import { db } from "./client.js";
 import { baccaratTables, type JsonObject } from "./schema.js";
 
@@ -71,6 +72,8 @@ const mainBaccaratTableValues = {
 };
 
 export async function ensureMainBaccaratSeed(): Promise<MainBaccaratSeedResult> {
+  assertCardGamesEnabled();
+
   const table = await ensureMainBaccaratTable();
 
   return {
@@ -79,6 +82,8 @@ export async function ensureMainBaccaratSeed(): Promise<MainBaccaratSeedResult> 
 }
 
 export async function getBaccaratTableByCode(tableCode: string) {
+  assertCardGamesEnabled();
+
   const normalizedTableCode = tableCode.trim();
 
   if (!normalizedTableCode) {

@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 
+import { assertCardGamesEnabled } from "./card-games.js";
 import { db } from "./client.js";
 import {
   adminAuditLogs,
@@ -167,6 +168,8 @@ export async function adjustUserPoints(
 export async function setBlackjackTableStatus(
   input: SetBlackjackTableStatusInput,
 ): Promise<SetBlackjackTableStatusResult> {
+  assertCardGamesEnabled();
+
   const normalized = normalizeSetBlackjackTableStatusInput(input);
 
   return db.transaction(async (tx) => {

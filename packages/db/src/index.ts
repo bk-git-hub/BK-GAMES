@@ -1,5 +1,6 @@
 export * from "./schema.js";
 export * from "./client.js";
+export * from "./card-games.js";
 export * from "./user-bootstrap.js";
 export * from "./wallet-transactions.js";
 export * from "./daily-rewards.js";

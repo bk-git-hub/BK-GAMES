@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/client.test.ts",
+    "test": "node --import tsx --test src/client.test.ts src/card-games.test.ts",
     "smoke:wallet": "tsx scripts/wallet-transactions-smoke.ts",
     "smoke:daily-reward": "tsx scripts/daily-rewards-smoke.ts",
     "smoke:blackjack-betting": "tsx scripts/blackjack-betting-smoke.ts",

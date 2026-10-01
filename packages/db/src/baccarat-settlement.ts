@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 
+import { assertCardGamesEnabled } from "./card-games.js";
 import { db } from "./client.js";
 import {
   baccaratActions,
@@ -113,6 +114,8 @@ type BaccaratBetSettlementPlan = {
 export async function settleBaccaratRound(
   input: SettleBaccaratRoundInput,
 ): Promise<SettleBaccaratRoundResult> {
+  assertCardGamesEnabled();
+
   const normalizedInput = normalizeSettleBaccaratRoundInput(input);
 
   return db.transaction((tx) =>
@@ -124,6 +127,8 @@ export async function settleBaccaratRoundInTransaction(
   tx: WalletMutationTransaction,
   input: SettleBaccaratRoundInput,
 ): Promise<SettleBaccaratRoundResult> {
+  assertCardGamesEnabled();
+
   const round = await lockBaccaratRound(tx, input.roundId);
 
   if (round.status === "CANCELLED") {
@@ -182,6 +187,8 @@ export async function settleBaccaratRoundInTransaction(
 export async function cancelBaccaratRound(
   input: CancelBaccaratRoundInput,
 ): Promise<CancelBaccaratRoundResult> {
+  assertCardGamesEnabled();
+
   const normalizedInput = normalizeCancelBaccaratRoundInput(input);
 
   return db.transaction((tx) =>
@@ -193,6 +200,8 @@ export async function cancelBaccaratRoundInTransaction(
   tx: WalletMutationTransaction,
   input: CancelBaccaratRoundInput,
 ): Promise<CancelBaccaratRoundResult> {
+  assertCardGamesEnabled();
+
   const round = await lockBaccaratRound(tx, input.roundId);
 
   if (round.status === "CANCELLED") {

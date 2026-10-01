@@ -1,5 +1,7 @@
 # PPR 적용 전·중간 성능 기준선
 
+> **참고 (2026-10-01)**: 이 문서 작성 이후 `/blackjack`과 `/baccarat` route는 기본값으로 꺼졌다(`CARD_GAMES_ENABLED`, [archive/card-games/00_INDEX.md](./archive/card-games/00_INDEX.md)). 아래 계획과 측정값은 당시 기록 그대로 둔다.
+
 - 측정일: 2026-08-07
 - 측정 대상: `apps/web`
 - 관련 계획: [19_NEXT16_PPR_ADOPTION_PLAN.md](./19_NEXT16_PPR_ADOPTION_PLAN.md)

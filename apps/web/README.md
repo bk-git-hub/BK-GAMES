@@ -1,29 +1,28 @@
-# BK Games Web
+# BK Derby Web
 
-Next.js frontend for BK Games.
+Next.js frontend for BK Derby. The workspace package is named `web` and lives in the `bk-games` repository.
 
-This app owns the public home page, auth screens, playable game screens, and web-facing API routes such as Better Auth and `POST /api/game-token`.
+This app owns the public home page, auth screens, the BK Derby race screen, and web-facing API routes such as Better Auth and `POST /api/game-token`.
 
 ## Current Routes
 
 | Route | Purpose | Auth |
 |---|---|---|
-| `/` | Game list plus guest/login-aware reward and wallet panel | Public; login required to claim |
+| `/` | Home page: entry to BK Derby plus a guest/login-aware daily reward and wallet panel | Public; login required to claim |
 | `/auth` | Sign in and sign up | Public |
 | `/lobby` | Legacy redirect to `/` | Public |
-| `/racing/bk-derby` | BK Derby racing screen | Public; login/backend required to bet |
-| `/blackjack` | Real-time Blackjack table | Required |
-| `/baccarat` | Real-time Baccarat table | Required |
+| `/racing/bk-derby` | BK Derby race screen | Public to watch; login and the game server required to issue a ticket |
 
-## Visible Game Lineup
+## BK Derby Screen
 
-The frontend game list currently shows:
+`/racing/bk-derby` renders what the game server broadcasts:
 
-1. BK Derby
-2. Blackjack
-3. Baccarat
+- Live track driven by `table:state` and `table:event` on the `/racing` Socket.IO namespace
+- Ticket window for the seven ticket types, with the stake limits sent by the server
+- Race history, horse records, and the signed-in user's ticket history
+- Wallet balance updated from private `wallet:updated` events
 
-Boxing is not part of the visible game list. The existing Boxing document is only an archived/future backend-facing specification unless the game is explicitly reactivated.
+Guests connect without a token and can watch. A signed-in user requests a short-lived token from `POST /api/game-token` and sends it in the socket handshake. If the socket is not connected, the screen falls back to polling `GET /racing/tables` on the game server.
 
 ## Local Development
 
@@ -55,7 +54,7 @@ corepack pnpm --filter web build
 
 The public home page should render without requiring the game server.
 
-Authenticated or betting flows require the relevant backend pieces:
+Authenticated or ticket flows require the relevant backend pieces:
 
 - Better Auth session routes
 - PostgreSQL-backed auth/wallet data
@@ -76,4 +75,4 @@ GAME_TOKEN_SECRET
 NEXT_PUBLIC_GAME_SERVER_URL
 ```
 
-`NEXT_PUBLIC_GAME_SERVER_URL` should be the game-server origin only. Do not include `/blackjack`, `/baccarat`, or `/racing` in that value.
+`NEXT_PUBLIC_GAME_SERVER_URL` should be the game-server origin only. Do not include `/racing` in that value.

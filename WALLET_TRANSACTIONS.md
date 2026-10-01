@@ -1,8 +1,8 @@
 # BK Games Wallet Transactions
 
-Last updated: 2026-06-06
+Last updated: 2026-10-01
 
-This document explains the current wallet mutation helper.
+This document explains the current wallet mutation helper and the flows built on it.
 
 ## Goal
 
@@ -16,6 +16,7 @@ Implemented helper:
 
 - `packages/db/src/wallet-transactions.ts`
 - `packages/db/src/daily-rewards.ts`
+- `packages/db/src/racing-betting.ts`
 - Exported from `@bk-games/db`
 
 ## Current Scope
@@ -32,22 +33,23 @@ Implemented:
 - Daily reward claim service using the wallet mutation helper inside the same transaction.
 - Manual smoke script: `pnpm --filter @bk-games/db smoke:wallet`
 - Daily reward smoke script: `pnpm --filter @bk-games/db smoke:daily-reward`
-- Blackjack initial bet transaction helper: `packages/db/src/blackjack-betting.ts`
-- Blackjack betting smoke script: `pnpm --filter @bk-games/db smoke:blackjack-betting`
+- Racing ticket placement, settlement, and cancellation refund helpers: `packages/db/src/racing-betting.ts`
+- Racing wallet smoke script: `pnpm --filter @bk-games/db smoke:racing-wallet`
+- Admin point adjustment helper and API route: `packages/db/src/admin.ts`, `POST /api/admin/users/[userId]/points/adjust`
 
 Not implemented yet:
 
-- Blackjack double/split/insurance/surrender bet integration.
-- Blackjack refund/settlement integration.
 - Locked-balance hold/release helper.
-- Admin point adjustment UI/API.
+- Admin point adjustment UI.
 
 ## Main API
 
 ```ts
 applyWalletMutation(input);
 claimDailyReward(input);
-placeBlackjackInitialBet(input);
+placeRacingBet(input);
+settleRacingRace(input);
+cancelRacingRace(input);
 ```
 
 Important input fields:
@@ -73,7 +75,7 @@ referenceId = daily-reward:{userId}:{claimDate}
 
 Default daily reward policy:
 
-- Amount: `100`
+- Amount: `1000`
 - Claim date timezone: `Asia/Seoul`
 - Caller may pass an explicit `claimDate` for tests or future policy control.
 
@@ -109,6 +111,38 @@ commit
 ```
 
 This keeps `wallets`, `point_ledgers`, and `daily_reward_claims` atomic.
+
+Racing uses the same pattern. Each flow runs in one transaction and passes that transaction to the wallet mutation helper:
+
+```text
+placeRacingBet
+  lock race and table rows
+  check the table is open and the ticket window is open
+  lock wallet row and check stake limits against available balance
+  apply BET wallet mutation
+  insert racing_bets and racing_bet_selections rows
+
+settleRacingRace
+  lock race row
+  write final ranks
+  for each ticket: apply PAYOUT wallet mutation if it won, mark it WON or LOST
+  mark race SETTLED
+
+cancelRacingRace
+  lock race row
+  for each ticket: apply CANCEL_REFUND wallet mutation for the stored stake, mark it CANCELLED
+  mark race CANCELLED
+```
+
+Racing idempotency keys:
+
+```text
+racing:bet:{raceId}:{userId}:{commandId}
+racing:settlement:{raceId}:{betId}
+racing:cancel:{raceId}:{betId}
+```
+
+Losing tickets do not create a settlement ledger row. Calling settlement or cancellation again for a finished race returns the stored result instead of moving points twice.
 
 ## Why Existing Ledger Is Checked Twice
 
@@ -154,6 +188,8 @@ Credit types must use a positive `delta`:
 
 `ADMIN_ADJUST` can be positive or negative, but not zero.
 
+The racing flow uses `BET`, `PAYOUT`, and `CANCEL_REFUND`.
+
 ## Verification
 
 Run:
@@ -161,9 +197,10 @@ Run:
 ```text
 pnpm --filter @bk-games/db smoke:wallet
 pnpm --filter @bk-games/db smoke:daily-reward
+pnpm --filter @bk-games/db smoke:racing-wallet
 ```
 
-The smoke script creates a temporary user, profile, and wallet, then checks:
+The wallet smoke script creates a temporary user, profile, and wallet, then checks:
 
 - `DAILY_REWARD +100` succeeds.
 - Repeating the same reward with the same idempotency key returns the existing ledger.
@@ -191,7 +228,7 @@ The daily reward smoke script checks:
 - Two concurrent claims for the same date create one ledger and one claim.
 - A retry for the same date returns as idempotent.
 - A claim for the next date succeeds.
-- Final balance is `200`.
+- Final balance is `2000`.
 - Ledger count is `2`.
 - Claim count is `2`.
 - Temporary test data is deleted afterward.
@@ -202,8 +239,8 @@ Expected shape:
 {
   "sameDateIdempotentCount": 2,
   "retryIdempotent": true,
-  "nextDateBalance": "200",
-  "finalBalance": "200",
+  "nextDateBalance": "2000",
+  "finalBalance": "2000",
   "ledgerCount": 2,
   "claimCount": 2,
   "firstDateClaimCount": 1,
@@ -212,20 +249,25 @@ Expected shape:
 }
 ```
 
-The blackjack betting smoke script checks:
+The racing wallet smoke script checks:
 
-- A temporary user, wallet, and blackjack table can place an initial bet.
-- The bet creates a wallet `BET` ledger and debits the wallet once.
-- Retrying the same `commandId` returns the same ledger and round seat.
-- Final balance is `9500` after a `10000` grant and one `500` bet.
+- A temporary user, wallet, racing table, and race can accept a ticket of every type.
+- Retrying a ticket with the same `commandId` returns the same ticket and ledger without a second debit.
+- Reusing a `commandId` with a different amount is rejected with `IDEMPOTENCY_CONFLICT`.
+- Each ticket stores the expected multiplier numerator over a `10000` denominator.
+- Settlement pays each winning ticket once, pays nothing for a losing ticket, and is idempotent when repeated.
+- Cancelling a second race refunds its ticket once, and repeating the cancellation is idempotent.
+- Final balance is `31070` after a `10000` grant, with `18` ledger rows.
 - Temporary test data is deleted afterward.
 
 ## Next Work
 
-Next recommended implementation:
+Open follow-ups:
 
 ```text
-blackjack engine/state machine and settlement
+locked-balance hold/release helper
+admin point adjustment UI
+database-level protection against UPDATE or DELETE on point_ledgers
 ```
 
 Recommended boundary:

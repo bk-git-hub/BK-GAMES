@@ -1,6 +1,6 @@
 # BK Games Authentication Structure
 
-Last updated: 2026-06-05
+Last updated: 2026-10-01
 
 This document explains how Better Auth is wired into BK Games and what is intentionally left for later work.
 
@@ -18,7 +18,7 @@ It does not yet answer every authorization question:
 What is this user allowed to do?
 ```
 
-Authorization for wallet ownership, table actions, and admin operations will be enforced in later service layers.
+Authorization for wallet ownership, game commands, and admin operations is enforced in the service layers, not in the auth layer itself.
 
 ## Current Scope
 
@@ -34,16 +34,17 @@ Implemented now:
 - Automatic `user_profiles` and `wallets` creation when an authenticated user reaches the home page.
 - Transaction-safe wallet mutation helper in `@bk-games/db`.
 - Root `.env` loading for package-level Drizzle commands and DB client usage.
+- Daily reward claim through a server action on the home page.
+- Short-lived game token issued by `POST /api/game-token` and verified by the game server.
+- Socket.IO client wiring on the racing screen that requests the game token and sends it in the handshake.
+- Admin role check in `@bk-games/db` for the admin point adjustment route.
 
 Not implemented yet:
 
 - OAuth providers.
 - Email verification.
 - Password reset email flow.
-- Admin role enforcement.
 - Initial point grant.
-- Daily reward API/UI entry point.
-- Frontend Socket.IO client wiring for authenticated blackjack tables.
 
 ## Package Dependencies
 
@@ -106,8 +107,9 @@ Game token bridge:
 
 - `apps/web/src/app/api/game-token/route.ts`
 - `apps/game-server/src/auth/game-token.service.ts`
-- `apps/game-server/src/auth/socket-auth.guard.ts`
-- `apps/game-server/src/blackjack/blackjack.gateway.ts`
+- `apps/game-server/src/auth/socket-auth.guard.ts` (provided by AuthModule; not currently applied by any gateway)
+- `apps/game-server/src/racing/racing.gateway.ts`
+- `apps/game-server/src/racing/racing-bets.controller.ts`
 
 Dev database:
 
@@ -159,7 +161,11 @@ The browser never sends the `userId` used for bootstrap. The user id comes from 
 4. The route signs a short-lived HS256 game token with `GAME_TOKEN_SECRET`.
 5. The Socket.IO client sends the token in `handshake.auth.token`.
 6. The NestJS game server verifies issuer, audience, expiration, signature, user id, nickname, and role.
-7. Blackjack socket commands use the verified token identity instead of browser-supplied `userId`.
+7. Point-changing socket commands, such as `bet:place` on the `/racing` namespace, use the verified token identity instead of browser-supplied `userId`.
+
+Watching a race does not require a token. `table:join` without a token joins as a guest viewer, and a guest cannot issue a ticket.
+
+The ticket history API (`GET /racing/bets`) takes the same game token as a bearer token.
 
 The game-server dev fallback is disabled by default. It only accepts handshake/query identity when `GAME_SOCKET_DEV_AUTH=true`.
 
@@ -197,7 +203,7 @@ The value is the architecture:
 - Auth data stays in our PostgreSQL database.
 - Drizzle keeps schema and query types close to the rest of the backend.
 - Next.js owns login/session routes.
-- The future NestJS game server can validate user identity through a controlled boundary instead of owning browser login.
+- The NestJS game server validates user identity through a controlled boundary, the game token, instead of owning browser login.
 - Authorization remains application-specific and can be enforced around wallet, table, and admin actions.
 
 Interview framing:
@@ -228,19 +234,19 @@ The database package now includes the first real wallet authorization boundary f
 
 The game server now has a trusted Socket.IO identity bridge using short-lived game tokens. Socket commands should use the verified token identity, not browser payload user ids.
 
-Initial blackjack betting now uses the verified socket identity and never accepts a browser-supplied user id for wallet debit.
+Ticket placement on the `/racing` namespace uses the verified socket identity and never accepts a browser-supplied user id for the wallet debit.
 
-Next work should expose daily rewards through a server-side entry point and continue applying authorization rules to later gameplay actions such as double, split, surrender, insurance, and settlement.
+Daily rewards are claimed through a server action on the home page, which reads the Better Auth session server-side. Payouts and refunds are applied by the server during settlement and are never triggered by a client command.
+
+Admin point adjustment checks the caller's `user_profiles.role` inside the same transaction as the adjustment.
 
 ## Next Recommended Auth Work
 
 Recommended order:
 
-1. Add server helpers for `requireSession` and `requireUserId`.
-2. Expose daily reward claim through a trusted server-side entry point.
-3. Wire the frontend Socket.IO client to request and send game tokens.
-4. Add wallet-backed authorization for double, split, surrender, insurance, and settlement.
-5. Add role-based admin checks.
+1. Add a shared server helper for session reads. Server components, server actions, and route handlers currently each call `auth.api.getSession`.
+2. Add email verification and a password reset email flow.
+3. Add OAuth providers if they are needed.
 
 ## Verification Completed
 

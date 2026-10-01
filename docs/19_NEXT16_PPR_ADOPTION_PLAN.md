@@ -1,5 +1,7 @@
 # Next.js 16 PPR 도입 계획과 성능 목표
 
+> **참고 (2026-10-01)**: 이 문서 작성 이후 `/blackjack`과 `/baccarat` route는 기본값으로 꺼졌다(`CARD_GAMES_ENABLED`, [archive/card-games/00_INDEX.md](./archive/card-games/00_INDEX.md)). 아래 계획과 측정값은 당시 기록 그대로 둔다.
+
 작성일: 2026-08-07  
 대상: `apps/web`  
 현재 버전: Next.js `16.2.7`, React `19.2.4`

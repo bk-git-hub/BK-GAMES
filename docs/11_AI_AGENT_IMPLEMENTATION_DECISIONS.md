@@ -1,5 +1,7 @@
 # AI Agent Implementation Decisions
 
+> **참고 (2026-10-01)**: 이 문서의 예시는 첫 테이블 게임이었던 블랙잭을 기준으로 쓴 초기 설계다. 블랙잭과 바카라는 현재 기본값으로 꺼져 있다(`CARD_GAMES_ENABLED`, [archive/card-games/00_INDEX.md](./archive/card-games/00_INDEX.md)). 서버 권위, 지갑/원장 멱등성, 환불 규칙은 운영 중인 경마(BK Derby)에도 그대로 적용되며, 경마의 구체 사양은 [15_HORSE_RACING_BACKEND_SPEC.md](./15_HORSE_RACING_BACKEND_SPEC.md)를 본다.
+
 이 문서는 구현을 맡은 AI 에이전트와 개발자가 따라야 하는 확정 지침이다.
 
 기존 문서와 이 문서가 충돌하면 이 문서를 우선한다.  

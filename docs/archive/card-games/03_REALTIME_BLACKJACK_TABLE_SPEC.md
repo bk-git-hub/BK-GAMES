@@ -1,3 +1,5 @@
+> **Dormant (휴면)**: 블랙잭/바카라는 2026-10-01부터 기본값으로 꺼져 있다 (`CARD_GAMES_ENABLED`). 이 문서는 되살릴 때를 위한 보관본이며, 현재 상태와 재활성화 절차는 [00_INDEX.md](./00_INDEX.md)를 본다.
+
 # Realtime Blackjack Table Spec
 
 BK Games의 첫 게임인 테이블제 실시간 블랙잭 게임의 룰과 상태를 정의한다.

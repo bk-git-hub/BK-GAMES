@@ -1,5 +1,7 @@
 # Architecture
 
+> **참고 (2026-10-01)**: 이 문서의 예시는 첫 테이블 게임이었던 블랙잭을 기준으로 쓴 초기 설계다. 블랙잭과 바카라는 현재 기본값으로 꺼져 있다(`CARD_GAMES_ENABLED`, [archive/card-games/00_INDEX.md](./archive/card-games/00_INDEX.md)). 서버 권위, 지갑/원장 멱등성, 환불 규칙은 운영 중인 경마(BK Derby)에도 그대로 적용되며, 경마의 구체 사양은 [15_HORSE_RACING_BACKEND_SPEC.md](./15_HORSE_RACING_BACKEND_SPEC.md)를 본다.
+
 BK Games 게임 플랫폼을 위한 최종 아키텍처다. 초기 실시간 게임 런타임은 첫 게임인 멀티플레이 블랙잭을 기준으로 설계한다.
 
 ---

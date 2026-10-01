@@ -8,7 +8,7 @@ Keep this file concise and current. It contains repository-wide guidance only; t
 - `apps/game-server`: NestJS authentication bridge and authoritative real-time game server.
 - `packages/db`: Drizzle schema, migrations, wallet, ledger, rewards, betting, and settlement.
 - `packages/game-engine`: Pure game rules and deterministic simulations.
-- `packages/shared`: Public cross-app types and socket contracts.
+- `packages/shared`: Public cross-app types, socket contracts, and the deterministic race simulation used for live results.
 - `docs`: Architecture, domain specifications, implementation decisions, and operational reports.
 - `private`: Personal reference material; never treat it as implementation authority or commit it.
 
@@ -18,12 +18,11 @@ Read only the documents relevant to the task:
 
 - Cross-cutting architecture: `docs/02_ARCHITECTURE.md`
 - Security-critical implementation decisions: `docs/11_AI_AGENT_IMPLEMENTATION_DECISIONS.md`
-- Database and wallet: `docs/05_DATABASE_SCHEMA.md`, `docs/06_POINT_WALLET.md`
-- Socket contracts: `docs/04_SOCKET_EVENTS.md`
+- Database and wallet: `packages/db/src/schema.ts` (all tables, including racing), `docs/06_POINT_WALLET.md`; `docs/05_DATABASE_SCHEMA.md` is a blackjack-era draft
+- Socket contracts: `packages/shared/src/socket-events.ts` (all namespaces, including racing); `docs/04_SOCKET_EVENTS.md` is a blackjack-only draft
 - HTTP APIs and admin behavior: `docs/07_API_SPEC.md`, `docs/08_ADMIN_SPEC.md`
-- Blackjack: `docs/03_REALTIME_BLACKJACK_TABLE_SPEC.md`
-- Baccarat: `docs/12_BACCARAT_SCOPE.md`, `docs/13_BACCARAT_REALTIME_TABLE_SPEC.md`, `docs/14_BACCARAT_IMPLEMENTATION_PLAN.md`
-- Horse racing: `docs/15_HORSE_RACING_BACKEND_SPEC.md`
+- Horse racing (BK Derby, the only live game): `docs/15_HORSE_RACING_BACKEND_SPEC.md` (pre-implementation spec)
+- Dormant card games (blackjack, baccarat; off unless `CARD_GAMES_ENABLED=true`): `docs/archive/card-games/00_INDEX.md`
 - Boxing: `docs/16_BOXING_BACKEND_SPEC.md`
 - Deployment: `docs/18_BACKEND_DEPLOYMENT_CHECKLIST.md`
 - Next.js PPR work: `docs/19_NEXT16_PPR_ADOPTION_PLAN.md`, `docs/21_PPR_FINAL_PERFORMANCE_REPORT.md`
@@ -63,6 +62,7 @@ Database smoke scripts require the appropriate local environment and PostgreSQL 
 - Bet limits are calculated and revalidated on the server; client values are display-only.
 - Keep reusable game rules in `packages/game-engine`, not in gateways or UI components.
 - Treat changes to `packages/shared` as public contract changes and verify every affected producer and consumer.
+- Blackjack and baccarat are off by default and run only when `CARD_GAMES_ENABLED` is exactly `true`. Do not re-enable, query, or re-link them without an explicit request, and never drop their tables, schema definitions, or migrations.
 
 ## Working Agreements
 

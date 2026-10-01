@@ -1,3 +1,5 @@
+> **Dormant (휴면)**: 블랙잭/바카라는 2026-10-01부터 기본값으로 꺼져 있다 (`CARD_GAMES_ENABLED`). 이 문서는 되살릴 때를 위한 보관본이며, 현재 상태와 재활성화 절차는 [00_INDEX.md](./00_INDEX.md)를 본다.
+
 # Baccarat Implementation Plan
 
 바카라를 실제 개발할 때 따를 작업 순서와 구현 기준이다.

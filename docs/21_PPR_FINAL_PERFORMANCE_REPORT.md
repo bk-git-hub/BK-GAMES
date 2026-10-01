@@ -1,5 +1,7 @@
 # Next.js 16 PPR 최종 성능 보고서
 
+> **참고 (2026-10-01)**: 이 문서 작성 이후 `/blackjack`과 `/baccarat` route는 기본값으로 꺼졌다(`CARD_GAMES_ENABLED`, [archive/card-games/00_INDEX.md](./archive/card-games/00_INDEX.md)). 아래 계획과 측정값은 당시 기록 그대로 둔다.
+
 - 측정일: 2026-08-07
 - 대상: `apps/web`
 - 최초 기준선: `ca1a1cc`
@@ -183,8 +185,8 @@ Next.js client reference manifest의 route entry chunk를 중복 제거하고 ra
 ### 미완료
 
 ```text
-[ ] Blackjack socket disconnect/reconnect 각 1회 런타임 확인
-[ ] Baccarat socket disconnect/reconnect 각 1회 런타임 확인
+[-] Blackjack socket disconnect/reconnect 각 1회 런타임 확인 (해당 없음: route 휴면, 2026-10-01)
+[-] Baccarat socket disconnect/reconnect 각 1회 런타임 확인 (해당 없음: route 휴면, 2026-10-01)
 [ ] Derby guest socket/polling fallback에서 listener 중복 0건 확인
 [ ] 복귀 후 최신 서버 권위 table state 재동기화 확인
 ```
@@ -194,6 +196,8 @@ Next.js client reference manifest의 route entry chunk를 중복 제거하고 ra
 - 로컬 `4000` 포트가 열려 있지 않다.
 - `.env.local`의 `NEXT_PUBLIC_GAME_SERVER_URL=http://100.107.189.17:4000`도 health check가 timeout된다.
 - 저장소 운영 규칙에 따라 에이전트가 game-server를 직접 시작하거나 종료하지 않았다.
+
+`[-]` 항목은 `/blackjack`, `/baccarat` route가 기본값으로 꺼져 있는 동안 확인 대상이 아니다. 두 게임을 되살릴 때 다시 미완료 항목으로 되돌린다.
 
 ## 8. Acceptance criteria
 
@@ -213,7 +217,7 @@ Next.js client reference manifest의 route entry chunk를 중복 제거하고 ra
 ### push 전 필수
 
 1. game-server를 수동 시작한다.
-2. 로그인 세션으로 Blackjack과 Baccarat 왕복을 각각 3회 수행한다.
+2. 로그인 세션으로 Blackjack과 Baccarat 왕복을 각각 3회 수행한다. (해당 없음: route 휴면, 2026-10-01)
 3. guest Derby 왕복을 3회 수행한다.
 4. 연결 1개, listener 중복 0개, 복귀 후 최신 table version을 확인한다.
 5. 문제가 없으면 이 문서의 보류 항목을 완료로 바꾸고 push한다.
@@ -312,8 +316,8 @@ Blackjack timeout은 페이지 UI 준비 시간과 분리된 배포 운영 문�
 ```text
 Guest HTTP                 route별 30회
 Signed-in home             20회
-Signed-in Blackjack        15회
-Signed-in Baccarat         15회
+Signed-in Blackjack        15회  (해당 없음: route 휴면, 2026-10-01)
+Signed-in Baccarat         15회  (해당 없음: route 휴면, 2026-10-01)
 Signed-in BK Derby         15회
 Realtime connection        게임별 별도 상태와 완료 시간
 Navigation timeout         성공률과 함께 기록

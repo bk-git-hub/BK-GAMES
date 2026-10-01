@@ -1,5 +1,8 @@
 # Horse Racing Backend Spec
 
+> This spec was written before implementation, and the shipped build differs from it in places (ticket types, event names, timing).
+> Where they differ, the code (`packages/shared/src/socket-events.ts`, `packages/db/src/schema.ts`, `apps/game-server/src/racing`) and `docs/17_BACKEND_TECHNICAL_OVERVIEW.md` win.
+
 This document defines the backend-facing specification for the BK Games horse racing game.
 
 The goal is to make a race that feels close to real horse racing while staying inside BK Games' constraints:

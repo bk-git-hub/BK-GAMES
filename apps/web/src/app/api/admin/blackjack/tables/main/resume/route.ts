@@ -8,8 +8,15 @@ import {
   requireBodyString,
   requireSessionUserId,
 } from "../../../../_lib";
+import { cardGamesNotFoundBody, isCardGamesEnabled } from "@/lib/card-games";
 
 export async function POST(request: Request) {
+  // Before the session lookup: a disabled deployment answers like a missing
+  // route and does no auth or database work for card-game tables.
+  if (!isCardGamesEnabled()) {
+    return NextResponse.json(cardGamesNotFoundBody, { status: 404 });
+  }
+
   try {
     const adminUserId = await requireSessionUserId();
     const body = await readJsonObject(request);

@@ -27,7 +27,7 @@ export function HomeShell({ actions, children, identity }: HomeShellProps) {
                 </span>
               </Link>
               <h1 className="mt-4 text-4xl leading-none font-black tracking-normal sm:text-5xl">
-                Games
+                Lobby
               </h1>
               {identity}
             </div>

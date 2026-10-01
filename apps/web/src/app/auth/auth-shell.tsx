@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Club,
+  Flag,
   Gift,
   type LucideIcon,
   WalletCards,
@@ -59,14 +59,14 @@ function AuthPoster() {
         <div className="absolute inset-x-0 top-0 h-3 bg-[#c8272e]" />
         <div className="relative">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-[#071c3f] px-3 py-1 text-xs font-black tracking-normal text-[#d8ecff] uppercase">
-            <Club className="size-3.5" />
+            <Flag className="size-3.5" />
             Account
           </div>
           <h1 className="mt-5 max-w-xl text-4xl leading-none font-black tracking-normal sm:text-6xl">
-            Your table starts here.
+            Your race day starts here.
           </h1>
           <p className="mt-4 max-w-lg text-base leading-7 font-bold text-[#d8ecff]">
-            Keep points, rewards, and seats connected under one BK Games
+            Keep points, rewards, and race tickets connected under one BK Games
             account.
           </p>
 
@@ -79,22 +79,17 @@ function AuthPoster() {
               <StatusPill icon={WalletCards} label="Wallet" />
               <StatusPill icon={Gift} label="Daily reward" />
             </div>
-            <div className="absolute right-4 bottom-5 flex items-end justify-center gap-3">
-              <Image
-                alt=""
-                className="h-auto w-24 rotate-[-9deg] drop-shadow-[0_14px_12px_rgba(7,28,63,0.28)] sm:w-28"
-                height={588}
-                priority
-                src="/cards/royal-noir/AS.svg"
-                width={420}
+            <div className="absolute right-4 bottom-5 flex items-end">
+              <GallopFrame
+                className="hidden w-32 sm:block lg:hidden xl:block"
+                frameClassName="left-[-100%]"
+                src="/racing/generated-reference-style/horse-03-blue-gallop-7f.png"
               />
-              <Image
-                alt=""
-                className="h-auto w-24 rotate-[8deg] drop-shadow-[0_14px_12px_rgba(7,28,63,0.28)] sm:w-28"
-                height={588}
-                priority
-                src="/cards/royal-noir/KH.svg"
-                width={420}
+              <GallopFrame
+                className="w-36 sm:w-44"
+                eager
+                frameClassName="left-[-400%]"
+                src="/racing/generated-reference-style/horse-01-red-gallop-7f.png"
               />
             </div>
             <div className="absolute bottom-5 left-5">
@@ -106,6 +101,35 @@ function AuthPoster() {
         </div>
       </div>
     </section>
+  );
+}
+
+// Each strip holds seven 206x181 gallop frames; frameClassName picks a frame its
+// neighbours do not bleed into.
+function GallopFrame({
+  className,
+  eager = false,
+  frameClassName,
+  src,
+}: {
+  className: string;
+  eager?: boolean;
+  frameClassName: string;
+  src: string;
+}) {
+  return (
+    <div
+      className={`relative aspect-[206/181] overflow-hidden drop-shadow-[0_14px_12px_rgba(7,28,63,0.28)] ${className}`}
+    >
+      <Image
+        alt=""
+        className={`absolute top-0 h-full w-[700%] max-w-none ${frameClassName}`}
+        height={181}
+        loading={eager ? "eager" : "lazy"}
+        src={src}
+        width={1442}
+      />
+    </div>
   );
 }
 

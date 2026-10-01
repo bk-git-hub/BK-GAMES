@@ -1,3 +1,5 @@
+import { isCardGamesEnabled } from "@/lib/card-games";
+
 type GameTableLoadingShellProps = {
   accent: "blue" | "red";
   label: string;
@@ -6,6 +8,10 @@ type GameTableLoadingShellProps = {
 const pulse = "animate-pulse motion-reduce:animate-none";
 
 export function HomeLoadingShell() {
+  // Mirrors GameList, which features BK Derby alone while the card games are
+  // off, so the list does not shift when it replaces this shell.
+  const isFeatured = !isCardGamesEnabled();
+
   return (
     <LoadingFrame className="bg-[#f7efe2] text-[#111827]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1260px] flex-col gap-6 px-5 py-6 sm:px-8 lg:px-10">
@@ -33,20 +39,30 @@ export function HomeLoadingShell() {
 
         <section className="rounded-[1.35rem] border-2 border-[#111827] bg-[#fff8ed] p-5 shadow-[8px_9px_0_#0b3b73] sm:p-6">
           <SkeletonBlock className="h-9 w-32 bg-[#111827]/20" />
-          <div className="mt-6 grid gap-5 lg:grid-cols-3">
-            {Array.from({ length: 3 }, (_, index) => (
-              <div
-                className="overflow-hidden rounded-[1.25rem] border-2 border-[#111827] bg-[#fffaf0]"
-                key={index}
-              >
-                <SkeletonBlock className="h-44 rounded-none bg-[#0b3b73]/20" />
-                <div className="space-y-4 p-5">
-                  <SkeletonBlock className="h-7 w-2/3 bg-[#111827]/20" />
-                  <SkeletonBlock className="h-16 bg-[#4b5874]/15" />
-                </div>
+          {isFeatured ? (
+            <div className="mt-6 overflow-hidden rounded-[1.25rem] border-2 border-[#111827] bg-[#fffaf0] lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+              <SkeletonBlock className="h-60 rounded-none bg-[#0b3b73]/20 sm:h-68 lg:h-72" />
+              <div className="space-y-4 p-5 lg:flex lg:flex-col lg:justify-center lg:p-8">
+                <SkeletonBlock className="h-7 w-2/3 bg-[#111827]/20" />
+                <SkeletonBlock className="h-16 bg-[#4b5874]/15" />
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-5 lg:grid-cols-3">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div
+                  className="overflow-hidden rounded-[1.25rem] border-2 border-[#111827] bg-[#fffaf0]"
+                  key={index}
+                >
+                  <SkeletonBlock className="h-44 rounded-none bg-[#0b3b73]/20" />
+                  <div className="space-y-4 p-5">
+                    <SkeletonBlock className="h-7 w-2/3 bg-[#111827]/20" />
+                    <SkeletonBlock className="h-16 bg-[#4b5874]/15" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </LoadingFrame>

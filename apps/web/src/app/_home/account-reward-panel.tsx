@@ -63,7 +63,7 @@ export function AccountRewardPanel({
               </h2>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 font-bold text-[#d8ecff]">
-              Browse the games freely. Sign in when you are ready to claim
+              Browse the lobby freely. Sign in when you are ready to claim
               points or place a bet.
             </p>
           </div>
@@ -210,7 +210,7 @@ function RewardMessage({
         className="rounded-[1rem] border border-[#f5c95f] bg-[#f5c95f]/10 px-4 py-3 text-sm leading-6 font-bold text-[#fff8ed]"
         role="alert"
       >
-        Account data could not be loaded. The game list is still available.
+        Account data could not be loaded. The lobby is still available.
       </p>
     );
   }

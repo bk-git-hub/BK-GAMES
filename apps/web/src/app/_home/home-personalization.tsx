@@ -36,7 +36,7 @@ export async function HomeIdentity() {
     <p className="mt-3 text-sm leading-6 font-bold break-words text-[#4b5874]">
       {session
         ? `${session.user.name || "Player"} · ${session.user.email}`
-        : "Browse games first. Login only when you are ready to claim points or bet."}
+        : "Browse the lobby first. Login only when you are ready to claim points or bet."}
     </p>
   );
 }

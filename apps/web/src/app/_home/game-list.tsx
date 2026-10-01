@@ -1,6 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Club } from "lucide-react";
+import { ArrowRight, Club, Flag } from "lucide-react";
+
+import { isCardGamesEnabled } from "@/lib/card-games";
+import { cn } from "@/lib/utils";
 
 type Game = {
   description: string;
@@ -8,6 +11,12 @@ type Game = {
   kind: "cards" | "derby" | "baccarat";
   name: string;
   status: string;
+};
+
+type FeatureRunner = {
+  className: string;
+  frameClassName: string;
+  src: string;
 };
 
 const games: Game[] = [
@@ -36,42 +45,86 @@ const games: Game[] = [
   },
 ];
 
+// Each strip holds seven 206x181 gallop frames. frameClassName picks a frame
+// its neighbours do not bleed into, and the bottom offsets land every runner
+// on the turf although the strips draw their horses at different heights.
+const featureRunners: FeatureRunner[] = [
+  {
+    className: "bottom-[18%] left-[4%] h-[40%] sm:bottom-[16%] sm:h-[50%]",
+    frameClassName: "left-[-100%]",
+    src: "/racing/generated-reference-style/horse-04-yellow-gallop-7f.png",
+  },
+  {
+    className: "bottom-[8%] left-[27%] hidden h-[60%] sm:block",
+    frameClassName: "left-[-100%]",
+    src: "/racing/generated-reference-style/horse-03-blue-gallop-7f.png",
+  },
+  {
+    className: "right-[4%] bottom-[4%] h-[58%] sm:bottom-[3%] sm:h-[72%]",
+    frameClassName: "left-[-400%]",
+    src: "/racing/generated-reference-style/horse-01-red-gallop-7f.png",
+  },
+];
+
 export function GameList() {
+  // The card games stay listed for revival; the switch decides what renders,
+  // and a lone game gets a featured card instead of a sparse three-column grid.
+  const visibleGames = isCardGamesEnabled()
+    ? games
+    : games.filter((game) => game.kind === "derby");
+  const isFeatured = visibleGames.length === 1;
+  const HeadingIcon = isFeatured ? Flag : Club;
+
   return (
     <section className="rounded-[1.35rem] border-[2px] border-[#111827] bg-[#fff8ed] p-5 shadow-[8px_9px_0_#0b3b73] sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Club className="size-5 text-[#c8272e]" />
+            <HeadingIcon className="size-5 text-[#c8272e]" />
             <h2 className="text-3xl font-black tracking-normal text-[#111827]">
-              Games
+              {isFeatured ? "Live racing" : "Games"}
             </h2>
           </div>
           <p className="mt-2 max-w-2xl text-sm leading-6 font-bold text-[#4b5874]">
-            Pick a game and play with the same free points wallet.
+            {isFeatured
+              ? "Head to the track and play with your free points wallet."
+              : "Pick a game and play with the same free points wallet."}
           </p>
         </div>
       </div>
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-3">
-        {games.map((game) => (
-          <GameCard game={game} key={game.name} />
+      <div className={cn("mt-6 grid gap-5", !isFeatured && "lg:grid-cols-3")}>
+        {visibleGames.map((game) => (
+          <GameCard featured={isFeatured} game={game} key={game.name} />
         ))}
       </div>
     </section>
   );
 }
 
-function GameCard({ game }: { game: Game }) {
+function GameCard({ featured, game }: { featured: boolean; game: Game }) {
   return (
     <Link
       href={game.href}
-      className="group block overflow-hidden rounded-[1.25rem] border-[2px] border-[#111827] bg-[#fffaf0] shadow-[6px_7px_0_#0b3b73] transition hover:-translate-y-1 hover:shadow-[8px_10px_0_#c8272e] focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-[#c8272e]"
+      className={cn(
+        "group block overflow-hidden rounded-[1.25rem] border-[2px] border-[#111827] bg-[#fffaf0] shadow-[6px_7px_0_#0b3b73] transition hover:-translate-y-1 hover:shadow-[8px_10px_0_#c8272e] focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-[#c8272e]",
+        featured && "lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]",
+      )}
     >
-      <div className="border-b border-[#d8c09a] bg-white p-4">
-        <GameVisual game={game} />
+      <div
+        className={cn(
+          "border-b border-[#d8c09a] bg-white p-4",
+          featured && "lg:border-r lg:border-b-0",
+        )}
+      >
+        <GameVisual featured={featured} game={game} />
       </div>
-      <div className="p-5">
+      <div
+        className={cn(
+          "p-5",
+          featured && "lg:flex lg:flex-col lg:justify-center lg:p-8",
+        )}
+      >
         <div className="flex items-center justify-between gap-4">
           <h3 className="text-2xl font-black tracking-normal text-[#111827]">
             {game.name}
@@ -80,7 +133,13 @@ function GameCard({ game }: { game: Game }) {
             {game.status}
           </span>
         </div>
-        <p className="mt-3 min-h-16 text-sm leading-6 text-[#4b5874]">
+        <p
+          className={cn(
+            "mt-3",
+            !featured && "min-h-16",
+            "text-sm leading-6 text-[#4b5874]",
+          )}
+        >
           {game.description}
         </p>
         <span className="mt-5 inline-flex items-center gap-2 text-sm font-black tracking-normal text-[#c8272e] uppercase transition group-hover:gap-3">
@@ -92,7 +151,7 @@ function GameCard({ game }: { game: Game }) {
   );
 }
 
-function GameVisual({ game }: { game: Game }) {
+function GameVisual({ featured, game }: { featured: boolean; game: Game }) {
   if (game.kind === "cards") {
     return (
       <div className="relative grid h-44 place-items-center overflow-hidden rounded-2xl bg-[#071c3f]">
@@ -113,6 +172,35 @@ function GameVisual({ game }: { game: Game }) {
             width={420}
           />
         </div>
+      </div>
+    );
+  }
+
+  if (game.kind === "derby" && featured) {
+    return (
+      <div className="relative h-52 overflow-hidden rounded-2xl bg-[#c8272e] sm:h-60 lg:h-64">
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[#f5c95f]" />
+        <div className="absolute inset-x-0 bottom-[34%] h-1 bg-[#111827]/20" />
+        {featureRunners.map((runner) => (
+          <div
+            className={cn(
+              "absolute aspect-[206/181] overflow-hidden drop-shadow-[0_12px_10px_rgba(7,28,63,0.38)]",
+              runner.className,
+            )}
+            key={runner.src}
+          >
+            <Image
+              alt=""
+              className={cn(
+                "absolute top-0 h-full w-[700%] max-w-none",
+                runner.frameClassName,
+              )}
+              height={181}
+              src={runner.src}
+              width={1442}
+            />
+          </div>
+        ))}
       </div>
     );
   }

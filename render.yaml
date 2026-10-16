@@ -1,0 +1,40 @@
+# Render Blueprint for the BK Derby game server on the free plan.
+# Singapore keeps the server next to the Neon database (ap-southeast-1).
+services:
+  - type: web
+    name: bk-games-game-server
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: corepack pnpm install --frozen-lockfile && corepack pnpm --filter game-server build
+    startCommand: corepack pnpm --filter game-server start:prod
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    buildFilter:
+      paths:
+        - apps/game-server/**
+        - packages/**
+        - package.json
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - render.yaml
+    envVars:
+      # Workspace packages ship TypeScript sources that Node 24 runs directly.
+      - key: NODE_VERSION
+        value: "24"
+      - key: COREPACK_ENABLE_DOWNLOAD_PROMPT
+        value: "0"
+      - key: NODE_ENV
+        value: production
+      - key: GAME_SERVER_HOST
+        value: 0.0.0.0
+      - key: GAME_SOCKET_DEV_AUTH
+        value: "false"
+      - key: GAME_SERVER_CORS_ORIGINS
+        value: https://bk-games-web.vercel.app,https://bk-games-web-bk-git-hubs-projects.vercel.app,https://bk-games-web-bk-git-hub-bk-git-hubs-projects.vercel.app
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://bk-games-web.vercel.app
+      - key: DATABASE_URL
+        sync: false
+      - key: GAME_TOKEN_SECRET
+        sync: false

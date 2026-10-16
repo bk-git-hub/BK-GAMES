@@ -121,6 +121,14 @@ corepack pnpm --filter game-server start:prod
 
 Railway 배포에서는 repository root의 `railway.json`이 위 build/start command와 `/health` health check를 고정한다.
 
+Render 무료 플랜 배포에서는 repository root의 `render.yaml`(Blueprint)이 싱가포르 리전 free web service, 의존성 설치를 포함한 build/start command, `/health` health check, 비밀이 아닌 환경변수를 고정한다. 리전은 운영 DB(Neon `ap-southeast-1`)에 맞춘 것이다. Blueprint를 만들 때 `DATABASE_URL`과 `GAME_TOKEN_SECRET`만 입력한다.
+
+Render 무료 플랜 동작:
+
+- 15분 동안 들어오는 HTTP 요청이나 WebSocket 메시지가 없으면 서버가 잠든다. 다음 접속 때 깨어나는 데 약 1분이 걸린다.
+- 워크스페이스당 월 750시간까지 무료이고, 잠든 시간은 차감되지 않는다. 다 쓰면 다음 달까지 정지된다.
+- 배포 후 받은 `https://<service>.onrender.com` 주소를 web의 `NEXT_PUBLIC_GAME_SERVER_URL`에 넣고 web을 다시 배포한다.
+
 health check:
 
 ```text
